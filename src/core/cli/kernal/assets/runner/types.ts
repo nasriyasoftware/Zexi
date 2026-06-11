@@ -1,0 +1,1 @@
+export type CLIOptionToken = { name: string; raw: string; value?: string | boolean; }
