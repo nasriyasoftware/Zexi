@@ -16,7 +16,7 @@ import ObjectCache from "./assets/object.cache";
 import type { JSONConfig } from "./types";
 import type { JsonOptions } from "../../../types";
 import type { Token } from "../../../3-tokenization/types";
-import DataEnvelope, { TRAILING_LENGTH } from "../../shared/envelope/data.envelope";
+import DataEnvelope from "../../shared/envelope/data.envelope";
 
 const ERROR_CACHE_KEY = Symbol.for('error_cache');
 const OBJECT_CACHE_KEY = Symbol.for('object_cache');
@@ -181,16 +181,15 @@ class JSONRenderer {
                 this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `soft-line`
                 this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `indent-start`
 
-                const dataEndAnchor = new TOKENS.Anchor('set:close');
+                const envelopeStartAnchor = new TOKENS.Anchor('set:envelope-start');
+                this.#_ctx.tokens.inject(envelopeStartAnchor, { at: initialCursor + skipped + 1 });
 
                 const size = (() => {
                     let separators = 0;
                     let scanned = skipped; // The skipped tokens
 
-                    const scopes = { opened: 1, closed: 0 }
-
                     let item = this.#_ctx.tokens.peek(++scanned);
-                    let closeIndex = -1;
+                    const scopes = { opened: 1, closed: 0 }
 
                     do {
                         try {
@@ -198,11 +197,6 @@ class JSONRenderer {
                             if (item.kind === 'object-close') {
                                 scopes.closed++;
                                 if (scopes.opened === scopes.closed) {
-                                    closeIndex = initialCursor + scanned;
-                                    this.#_ctx.tokens.inject(dataEndAnchor, {
-                                        // The index of the closing token - 2 tokens (`soft-line` and `indent-end`)
-                                        at: closeIndex - 2
-                                    });
                                     break;
                                 }
 
@@ -230,44 +224,24 @@ class JSONRenderer {
                 })();
 
                 const envelop = new DataEnvelope('set', { size, values: [] });
-                const tokenized = this.#_tokenize(envelop.toObject());
-
-                const finalTokens = tokenized.slice(1, tokenized.length - 1);
-
-                if (finalTokens.length + 2 !== tokenized.length) {
-                    throw new Error(`Invariant violation: Expected sliced tokens to be exactly 2 tokens short.`);
-                }
-
-                const trailing = TRAILING_LENGTH + 4;
-                const startEnd = finalTokens.length - trailing
-                const envelopeTokens = {
-                    start: finalTokens.slice(0, startEnd),
-                    end: finalTokens.slice(startEnd)
-                }
-
-                if (envelopeTokens.end.length + envelopeTokens.start.length !== finalTokens.length) {
-                    throw new Error(`Invariant violation: Expected trailing tokens to be at the end of the token stream.`);
-                }
+                const result = envelop.tokenize(this.#_tokenize);
 
                 // Add the envelope data to the stream
-                this.#_ctx.tokens.inject(envelopeTokens.start, { at: initialCursor + skipped + 1 });
+                this.#_ctx.tokens.inject(result.tokens.start, { at: envelopeStartAnchor });
 
                 this.#_ctx.tokens.inject([
-                    ...envelopeTokens.end,
+                    ...result.tokens.trailing,
                     new TOKENS.Callback(() => {
                         this.#_ignoredTokens.add(this.#_ctx.tokens.peek(1)!); // Ignoring `indent-end`
                         this.#_ignoredTokens.add(this.#_ctx.tokens.peek(2)!); // Ignoring `soft-line`
                         this.#_ignoredTokens.add(this.#_ctx.tokens.peek(3)!); // Ignoring `object-close`
                     })
-                ], { at: dataEndAnchor });
-            },
-            map: () => {
-                console.warn('Map is not supported yet.');
+                ], { at: result.anchors.end });
             }
         }
     }
 
-    #_tokenize(value: unknown) {
+    #_tokenize(value: unknown): readonly Token[] {
         const graph = GraphBuilder.build(value, { cycles: 'throw', canonical: true });
         const rep = RepresentationBuilder.build(graph);
         const buffer = Tokenizer.tokenize(rep);
@@ -325,8 +299,8 @@ class JSONRenderer {
                     const funcName = token.value.name ?? 'anonymous';
                     const envelope = new DataEnvelope('function', { name: funcName });
 
-                    const toInject = this.#_tokenize(envelope.toObject());
-                    this.#_ctx.tokens.inject(toInject);
+                    const result = envelope.tokenize(this.#_tokenize);
+                    this.#_ctx.tokens.inject(result.tokens);
                     continue;
                 }
 
@@ -427,8 +401,8 @@ class JSONRenderer {
                         flags: regex.flags
                     });
 
-                    const toInject = this.#_tokenize(envelope.toObject());
-                    this.#_ctx.tokens.inject(toInject);
+                    const result = envelope.tokenize(this.#_tokenize);
+                    this.#_ctx.tokens.inject(result.tokens);
                     continue;
                 }
 
@@ -465,12 +439,7 @@ class JSONRenderer {
                                 this.#_helpers.render.set();
                                 continue;
                             }
-
-                            case 'Map': {
-                                this.#_helpers.render.map();
-                                continue;
-                            }
-                        }                        
+                        }
 
                         this.#_helpers.ignoreCurrentGroup();
                         this.#_ctx.writer.write('{}');
@@ -493,28 +462,16 @@ class JSONRenderer {
                 case 'error-start': {
                     this.#_ctx.scopes.begin({ id: token.id });
                     const envelop = new DataEnvelope('error', {});
-                    const tokenized = this.#_tokenize(envelop.toObject());
-
-                    const finalTokens = tokenized.slice(1, tokenized.length - 1);
-                    if (finalTokens.length + 2 !== tokenized.length) {
-                        throw new Error(`Invariant violation: Expected sliced tokens to be exactly 2 tokens short.`);
-                    }
-
-                    const toInject = finalTokens.slice(0, tokenized.length - TRAILING_LENGTH);
-                    const trailing = finalTokens.slice(tokenized.length - TRAILING_LENGTH);
+                    const result = envelop.tokenize(this.#_tokenize);
 
                     this.#_ctx.tokens.inject([
-                        ...toInject,
+                        ...result.tokens.start,
                         new TOKENS.IndentStart
                     ]);
 
-                    if (trailing.length + toInject.length !== finalTokens.length) {
-                        throw new Error(`Invariant violation: Expected trailing tokens to be at the end of the token stream.`);
-                    }
-
                     // Set the scope type
                     this.#_ctx.data.set('type', 'error');
-                    this.#_ctx.data.set(ERROR_CACHE_KEY, new ErrorCache(token, trailing));
+                    this.#_ctx.data.set(ERROR_CACHE_KEY, new ErrorCache(token, [...result.tokens.trailing]));
                     continue;
                 }
 
