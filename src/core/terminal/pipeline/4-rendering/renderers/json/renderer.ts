@@ -182,6 +182,7 @@ class JSONRenderer {
                 this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `indent-start`
 
                 const envelopeStartAnchor = new TOKENS.Anchor('set:envelope-start');
+                const dataEndAnchor = new TOKENS.Anchor('set:data-end');
                 this.#_ctx.tokens.inject(envelopeStartAnchor, { at: initialCursor + skipped + 1 });
 
                 const size = (() => {
@@ -197,6 +198,11 @@ class JSONRenderer {
                             if (item.kind === 'object-close') {
                                 scopes.closed++;
                                 if (scopes.opened === scopes.closed) {
+                                    const closeIndex = initialCursor + scanned;
+                                    this.#_ctx.tokens.inject(dataEndAnchor, {
+                                        // The index of the closing token - 2 tokens (`soft-line` and `indent-end`)
+                                        at: closeIndex - 2
+                                    });
                                     break;
                                 }
 
@@ -236,7 +242,7 @@ class JSONRenderer {
                         this.#_ignoredTokens.add(this.#_ctx.tokens.peek(2)!); // Ignoring `soft-line`
                         this.#_ignoredTokens.add(this.#_ctx.tokens.peek(3)!); // Ignoring `object-close`
                     })
-                ], { at: result.anchors.end });
+                ], { at: dataEndAnchor });
             }
         }
     }
