@@ -8,20 +8,19 @@ import RepresentationBuilder from "../../../2-representation/builder";
 import Tokenizer from "../../../3-tokenization/tokenizer";
 import TokensBuffer from "../../../3-tokenization/container/tokens.buffer";
 import TOKENS from "../../../3-tokenization/tokens";
+import DataEnvelope from "../../shared/envelope/data.envelope";
 import { PropertyToken } from "../../../3-tokenization/tokens/tokenization/property.token";
 
 import ErrorCache, { ERROR_SECTIONS } from "./assets/error.cache";
 import ObjectCache from "./assets/object.cache";
+import MapEntryFrame from "./assets/map.entry.frame";
 
 import type { JSONConfig } from "./types";
 import type { JsonOptions } from "../../../types";
 import type { Token } from "../../../3-tokenization/types";
-import DataEnvelope from "../../shared/envelope/data.envelope";
 
 const ERROR_CACHE_KEY = Symbol.for('error_cache');
 const OBJECT_CACHE_KEY = Symbol.for('object_cache');
-
-let logNow = false;
 
 class JSONRenderer {
     readonly #_config: JSONConfig;
@@ -243,6 +242,168 @@ class JSONRenderer {
                         this.#_ignoredTokens.add(this.#_ctx.tokens.peek(3)!); // Ignoring `object-close`
                     })
                 ], { at: dataEndAnchor });
+            },
+            map: () => {
+                const initialCursor = this.#_ctx.tokens.cursor;
+
+                // Skipping set tokens
+                let skipped = 0;
+                this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `object-open`
+                this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `soft-line`
+                this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `indent-start`
+
+                const envelopeStartAnchor = new TOKENS.Anchor('map:envelope-start');
+                const dataEndAnchor = new TOKENS.Anchor('map:data-end');
+                this.#_ctx.tokens.inject(envelopeStartAnchor, { at: initialCursor + skipped + 1 });
+
+                const metadata = (() => {
+                    let separators = 0;
+                    let scanned = skipped; // The skipped tokens
+
+                    let item = this.#_ctx.tokens.peek(++scanned);
+                    const objects = { opened: 1, closed: 0 }
+                    const groups = { opened: 0, closed: 0 }
+
+                    const sameObject = () => objects.closed + 1 === objects.opened;
+
+                    let entry: MapEntryFrame | undefined;
+                    const entries: (readonly Token[])[] = [];
+
+                    scanning: do {
+                        try {
+                            if (!item) { break; }
+                            this.#_ignoredTokens.add(item);
+
+                            if (item.kind === 'object-close') {
+                                objects.closed++;
+
+                                // Inject the data anchor
+                                if (objects.opened === objects.closed) {
+                                    const closeIndex = initialCursor + scanned;
+
+                                    this.#_ctx.tokens.inject(dataEndAnchor, {
+                                        // The index of the closing token - 2 tokens (`soft-line` and `indent-end`)
+                                        at: closeIndex - 2
+                                    });
+
+                                    break;
+                                }
+
+                                entry!.add(item);
+
+                                continue;
+                            } else if (item.kind === 'object-open') {
+                                objects.opened++;
+
+                                entry!.add(item);
+
+                                continue;
+                            }
+
+                            // Checking if we're in the correct scope
+                            if (!sameObject()) {
+                                entry!.add(item);
+                                continue;
+                            }
+
+                            // We're in the same object
+                            switch (item.kind) {
+                                case 'group-start': {
+                                    groups.opened++;
+
+                                    if (groups.closed + 1 === groups.opened) {
+                                        entry = new MapEntryFrame(this.#_tokenize);
+                                    }
+
+                                    continue scanning;
+                                }
+
+                                case 'group-end': {
+                                    groups.closed++;
+
+                                    if (groups.opened === groups.closed) {
+                                        if (!entry) {
+                                            throw new Error('Invariant violation: Group end without group start.');
+                                        }
+
+                                        entry.apply();
+
+                                        if (!entry.isComplete) {
+                                            throw new Error('Invariant violation: attempting to close an entry before streaming its "end" tokens.')
+                                        }
+
+                                        entries.push(entry.getTokens());
+                                        entry = undefined;
+                                    }
+
+                                    continue scanning;
+                                }
+
+                                case 'key-value-separator': {
+                                    entry?.apply();
+
+                                    continue scanning;
+                                }
+
+                                case 'separator': {
+                                    separators++;
+                                    continue scanning;
+                                }
+                            }
+
+                            if (entry && item.kind === 'primitive') {
+                                entry.add(item);
+                            }
+                        } finally {
+                            scanned++;
+                            item = this.#_ctx.tokens.peek(scanned);
+                        }
+                    } while (item);
+
+                    const mapDataTokens: Token[] = [];
+                    for (let i = 0; i < entries.length; i++) {
+                        const entryTokens = entries[i];
+                        const hasMore = i < entries.length - 1;
+
+                        mapDataTokens.push(new TOKENS.Anchor(`entry-${i}`));
+                        mapDataTokens.push(...entryTokens);
+
+                        if (hasMore) {
+                            // The group-end token of the entry object
+                            const groupEnd = mapDataTokens.pop()! as InstanceType<typeof TOKENS.GroupEnd>;
+                            console.assert(groupEnd.kind === 'group-end'), `Invariant violation: Expected 'group-end' token, but got '${groupEnd.kind}' instead.`;
+
+                            mapDataTokens.push(
+                                new TOKENS.Separator,
+                                new TOKENS.SoftLine,
+                                groupEnd
+                            )
+                        }
+                    }
+
+                    return {
+                        size: separators + 1,
+                        entriesTokens: mapDataTokens,
+                    }
+                })();
+
+                const envelop = new DataEnvelope('map', { size: metadata.size, entries: [] });
+                const result = envelop.tokenize(this.#_tokenize);
+
+                // Add the envelope data to the stream
+                this.#_ctx.tokens.inject(result.tokens.start, { at: envelopeStartAnchor });
+
+                // this.#_helpers.skipNext.tokens(metadata.skipCount);
+
+                this.#_ctx.tokens.inject([
+                    ...metadata.entriesTokens,
+                    ...result.tokens.trailing,
+                    new TOKENS.Callback(() => {
+                        this.#_ignoredTokens.add(this.#_ctx.tokens.peek(1)!); // Ignoring `indent-end`
+                        this.#_ignoredTokens.add(this.#_ctx.tokens.peek(2)!); // Ignoring `soft-line`
+                        this.#_ignoredTokens.add(this.#_ctx.tokens.peek(3)!); // Ignoring `object-close`
+                    })
+                ], { at: dataEndAnchor });
             }
         }
     }
@@ -424,8 +585,53 @@ class JSONRenderer {
                     }
 
                     if (objectCache.shouldRemoveTrailing(token)) {
-                        this.#_flags.skipNextSeparator = true;
-                        this.#_flags.skipNextSoftLine = true;
+                        const anchor = new TOKENS.Anchor('remove-trailing');
+                        const cb = new TOKENS.Callback(() => {
+                            this.#_flags.skipNextSeparator = true;
+                            this.#_flags.skipNextSoftLine = true;
+                        });
+
+                        // Find the index of the closing group token
+                        // and insert the callback 2 tokens before that index
+
+                        const injectAnchor = () => {
+                            const cursor = this.#_ctx.tokens.cursor;
+                            const groups = { opened: 1, closed: 0 };
+                            let scanned = 0;
+
+                            let item = this.#_ctx.tokens.peek(++scanned);
+
+                            scanning: do {
+                                try {
+                                    if (!item) { break; }
+
+                                    switch (item.kind) {
+                                        case 'group-start': {
+                                            groups.opened++;
+                                            continue scanning;
+                                        }
+
+                                        case 'group-end': {
+                                            groups.closed++;
+                                            if (groups.opened === groups.closed) {
+                                                const closingIndex = cursor + scanned;
+
+                                                tokens.inject(anchor, { at: closingIndex - 2 });
+                                                break scanning;
+                                            }
+
+                                            continue scanning;
+                                        }
+                                    }
+                                } finally {
+                                    scanned++;
+                                    item = this.#_ctx.tokens.peek(scanned);
+                                }
+                            } while (item);
+                        }
+
+                        injectAnchor();
+                        tokens.inject(cb, { at: anchor });
                     }
 
                     if (objectCache.isIgnored(token)) {
@@ -443,6 +649,11 @@ class JSONRenderer {
                         switch (token.className) {
                             case 'Set': {
                                 this.#_helpers.render.set();
+                                continue;
+                            }
+
+                            case 'Map': {
+                                this.#_helpers.render.map();
                                 continue;
                             }
                         }

@@ -1,13 +1,15 @@
+import contracts from "./assets/contracts";
+
 import GraphBuilder from "../../../../../../src/core/terminal/pipeline/1-graphing/builder";
 import RepresentationBuilder from "../../../../../../src/core/terminal/pipeline/2-representation/builder";
 import TokensBuffer from "../../../../../../src/core/terminal/pipeline/3-tokenization/container/tokens.buffer";
 import Tokenizer from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizer";
 import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
-import { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 import DataEnvelope from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
-import { EnvelopeKind } from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/types";
-import { GraphConfig } from "../../../../../../src/core/terminal/pipeline/4-rendering/types/types";
-import contracts from "./assets/contracts";
+
+import type { GraphConfig } from "../../../../../../src/core/terminal/pipeline/4-rendering/types/types";
+import type { EnvelopeKind } from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/types";
+import type { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 
 describe("DataEnvelope", () => {
 

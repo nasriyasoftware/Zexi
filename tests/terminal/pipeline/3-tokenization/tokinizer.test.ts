@@ -145,21 +145,23 @@ describe("Tokenizer", () => {
         const kinds = extractKinds(tokens);
 
         expect(kinds).toEqual([
-            // array object opener
+            // map object opener
             'group-start',
             'object-name',
             'object-open',
             'soft-line',
             'indent-start',
 
-            // array elements
+            // map elements
+            'group-start',
             'primitive',
             'hard-space',
             'key-value-separator',
             'hard-space',
             'primitive',
+            'group-end',
 
-            // array object closer
+            // map object closer
             'indent-end',
             'soft-line',
             'object-close',
@@ -170,22 +172,22 @@ describe("Tokenizer", () => {
         expect(objectName).toBeInstanceOf(TOKENS.ObjectName);
         expect(objectName.className).toBe("Map");
 
-        const key = tokens[5] as InstanceType<typeof TOKENS.Primitive>;
+        const key = tokens[6] as InstanceType<typeof TOKENS.Primitive>;
         expect(key).toBeInstanceOf(TOKENS.Primitive);
         expect(key.type).toBe("string");
         expect(key.value).toBe("k");
 
-        const space1 = tokens[6] as InstanceType<typeof TOKENS.HardSpace>;
+        const space1 = tokens[7] as InstanceType<typeof TOKENS.HardSpace>;
         expect(space1).toBeInstanceOf(TOKENS.HardSpace);
 
-        const separator = tokens[7] as InstanceType<typeof TOKENS.KeyValueSeparator>;
+        const separator = tokens[8] as InstanceType<typeof TOKENS.KeyValueSeparator>;
         expect(separator).toBeInstanceOf(TOKENS.KeyValueSeparator);
         expect(separator.value).toBe('=>');
 
-        const space2 = tokens[8] as InstanceType<typeof TOKENS.HardSpace>;
+        const space2 = tokens[9] as InstanceType<typeof TOKENS.HardSpace>;
         expect(space2).toBeInstanceOf(TOKENS.HardSpace);
 
-        const value = tokens[9] as InstanceType<typeof TOKENS.Primitive>;
+        const value = tokens[10] as InstanceType<typeof TOKENS.Primitive>;
         expect(value).toBeInstanceOf(TOKENS.Primitive);
         expect(value.type).toBe("number");
         expect(value.value).toBe(1);

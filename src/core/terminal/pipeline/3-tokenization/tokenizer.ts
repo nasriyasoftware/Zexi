@@ -497,6 +497,9 @@ class Tokenizer {
                                 const [key, value] = entries[i];
                                 const hasMore = i < map.entries.size - 1;
 
+                                const startToken = new TOKENS.GroupStart;
+
+                                entry.buffer.add(startToken);
                                 this.#_process(key, entry.buffer);
                                 entry.buffer
                                     .add(new TOKENS.HardSpace)
@@ -507,6 +510,8 @@ class Tokenizer {
                                 if (hasMore) {
                                     entry.buffer.add(new TOKENS.Separator(';')).add(new TOKENS.SoftLine);
                                 }
+
+                                entry.buffer.add(new TOKENS.GroupEnd(startToken.id));
                             }
                             break;
                         }
