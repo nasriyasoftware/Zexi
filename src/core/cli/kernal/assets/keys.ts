@@ -1,2 +1,2 @@
-export const ZexiCommandSymbol = Symbol.for('ZexiCommand');
-export const ZexiOptionPreservedNamesOverrideSymbol = Symbol.for('ZexiOptionPreservedNamesOverride');
+export const ZexiCommandSymbol = Symbol('ZexiCommand');
+export const ZexiOptionPreservedNamesOverrideSymbol = Symbol('ZexiOptionPreservedNamesOverride');
