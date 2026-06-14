@@ -22,18 +22,230 @@ import type { Token } from "../../../3-tokenization/types";
 const ERROR_CACHE_KEY = Symbol.for('error_cache');
 const OBJECT_CACHE_KEY = Symbol.for('object_cache');
 
+/**
+ * JSONRenderer
+ * ------------
+ *
+ * A deterministic token-stream renderer that converts Zexi token graphs
+ * into a structured JSON-compatible output.
+ *
+ * This renderer does NOT operate on raw JavaScript objects directly.
+ * Instead, it consumes a pre-tokenized representation produced by the
+ * Zexi pipeline:
+ *
+ *    GraphBuilder → RepresentationBuilder → Tokenizer → TokensBuffer → JSONRenderer
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 DESIGN GOALS
+ * ---------------------------------------------------------------------
+ *
+ * 1. **Token-Driven Rendering**
+ *    - Rendering is fully driven by immutable token streams
+ *    - No structural introspection of runtime JS objects occurs here
+ *    - Ensures deterministic output across all environments
+ *
+ * 2. **Layout-Aware Serialization**
+ *    - Supports compact and formatted layouts via renderer config
+ *    - Layout decisions are applied at render-time, not tokenization-time
+ *
+ * 3. **Behavior-Aware Exclusion Rules**
+ *    - Certain JS constructs are intentionally NOT serialized:
+ *
+ *      ❌ Methods (function-valued properties)
+ *      ❌ Getters / setters (accessor side effects risk)
+ *      ❌ Symbols (non-serializable identity values)
+ *      ❌ Undefined values (omitted from JSON output)
+ *
+ *    - Reason:
+ *      JSONRenderer is strictly a *data representation layer*, not a
+ *      behavior-preserving serializer.
+ *
+ * 4. **Side-Effect Safety Model**
+ *    - The renderer must never invoke user code
+ *    - Avoids accidental execution of:
+ *        - getters
+ *        - methods
+ *        - computed properties
+ *    - Guarantees serialization is PURE and OBSERVATION-ONLY
+ *
+ * 5. **Anchor-Based Structural Injection**
+ *    - Uses `Anchor` tokens to inject envelopes and structured segments
+ *    - Enables late-stage composition of nested structures (Map, Set, Error)
+ *    - Prevents reliance on fragile index arithmetic
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 INTERNAL STATE MODEL
+ * ---------------------------------------------------------------------
+ *
+ * - `#_ctx`
+ *   Rendering context holding:
+ *   - token cursor state
+ *   - scope stack
+ *   - writer buffer
+ *   - shared renderer data (caches)
+ *
+ * - `#_ignoredTokens`
+ *   Tokens explicitly skipped during rendering traversal
+ *
+ * - `#_flags`
+ *   Controls rendering behavior:
+ *   - `ignoreCurrentGroup`: skip entire group subtree
+ *   - `skipNextSeparator`: suppress trailing commas
+ *   - `skipNextSoftLine`: suppress formatting line breaks
+ *
+ * ---------------------------------------------------------------------
+ * @since 1.0.0
+ */
 class JSONRenderer {
+    /**
+     * Immutable renderer configuration derived from user options
+     * and resolved through the JSON rendering preset system.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * Controls all formatting decisions during rendering:
+     *
+     * - layout mode (compact / pretty / strict)
+     * - indentation size (spaces)
+     * - whitespace normalization rules
+     * - line-break strategy
+     *
+     * This value is computed once at construction time and never mutated.
+     *
+     * @since 1.0.0
+     */
     readonly #_config: JSONConfig;
+
+    /**
+     * Core rendering execution context.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ROLE
+     * ---------------------------------------------------------------------
+     *
+     * Acts as the central state container for the renderer pipeline:
+     *
+     * - token stream traversal state (cursor, peek, next)
+     * - scope stack tracking (group nesting)
+     * - writer buffer (final output accumulation)
+     * - shared cross-renderer metadata storage
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN NOTE
+     * ---------------------------------------------------------------------
+     *
+     * This object is intentionally shared across all render helpers
+     * (object / map / set / error / regex) to maintain:
+     *
+     * - deterministic traversal order
+     * - consistent scope resolution
+     * - unified output stream
+     *
+     * @since 1.0.0
+     */
     readonly #_ctx: ZexiRenderingContext;
 
+    /**
+     * Mutable rendering control flags used to influence
+     * local traversal behavior during token processing.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 FLAG SEMANTICS
+     * ---------------------------------------------------------------------
+     *
+     * - ignoreCurrentGroup
+     *   Skips rendering of the current structural group.
+     *   Used when an object/map/set is collapsed or replaced.
+     *
+     * - skipNextSeparator
+     *   Prevents the next separator token from being written.
+     *   Used for trailing comma suppression in object-like structures.
+     *
+     * - skipNextSoftLine
+     *   Suppresses the next soft-line token.
+     *   Used to avoid orphaned formatting after structural removals.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN NOTE
+     * ---------------------------------------------------------------------
+     *
+     * These flags are *ephemeral control signals*, not state.
+     * They are expected to flip frequently during rendering.
+     *
+     * @since 1.0.0
+     */
     readonly #_flags = {
         ignoreCurrentGroup: false,
         skipNextSeparator: false,
         skipNextSoftLine: false
     }
 
+    /**
+     * A transient registry of tokens that must be skipped
+     * during the rendering pass.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * Allows structural renderers (Map, Set, Object, Error)
+     * to inject tokens into the stream without them being processed
+     * by the main rendering loop.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 BEHAVIOR
+     * ---------------------------------------------------------------------
+     *
+     * - Tokens added here are skipped exactly once
+     * - After skipping, they are automatically removed
+     * - Prevents double-processing during injection-based rendering
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN NOTE
+     * ---------------------------------------------------------------------
+     *
+     * This set is critical for supporting:
+     * - anchor-based injection
+     * - deferred envelope composition
+     * - safe mid-stream token mutation
+     *
+     * @since 1.0.0
+     */
     readonly #_ignoredTokens = new Set<Token>();
 
+    /**
+     * Creates a new JSONRenderer instance.
+     *
+     * The constructor initializes:
+     * - Renderer configuration (layout + spacing rules)
+     * - Rendering context bound to the provided token stream
+     *
+     * It also validates and normalizes user-provided formatting options,
+     * ensuring safe constraints for indentation.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 OPTION VALIDATION RULES
+     * ---------------------------------------------------------------------
+     *
+     * - `spaces` must be a number in range [0, 8]
+     * - Invalid values result in immediate exceptions
+     *
+     * @param tokens
+     * The immutable token stream produced by the Zexi pipeline.
+     *
+     * @param options
+     * Rendering configuration controlling formatting and layout behavior.
+     *
+     * @throws {TypeError}
+     * If `spaces` is not a number.
+     *
+     * @throws {RangeError}
+     * If `spaces` is outside the allowed range.
+     *
+     * @since 1.0.0
+     */
     constructor(
         tokens: readonly Token[],
         options: JsonOptions
@@ -65,7 +277,39 @@ class JSONRenderer {
         );
     }
 
+    /**
+     * Internal helper collection used during rendering traversal.
+     *
+     * These helpers provide:
+     * - Token visibility filtering
+     * - Controlled skipping of token groups
+     * - Delegation into structural renderers (Map / Set / Object)
+     *
+     * @since 1.0.0
+     */
     readonly #_helpers = {
+        /**
+         * Determines whether a token should be included in JSON output.
+         *
+         * ---------------------------------------------------------------------
+         * 🔷 VISIBILITY RULES
+         * ---------------------------------------------------------------------
+         *
+         * A token is considered invisible if:
+         *
+         * - It is a `symbol`
+         * - It is `undefined`
+         *
+         * All other tokens are considered renderable.
+         *
+         * @param token
+         * Token to evaluate.
+         *
+         * @returns
+         * `true` if token should be rendered, otherwise `false`.
+         *
+         * @since 1.0.0
+         */
         isVisibleToken: (token: Token): boolean => {
             if (token.kind !== 'primitive') {
                 return true;
@@ -80,10 +324,31 @@ class JSONRenderer {
 
             return true;
         },
+
+        /**
+         * Marks the current token group as ignored for rendering.
+         *
+         * This prevents further processing of the group in the rendering loop,
+         * effectively skipping its entire subtree.
+         *
+         * @since 1.0.0
+         */
         ignoreCurrentGroup: () => {
             this.#_flags.ignoreCurrentGroup = true;
         },
+
         skipNext: {
+            /**
+             * Advances the token cursor by a fixed number of steps.
+             *
+             * Used primarily to bypass structural tokens that are already
+             * handled by higher-level renderers (e.g., object/map/set wrappers).
+             *
+             * @param count
+             * Number of tokens to skip.
+             *
+             * @since 1.0.0
+             */
             tokens: (count: number) => {
                 let skipped = 0;
                 while (
@@ -95,7 +360,34 @@ class JSONRenderer {
                 }
             }
         },
+
         render: {
+            /**
+             * Renders a plain object literal from the token stream.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 RESPONSIBILITIES
+             * ---------------------------------------------------------------------
+             *
+             * - Detects visible properties
+             * - Filters out non-serializable properties:
+             *     - methods
+             *     - getters/setters
+             *     - symbols
+             *     - undefined values
+             *
+             * - Tracks ignored properties for structural optimization
+             * - Determines whether object should render as `{}` or full structure
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 TRAILING BEHAVIOR
+             * ---------------------------------------------------------------------
+             *
+             * - If all properties are ignored, the object is collapsed into `{}`.
+             * - If only trailing properties are ignored, the final separator is suppressed.
+             *
+             * @since 1.0.0
+             */
             objectLiteral: () => {
                 const ignoredProps = new Set<PropertyToken>();
                 const cache = new ObjectCache(ignoredProps);
@@ -171,6 +463,36 @@ class JSONRenderer {
                     cache.suppressTrailingOf(lastVisibleProp);
                 }
             },
+
+            /**
+             * Renders a Set structure into a JSON-compatible envelope.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 SERIALIZATION FORMAT
+             * ---------------------------------------------------------------------
+             *
+             * Sets are serialized as:
+             *
+             * {
+             *   "$codec": "zexi@1.0",
+             *   "$kind": "set",
+             *   "$payload": {
+             *     "size": number,
+             *     "values": [...]
+             *   }
+             * }
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 IMPLEMENTATION DETAILS
+             * ---------------------------------------------------------------------
+             *
+             * - Uses token skipping to bypass structural wrappers
+             * - Injects envelope boundaries using anchor tokens
+             * - Computes size by counting separator tokens
+             * - Defers payload injection until token resolution phase
+             *
+             * @since 1.0.0
+             */
             set: () => {
                 const initialCursor = this.#_ctx.tokens.cursor;
 
@@ -243,6 +565,43 @@ class JSONRenderer {
                     })
                 ], { at: dataEndAnchor });
             },
+
+            /**
+             * Renders a Map structure into a JSON-compatible envelope.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 SERIALIZATION FORMAT
+             * ---------------------------------------------------------------------
+             *
+             * {
+             *   "$codec": "zexi@1.0",
+             *   "$kind": "map",
+             *   "$payload": {
+             *     "entries": [
+             *       { "key": ..., "value": ... }
+             *     ],
+             *     "size": number
+             *   }
+             * }
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 ENTRY MODEL
+             * ---------------------------------------------------------------------
+             *
+             * - Each Map entry is processed through a MapEntryFrame
+             * - Entry frames ensure correct key/value anchoring
+             * - Frames are only committed when fully closed (group-balanced)
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 DESIGN CONSTRAINTS
+             * ---------------------------------------------------------------------
+             *
+             * - Entries MUST NOT be emitted before group closure
+             * - Frames enforce structural correctness via group counters
+             * - Anchors are used instead of index arithmetic for safety
+             *
+             * @since 1.0.0
+             */
             map: () => {
                 const initialCursor = this.#_ctx.tokens.cursor;
 
@@ -408,6 +767,36 @@ class JSONRenderer {
         }
     }
 
+    /**
+     * Converts a runtime value into a deterministic token stream.
+     *
+     * This is the ONLY entry point into the Graph → Representation → Token pipeline.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PIPELINE STEPS
+     * ---------------------------------------------------------------------
+     *
+     * 1. GraphBuilder builds structural graph
+     * 2. RepresentationBuilder converts graph into intermediate model
+     * 3. Tokenizer produces raw token stream
+     * 4. TokensBuffer materializes final immutable array
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN NOTE
+     * ---------------------------------------------------------------------
+     *
+     * This function enforces canonical serialization:
+     * - cycles are always thrown (strict mode)
+     * - output is deterministic
+     *
+     * @param value
+     * Arbitrary JS value to serialize.
+     *
+     * @returns
+     * Immutable token stream representing the value.
+     *
+     * @since 1.0.0
+     */
     #_tokenize(value: unknown): readonly Token[] {
         const graph = GraphBuilder.build(value, { cycles: 'throw', canonical: true });
         const rep = RepresentationBuilder.build(graph);
@@ -415,6 +804,47 @@ class JSONRenderer {
         return TokensBuffer.toArray(buffer);
     }
 
+    /**
+     * Executes the full token rendering pipeline.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 EXECUTION MODEL
+     * ---------------------------------------------------------------------
+     *
+     * - Iterates sequentially through token stream
+     * - Maintains scope stack for nested structures
+     * - Applies layout rules (spaces, line breaks)
+     * - Delegates structured types to specialized renderers:
+     *     - object
+     *     - map
+     *     - set
+     *     - error
+     *     - regex
+     *     - function envelope
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SIDE-EFFECT GUARANTEE
+     * ---------------------------------------------------------------------
+     *
+     * - Does NOT mutate input tokens
+     * - Only mutates internal ignored-token tracking set
+     * - Uses controlled injection via anchors
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 OUTPUT GUARANTEE
+     * ---------------------------------------------------------------------
+     *
+     * - Must end at root scope
+     * - Otherwise rendering is considered structurally invalid
+     *
+     * @returns
+     * Final serialized JSON string output.
+     *
+     * @throws {Error}
+     * If rendering ends outside root scope.
+     *
+     * @since 1.0.0
+     */
     #_render() {
         const tokens = this.#_ctx.tokens;
 
@@ -899,6 +1329,24 @@ class JSONRenderer {
         return this.#_ctx.writer.toString();
     }
 
+    /**
+     * Static entry point for JSON rendering.
+     *
+     * Creates a new renderer instance and executes the full rendering pipeline.
+     *
+     * This is the primary API surface for consumers.
+     *
+     * @param tokens
+     * Pre-tokenized Zexi representation.
+     *
+     * @param options
+     * Rendering configuration (layout, spacing, etc).
+     *
+     * @returns
+     * Fully serialized JSON string.
+     *
+     * @since 1.0.0
+     */
     static render(tokens: readonly Token[], options: JsonOptions) {
         return new JSONRenderer(tokens, options).#_render();
     }
