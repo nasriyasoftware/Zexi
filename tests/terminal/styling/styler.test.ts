@@ -1,6 +1,7 @@
 import consoleStyler from "../../../src/core/terminal/styling/styler";
 
 const ANSI = consoleStyler.ansi;
+const toCharCodes = (str: string) => [...str].map((c) => c.charCodeAt(0));
 
 describe("ConsoleStyler", () => {
     describe("strip", () => {
@@ -90,9 +91,7 @@ describe("ConsoleStyler", () => {
 
             const result = consoleStyler.render(input);
 
-            expect(result).toBe(
-                `${ANSI.color.fg.normal.red}Hello${ANSI.reset}`
-            );
+            expect(result).toEqual(`${ANSI.color.fg.normal.red}Hello${ANSI.reset}`);
         });
 
         it("renders style tags", () => {

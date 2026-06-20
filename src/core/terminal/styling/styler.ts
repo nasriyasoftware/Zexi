@@ -321,10 +321,10 @@ class ConsoleStyler {
 
         return input
             .replace(/<:reset>/g, ANSI.reset)
-            .replace(/<:color:([\w-]+)>/g, (_, c) => hasOwnProp(ANSI.color, c) ? ANSI.color.fg.normal[c as KnownColorNames] : fallback('color', c))
-            .replace(/<:color:bright-([\w-]+)>/g, (_, c) => hasOwnProp(ANSI.color, c) ? ANSI.color.fg.bright[c as KnownColorNames] : fallback('color', c))
-            .replace(/<:color-bg:([\w-]+)>/g, (_, c) => hasOwnProp(ANSI.color, c) ? ANSI.color.bg.normal[c as KnownColorNames] : fallback('color-bg', c))
-            .replace(/<:color-bg:bright-([\w-]+)>/g, (_, c) => hasOwnProp(ANSI.color, c) ? ANSI.color.bg.bright[c as KnownColorNames] : fallback('color-bg', c))
+            .replace(/<:color:([\w-]+)>/g, (_, c) => hasOwnProp(ANSI.color.fg.normal, c) ? ANSI.color.fg.normal[c as KnownColorNames] : fallback('color', c))
+            .replace(/<:color:bright-([\w-]+)>/g, (_, c) => hasOwnProp(ANSI.color.fg.bright, c) ? ANSI.color.fg.bright[c as KnownColorNames] : fallback('color', c))
+            .replace(/<:color-bg:([\w-]+)>/g, (_, c) => hasOwnProp(ANSI.color.bg.normal, c) ? ANSI.color.bg.normal[c as KnownColorNames] : fallback('color-bg', c))
+            .replace(/<:color-bg:bright-([\w-]+)>/g, (_, c) => hasOwnProp(ANSI.color.bg.bright, c) ? ANSI.color.bg.bright[c as KnownColorNames] : fallback('color-bg', c))
             .replace(/<:style:([\w-]+)>/g, (_, s) => hasOwnProp(ANSI.style, s) ? ANSI.style[s as PredefinedStyle] : fallback('style', s));
     }
 
