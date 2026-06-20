@@ -34,16 +34,17 @@ describe("RegExpRepresentationNode", () => {
 
             expect(node).toBeInstanceOf(RegExpRepresentationNode);
             expect(node.type).toBe("regex");
-            expect(node.value).toBe(regex);
+            expect(node.value).toEqual(regex);
+            expect(node.value).not.toBe(regex);
         });
 
-        it("preserves original RegExp reference from graph node", () => {
+        it("removes original RegExp reference from graph node", () => {
             const regex = /world/;
             const graphNode = new RegExpGraphNode(regex);
 
             const node = RegExpRepresentationNode.from(graphNode);
 
-            expect(node.value).toBe(regex);
+            expect(node.value).not.toBe(regex);
         });
 
     });

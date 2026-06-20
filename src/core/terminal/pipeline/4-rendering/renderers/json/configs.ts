@@ -1,3 +1,4 @@
+import globalUtils from "../../../../../../utils";
 import { Token } from "../../../3-tokenization/types";
 import type { JSONConfig } from "./types";
 
@@ -26,3 +27,5 @@ export const INLINE_SAFE_TOKENS = [
     'primitive',
     'date'
 ] as Token['kind'][]
+
+globalUtils.deepFreeze(DEFAULT_JSON_CONFIG);

@@ -1,11 +1,11 @@
-import consoleStyler from "../../../src/core/terminal/styling/consoleStyler";
+import consoleStyler from "../../../src/core/terminal/styling/styler";
 
 const ANSI = consoleStyler.ansi;
 
 describe("ConsoleStyler", () => {
     describe("strip", () => {
         it("removes ANSI escape sequences", () => {
-            const input = `${ANSI.color.red}Hello${ANSI.reset}`;
+            const input = `${ANSI.color.fg.normal.red}Hello${ANSI.reset}`;
             expect(consoleStyler.strip(input)).toBe("Hello");
         });
 
@@ -16,7 +16,7 @@ describe("ConsoleStyler", () => {
 
     describe("hasANSI", () => {
         it("detects ANSI sequences", () => {
-            const input = `${ANSI.color.red}Hello`;
+            const input = `${ANSI.color.fg.normal.red}Hello`;
             expect(consoleStyler.hasANSI(input)).toBe(true);
         });
 
@@ -29,7 +29,7 @@ describe("ConsoleStyler", () => {
         it("formats with color only", () => {
             const result = consoleStyler.format("Hello", { color: "red" });
 
-            expect(result).toBe(`${ANSI.color.red}Hello${ANSI.reset}`);
+            expect(result).toBe(`${ANSI.color.fg.normal.red}Hello${ANSI.reset}`);
         });
 
         it("formats with single style", () => {
@@ -55,7 +55,7 @@ describe("ConsoleStyler", () => {
             });
 
             expect(result).toBe(
-                `${ANSI.color.green}${ANSI.style.bold}Hello${ANSI.reset}`
+                `${ANSI.color.fg.normal.green}${ANSI.style.bold}Hello${ANSI.reset}`
             );
         });
 
@@ -91,7 +91,7 @@ describe("ConsoleStyler", () => {
             const result = consoleStyler.render(input);
 
             expect(result).toBe(
-                `${ANSI.color.red}Hello${ANSI.reset}`
+                `${ANSI.color.fg.normal.red}Hello${ANSI.reset}`
             );
         });
 
@@ -106,13 +106,12 @@ describe("ConsoleStyler", () => {
         });
 
         it("renders mixed tags", () => {
-            const input =
-                "<:color:green><:style:bold>Hello<:reset>";
+            const input = "<:color:green><:style:bold>Hello<:reset>";
 
             const result = consoleStyler.render(input);
 
             expect(result).toBe(
-                `${ANSI.color.green}${ANSI.style.bold}Hello${ANSI.reset}`
+                `${ANSI.color.fg.normal.green}${ANSI.style.bold}Hello${ANSI.reset}`
             );
         });
 
@@ -141,7 +140,7 @@ describe("ConsoleStyler", () => {
 
     describe("ansi exposure", () => {
         it("exposes raw ANSI tokens", () => {
-            expect(consoleStyler.ansi.color.red).toBe(ANSI.color.red);
+            expect(consoleStyler.ansi.color.fg.normal.red).toBe(ANSI.color.fg.normal.red);
         });
     });
 });

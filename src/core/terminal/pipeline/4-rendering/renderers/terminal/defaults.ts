@@ -1,14 +1,15 @@
+import globalUtils from "../../../../../../utils";
 import type { TerminalConfig } from "./types";
 
-const SPACES = 2;
-const CYCLES = 'mark';
-const STYLE = 'full';
+const SPACES = 2 as const;
+const CYCLES = 'mark' as const;
+const FORMATS = 'both' as const;
 
 export const DEFAULT_TERMINAL_CONFIG: Record<'compact' | 'pretty', TerminalConfig> = {
     compact: {
         cycles: CYCLES,
         spaces: SPACES,
-        style: STYLE,
+        formats: FORMATS,
         layout: {
             spaces: 'collapse',
             lineBreaks: 'collapsed',
@@ -19,7 +20,7 @@ export const DEFAULT_TERMINAL_CONFIG: Record<'compact' | 'pretty', TerminalConfi
     pretty: {
         cycles: CYCLES,
         spaces: SPACES,
-        style: STYLE,
+        formats: FORMATS,
         layout: {
             spaces: 'normalize',
             lineBreaks: 'soft',
@@ -27,3 +28,5 @@ export const DEFAULT_TERMINAL_CONFIG: Record<'compact' | 'pretty', TerminalConfi
         }
     }
 };
+
+globalUtils.deepFreeze(DEFAULT_TERMINAL_CONFIG);

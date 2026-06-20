@@ -4,13 +4,6 @@ import { DEFAULT_OUTPUT_CONFIG } from "../../../../../src/core/terminal/pipeline
 
 describe("resolveRendererConfig (deterministic)", () => {
 
-    /**
-     * Utility: ensures deep equality without relying on reference identity.
-     */
-    function clone<T>(value: T): T {
-        return JSON.parse(JSON.stringify(value));
-    }
-
     describe("terminal target", () => {
 
         it("returns pretty configuration", () => {
@@ -26,14 +19,11 @@ describe("resolveRendererConfig (deterministic)", () => {
         });
 
         it("does not mutate default config (determinism check)", () => {
-            const before = clone(DEFAULT_OUTPUT_CONFIG.terminal.pretty);
-
             const result = helpers.resolveRendererConfig("terminal", "pretty");
-
-            // mutate result defensively
-            (result as any).__testMutation = true;
-
-            expect(DEFAULT_OUTPUT_CONFIG.terminal.pretty).toEqual(before);
+            expect(() => {
+                // mutate result defensively
+                (result as any).__testMutation = true;
+            }).toThrow(TypeError);           
         });
     });
 

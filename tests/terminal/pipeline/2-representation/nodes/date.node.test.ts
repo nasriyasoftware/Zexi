@@ -34,16 +34,17 @@ describe("DateRepresentationNode", () => {
 
             expect(node).toBeInstanceOf(DateRepresentationNode);
             expect(node.type).toBe("date");
-            expect(node.value).toBe(date);
+            expect(node.value).toEqual(date);
+            expect(node.value).not.toBe(date);
         });
 
-        it("preserves original Date reference from graph node", () => {
+        it("removes original Date reference from graph node", () => {
             const date = new Date();
             const graphNode = new DateGraphNode(date);
 
             const node = DateRepresentationNode.from(graphNode);
 
-            expect(node.value).toBe(date);
+            expect(node.value).not.toBe(date);
         });
 
     });

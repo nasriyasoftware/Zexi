@@ -39,3 +39,79 @@ declare const brand: unique symbol;
  * @note This has no runtime effect. The brand is erased in the compiled JavaScript.
  */
 export type Brand<T, Brand extends string> = T & { [brand]: Brand };
+
+/**
+ * Recursively converts a type into a deeply immutable form.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 TRANSFORMATION RULES
+ * ---------------------------------------------------------------------
+ *
+ * The transformation is applied recursively according to the following
+ * rules:
+ *
+ * 1. Functions
+ *    - Preserved as-is
+ *    - Function signatures remain callable
+ *    - No wrapping or mutation occurs
+ *
+ * 2. Arrays
+ *    - Converted to `ReadonlyArray`
+ *    - Element types are recursively transformed
+ *
+ * 3. Objects
+ *    - All properties become `readonly`
+ *    - Nested properties are recursively transformed
+ *
+ * 4. Primitives
+ *    - Preserved without modification
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 EXAMPLE
+ * ---------------------------------------------------------------------
+ *
+ * ```ts
+ * interface User {
+ *     name: string;
+ *     settings: {
+ *         theme: string;
+ *     };
+ * }
+ *
+ * type FrozenUser = DeepReadonly<User>;
+ * ```
+ *
+ * Produces:
+ *
+ * ```ts
+ * {
+ *     readonly name: string;
+ *     readonly settings: {
+ *         readonly theme: string;
+ *     };
+ * }
+ * ```
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 DESIGN NOTE
+ * ---------------------------------------------------------------------
+ *
+ * This utility provides compile-time immutability only.
+ *
+ * It does NOT freeze values at runtime.
+ * Use `deepFreeze()` when runtime immutability is required.
+ *
+ * @template T
+ * Type to transform.
+ *
+ * @since 1.0.0
+ */
+export type DeepReadonly<T> = {
+    readonly [P in keyof T]: T[P] extends (...args: any[]) => any
+    ? T[P] // Functions stay callable (not made readonly)
+    : T[P] extends Array<infer U>
+    ? ReadonlyArray<DeepReadonly<U>> // Recursively readonly arrays
+    : T[P] extends object
+    ? DeepReadonly<T[P]> // Recursively readonly objects
+    : T[P]; // Primitives remain as-is
+};
