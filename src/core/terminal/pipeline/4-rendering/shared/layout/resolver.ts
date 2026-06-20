@@ -331,10 +331,6 @@ class LayoutResolver {
             const valueToken = this.#_peek(this.#_data.index + 3);
             if (!valueToken) { return; }
 
-            if (valueToken.kind === 'function') {
-                return;
-            }
-
             if (!this.#_inlineSafe.has(valueToken.kind)) {
                 this.#_decision = 'block';
             }
@@ -614,10 +610,6 @@ class LayoutResolver {
                                 const valueToken = this.#_peek(data.index + 2);
                                 if (!valueToken) {
                                     throw new Error(`Invariant violation: Key value token was expected after the separator token but was not found.`);
-                                }
-
-                                if (valueToken.kind === 'function') {
-                                    continue scanning;
                                 }
 
                                 if (!this.#_inlineSafe.has(valueToken.kind)) {

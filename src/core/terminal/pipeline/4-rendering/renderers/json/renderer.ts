@@ -616,6 +616,8 @@ class JSONRenderer {
                 }
 
                 case 'function': {
+                    this.#_ctx.data.set(keys.RENDERING_LAYOUT_KEY, 'block', { overwrite: true });
+
                     const funcName = token.value.name ?? 'anonymous';
                     const envelope = new DataEnvelope('function', { name: funcName });
 
@@ -748,6 +750,8 @@ class JSONRenderer {
                 }
 
                 case 'regex': {
+                    this.#_ctx.data.set(keys.RENDERING_LAYOUT_KEY, 'block', { overwrite: true });
+                    
                     const regex = token.value;
                     const envelope = new DataEnvelope('regex', {
                         pattern: regex.source,
