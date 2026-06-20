@@ -1,12 +1,9 @@
-import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
-import { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
-import ZexiRenderingContext from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
-import LayoutResolver from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/layout/resolver";
 import contracts from "./contracts";
 
-
-const groupStart = (id: string): any => ({ kind: 'group-start', id });
-const groupEnd = (id: string): any => ({ kind: 'group-end', groupId: id });
+import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
+import ZexiRenderingContext from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
+import LayoutResolver from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/layout/resolver";
+import type { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 
 describe("LayoutResolver", () => {
 
@@ -246,26 +243,30 @@ describe("LayoutResolver", () => {
         }
     );
 
-    describe("early termination rules", () => {
+    describe.each(contracts)(
+        "early termination rules (%s)",
+        (_name, contract) => () => {
+            const groupStart = (id: string): any => ({ kind: 'group-start', id });
+            const groupEnd = (id: string): any => ({ kind: 'group-end', groupId: id });
 
-        test("stops at matching group-end", () => {
-            const tokens = [
-                groupStart("g1"),
-                new TOKENS.Primitive("string", "value"),
-                groupEnd("g1"),
-                new TOKENS.Primitive("number", 5) // should not matter
-            ];
+            test("stops at matching group-end", () => {
+                const tokens = [
+                    groupStart("g1"),
+                    new TOKENS.Primitive("string", "value"),
+                    groupEnd("g1"),
+                    ...contract.tokenize([1, 2, 3]) // should not be reached
+                ];
 
-            const ctx = makeCtx(tokens);
+                const ctx = makeCtx(tokens);
 
-            const result = LayoutResolver.resolve(tokens[0], {
-                context: ctx,
-                inlineSafe: new Set()
+                const result = LayoutResolver.resolve(tokens[0], {
+                    context: ctx,
+                    inlineSafe: new Set()
+                });
+
+                expect(result).toBe("inline");
             });
-
-            expect(result).toBe("inline");
-        });
-    }
+        }
     );
 });
 
