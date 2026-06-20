@@ -397,6 +397,8 @@ class ScopesController {
         }
 
         const removedScope = this.#_stack.pop()!;
+        this.current.writer.branches.discard(removedScope.writer);
+
         return removedScope;
     }
 
@@ -451,32 +453,6 @@ class ScopesController {
      * @since 1.0.0
      */
     readonly data: ScopeDataController = {
-        /**
-         * Retrieves a value from the scope chain.
-         *
-         * Lookup order:
-         *
-         * ```txt
-         * current → parent → root
-         * ```
-         *
-         * The first matching key is returned.
-         *
-         * This creates lexical shadowing semantics where inner scopes
-         * override outer scopes without mutating them.
-         *
-         * @typeParam T
-         * Expected return value type.
-         *
-         * @param key
-         * Scope key to resolve.
-         *
-         * @returns
-         * Resolved value or `null` if the key does not exist anywhere
-         * in the chain.
-         *
-         * @since 1.0.0
-         */
         get: <T extends any = unknown>(key: ScopeKey): T | null => {
             for (let i = this.#_stack.length - 1; i >= 0; i--) {
                 const scope = this.#_stack[i];
@@ -488,42 +464,39 @@ class ScopesController {
             return null;
         },
 
-        /**
-         * Checks whether a key is owned by the current active scope.
-         *
-         * This operation does NOT traverse parent scopes.
-         *
-         * @param key
-         * The key to check.
-         *
-         * @returns
-         * `true` if the key exists in the current scope, otherwise `false`.
-         *
-         * @since 1.0.0
-         */
+        getInherited: <T extends any = unknown>(key: ScopeKey): T | null => {
+            for (let i = this.#_stack.length - 2; i >= 0; i--) {
+                const scope = this.#_stack[i];
+                if (scope.data.has(key)) {
+                    return scope.data.get(key) as T;
+                }
+            }
+
+            return null;
+        },
+
         hasOwn: (key: ScopeKey): boolean => {
             return this.current.data.has(key);
         },
 
-        /**
-         * Checks whether a key exists in any parent scope.
-         *
-         * The current scope is intentionally excluded from this lookup.
-         *
-         * This is useful for detecting inherited values or determining
-         * whether a local binding shadows an ancestor binding.
-         *
-         * @param key
-         * The key to search for.
-         *
-         * @returns
-         * `true` if the key exists in a parent scope, otherwise `false`.
-         *
-         * @since 1.0.0
-         */
-        hasInherited: (key: ScopeKey): boolean => {
+        hasInherited: (
+            key: ScopeKey,
+            maxLevels?: number
+        ): boolean => {
+            let traversed = 0;
+
             for (let i = this.#_stack.length - 2; i >= 0; i--) {
+                traversed++;
+
+                if (
+                    maxLevels !== undefined &&
+                    traversed > maxLevels
+                ) {
+                    break;
+                }
+
                 const scope = this.#_stack[i];
+
                 if (scope.data.has(key)) {
                     return true;
                 }
@@ -532,71 +505,10 @@ class ScopesController {
             return false;
         },
 
-        /**
-         * Checks whether a key can be resolved from the current scope chain.
-         *
-         * This operation searches:
-         *
-         * - the current scope
-         * - all parent scopes
-         *
-         * and returns whether a matching binding exists anywhere in the
-         * active scope hierarchy.
-         *
-         * This is equivalent to asking whether a subsequent call to
-         * `get()` would return a non-null value.
-         *
-         * @param key
-         * The key to search for.
-         *
-         * @returns
-         * `true` if the key can be resolved from the scope chain,
-         * otherwise `false`.
-         *
-         * @since 1.0.0
-         */
         hasResolvable(key: ScopeKey): boolean {
             return this.hasOwn(key) || this.hasInherited(key);
         },
 
-        /**
-         * Stores a value in the current active scope.
-         *
-         * Values are always written locally and never propagated to
-         * parent scopes.
-         *
-         * By default, overwriting an existing key in the same scope
-         * is forbidden to prevent accidental state mutation.
-         *
-         * Shadowing parent-scope values is fully allowed.
-         *
-         * Example:
-         *
-         * ```ts
-         * root.set("name", "Ahmad");
-         * child.set("name", "Ali");
-         * ```
-         *
-         * Both values coexist safely in separate scopes.
-         *
-         * @param key
-         * Scope key identifier.
-         *
-         * @param value
-         * Value to store.
-         *
-         * @param options
-         * Optional write behavior configuration.
-         *
-         * @param options.overwrite
-         * Allows replacing an existing key inside the current scope.
-         *
-         * @throws Error
-         * If attempting to overwrite an existing local key without
-         * `overwrite: true`.
-         *
-         * @since 1.0.0
-         */
         set: (
             key: ScopeKey,
             value: unknown,

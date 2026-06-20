@@ -396,7 +396,8 @@ class TokensController {
     }
 
     _debug() {
-        console.debug(this.#_tokens.map(t => t.reference.kind));
+        const kinds = this.#_tokens.map(t => `${t.reference.kind}:${t.origin === 'original' ? 'O' : 'I'}`);
+        console.debug(kinds);
     }
 
     /**

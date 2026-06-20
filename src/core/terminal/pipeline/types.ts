@@ -175,71 +175,151 @@ export interface TerminalOptions {
 }
 
 /**
- * Configuration options for JSON output rendering.
+ * JsonOptions
+ * ----------
  *
- * JSON output is designed for safe, deterministic, machine-readable
- * serialization of values.
+ * Configuration contract for the JSONRenderer output system.
  *
- * ---------------------------------------------------------------------
- * 🔷 RESPONSIBILITIES
- * ---------------------------------------------------------------------
- *
- * JSON options control:
- *
- * - indentation formatting
- * - compact vs pretty rendering behavior
+ * This type defines two fundamentally different rendering modes:
  *
  * ---------------------------------------------------------------------
- * 🔷 DESIGN CONSTRAINT
+ * 🔷 RENDERING MODES
  * ---------------------------------------------------------------------
  *
- * JSON output must remain:
+ * 1. **compact (transport mode)**
  *
- * - valid
- * - deterministic
- * - serialization-safe
+ *    - Designed for HTTP transfer and serialization efficiency
+ *    - Produces single-line JSON output
+ *    - Disables all layout-related formatting
+ *    - No indentation, no optional whitespace decisions
+ *    - Optimized for bandwidth and deterministic encoding
  *
- * ANSI formatting and visual styling are intentionally unsupported.
- *
- * Circular reference handling is also NOT configurable here because
- * JSON serialization enforces strict cycle rules during graph construction.
+ *    This mode prioritizes:
+ *    - minimal byte size
+ *    - fast serialization
+ *    - strict structural consistency
  *
  * ---------------------------------------------------------------------
- * @internal
- * Internal pipeline configuration only.
+ * 2. **pretty (diagnostic mode)**
+ *
+ *    - Designed for human-readable inspection
+ *    - Enables structured indentation and line breaks
+ *    - Activates layout-aware rendering rules
+ *    - Supports width-based formatting decisions (e.g. inline vs block)
+ *
+ *    This mode prioritizes:
+ *    - readability
+ *    - structural clarity
+ *    - debugging and inspection workflows
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 DESIGN CONSTRAINTS
+ * ---------------------------------------------------------------------
+ *
+ * - Compact mode is intentionally restricted:
+ *   - no indentation configuration
+ *   - no layout tuning options
+ *
+ * - Pretty mode unlocks layout controls:
+ *   - indentation spaces
+ *   - maximum line width heuristics
+ *
+ * - The renderer guarantees deterministic output in both modes.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 USAGE INTENT
+ * ---------------------------------------------------------------------
+ *
+ * This configuration is not a general-purpose formatter API.
+ * It is a low-level contract for the Zexi token rendering pipeline.
+ *
+ * It is designed to ensure:
+ *
+ * - predictable serialization behavior
+ * - separation between transport and diagnostic output
+ * - safe integration with token-based rendering engine
+ *
  * ---------------------------------------------------------------------
  * @since 1.0.0
  */
-export interface JsonOptions {
+export type JsonOptions =
+    | {
+        /**
+         * Compact mode
+         * ------------
+         *
+         * A transport-optimized JSON output format.
+         *
+         * ---------------------------------------------------------------------
+         * 🔷 DESIGN GOALS
+         * ---------------------------------------------------------------------
+         *
+         * - Single-line output
+         * - No indentation
+         * - No optional whitespace
+         * - Deterministic key ordering
+         * - Minimal byte footprint for HTTP transfer
+         *
+         * This mode prioritizes:
+         * - bandwidth efficiency
+         * - parsing speed
+         * - strict structural consistency
+         *
+         * @since 1.0.0
+         */
+        mode?: 'compact';
 
-    /**
-     * Number of spaces used for indentation in JSON output.
-     *
-     * A value of:
-     *
-     * - `0` produces minified JSON
-     * - values greater than `0` improve readability
-     *
-     * @default 2
-     * @since 1.0.0
-     */
-    spaces?: number;
+        /**
+         * Optional hard cap for line width enforcement.
+         *
+         * NOTE:
+         * In compact mode this is NOT used for formatting decisions,
+         * only for validation or future transport constraints.
+         *
+         * @since 1.0.0
+         */
+        maxWidth?: never;
 
-    /**
-     * Formatting mode for JSON output.
-     *
-     * Options:
-     *
-     * - `pretty` → formatted multi-line JSON
-     * - `compact` → minified single-line JSON
-     *
-     * This setting influences renderer layout presets and whitespace behavior.
-     *
-     * @default 'compact'
-     * @since 1.0.0
-     */
-    mode?: 'pretty' | 'compact';
-}
+        /**
+         * Indentation is disabled in compact mode.
+         *
+         * @since 1.0.0
+         */
+        spaces?: never;
+    }
+    | {
+        /**
+         * Pretty mode
+         * -----------
+         *
+         * Human-readable diagnostic format.
+         *
+         * Enables structured indentation and layout-aware rendering.
+         *
+         * @since 1.0.0
+         */
+        mode: 'pretty';
+
+        /**
+         * Number of spaces used for indentation.
+         *
+         * @default 2
+         * @since 1.0.0
+         */
+        spaces?: number;
+
+        /**
+         * Maximum line width before layout engine forces a break.
+         *
+         * Used for:
+         * - inline vs block decisions
+         * - array/object formatting strategy
+         *
+         * @default Infinity
+         * @since 1.0.0
+         */
+        maxWidth?: number;
+    };
 
 /**
  * Configuration options for debug output rendering.

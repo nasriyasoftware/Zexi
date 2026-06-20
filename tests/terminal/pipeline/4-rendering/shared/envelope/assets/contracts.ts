@@ -396,11 +396,11 @@ const generate: GenerateFunctions = {
 }
 
 const contracts = [
-    generate.regex(),
-    generate.set(),
-    generate.map(),
-    generate.function(),
-    generate.error()
-];
+    ['RegExp', generate.regex()],
+    ['Set', generate.set()],
+    ['Map', generate.map()],
+    ['Function', generate.function()],
+    ['Error', generate.error()]
+] as const;
 
 export default contracts;

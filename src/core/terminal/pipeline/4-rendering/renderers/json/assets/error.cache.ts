@@ -1,77 +1,93 @@
-import type { ErrorStartToken } from "../../../../3-tokenization/tokens/tokenization/error";
 import type { Token } from "../../../../3-tokenization/types";
+import type { StackTraceLine } from "../../../../1-graphing/types";
+import type { EnvelopeDeferredTokens } from "../../../shared/envelope/types";
+import type { ErrorStartToken } from "../../../../3-tokenization/tokens/tokenization/error";
 
 export const ERROR_SECTIONS = ['name', 'message', 'cause', 'stack'] as const;
 
+type Tokenizer = (value: unknown) => readonly Token[];
 type ErrorSection = typeof ERROR_SECTIONS[number];
-type ErrorData = { groupId: symbol; closed: boolean }
+type ErrorData = {
+    name: string;
+    message: string;
+    cause: readonly Token[];
+    stack: readonly StackTraceLine[];
+}
 
 /**
- * Internal tracking cache for structured error rendering sections.
+ * Internal deferred rendering cache for structured error envelopes.
  *
- * `ErrorCache` is responsible for coordinating lifecycle state across
- * multiple logical sections of an error during rendering:
+ * `ErrorCache` collects error metadata as error-related tokens are
+ * encountered during rendering and later generates the final envelope
+ * payload once the error scope has completed.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 DESIGN PURPOSE
+ * ---------------------------------------------------------------------
+ *
+ * Error rendering is performed in two phases:
+ *
+ * 1. Collection
+ *    - error sections are captured as they appear in the token stream
+ *    - values are stored in the cache
+ *
+ * 2. Generation
+ *    - the cache is sealed
+ *    - a complete envelope payload is generated
+ *    - the resulting tokens are injected into the renderer
+ *
+ * This allows renderers to defer emission of error data until all
+ * required information has been collected.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 COLLECTED SECTIONS
+ * ---------------------------------------------------------------------
+ *
+ * The cache may store:
  *
  * - name
  * - message
  * - cause
  * - stack
  *
- * Each section is represented by a token group and may be opened once
- * and later "consumed" (closed) exactly once during rendering.
+ * Each section may be assigned at most once.
  *
  * ---------------------------------------------------------------------
- * 🔷 DESIGN PURPOSE
+ * 🔷 DEFERRED RENDERING MODEL
  * ---------------------------------------------------------------------
  *
- * This class exists to:
+ * Rather than rendering individual error sections directly, renderers
+ * accumulate data in this cache and generate the final envelope when
+ * the corresponding `error-end` token is reached.
  *
- * - Ensure deterministic ordering of error section group closures
- * - Prevent duplicate section tracking
- * - Provide safe id-based matching for nested group tokens
- * - Track whether a section has already been consumed
+ * This ensures:
  *
- * It is strictly scoped to a single error instance and must not be reused
- * across different error tokens.
- *
- * ---------------------------------------------------------------------
- * 🔷 SECTION LIFECYCLE
- * ---------------------------------------------------------------------
- *
- * Each section goes through the following states:
- *
- * 1. **Untracked**
- *    - section not yet registered
- *
- * 2. **Tracked**
- *    - section registered via `track()`
- *    - group id stored
- *    - not yet consumed
- *
- * 3. **Consumed**
- *    - section marked as closed via `consume()`
- *    - group id returned for closing token emission
+ * - complete error data availability
+ * - deterministic envelope generation
+ * - compatibility with canonical object ordering
+ * - correct handling of nested causes
  *
  * ---------------------------------------------------------------------
- * 🔷 CONSUMPTION SEMANTICS
+ * 🔷 SEALING
  * ---------------------------------------------------------------------
  *
- * The `consume()` method:
+ * Once token generation begins, the cache becomes sealed.
  *
- * - marks the section as closed if not already closed
- * - returns the associated group id
- * - enforces single-consumption semantics per section
+ * A sealed cache:
  *
- * Re-consuming a section is safe but idempotent in terms of state change.
+ * - cannot accept additional sections
+ * - cannot generate tokens again
+ *
+ * This guarantees deterministic one-time generation semantics.
  *
  * ---------------------------------------------------------------------
  * 🔷 INVARIANTS
  * ---------------------------------------------------------------------
  *
- * - A section can only be tracked once
- * - Only tracked sections can be consumed
- * - Consumption is tracked per section independently
- * - Error identity is immutable for the lifetime of the cache
+ * - Each error section may be assigned once
+ * - Generation may occur only once
+ * - Error identity remains immutable
+ * - Required sections must be present before generation
  *
  * ---------------------------------------------------------------------
  * @since 1.0.0
@@ -88,185 +104,322 @@ class ErrorCache {
     readonly #_id: symbol;
 
     /**
-     * Internal registry of tracked error sections.
+     * Deferred envelope token template associated with the error.
      *
-     * Maps each section name to:
+     * Contains the envelope's opening and trailing token sequences that
+     * surround the generated error payload.
      *
-     * - its associated group id
-     * - whether it has been consumed (closed)
-     *
-     * @internal
-     */
-    readonly #_data = new Map<ErrorSection, ErrorData>();
-
-    /**
-     * Internal list of trailing tokens used to close error sections
-     * during rendering.
-     *
-     * These tokens represent the *structural end markers* for error
-     * subsections (e.g. stack, cause, message).
-     *
-     * They are not mutated by the cache and are treated as a static
-     * rendering resource provided at construction time.
+     * The payload tokens generated from collected error data are injected
+     * between these token groups during final generation.
      *
      * @internal
      * @since 1.0.0
      */
-    readonly #_closeTokens: Token[];
+    readonly #_envelope: EnvelopeDeferredTokens;
 
     /**
-     * Creates a new error tracking cache for a given error token.
+     * Internal storage for collected error sections.
+     *
+     * Sections are populated incrementally as error-related tokens are
+     * processed by the renderer.
+     *
+     * A partial shape is used because sections may arrive in any order and
+     * are not necessarily available simultaneously.
+     *
+     * @internal
+     * @since 1.0.0
+     */
+    readonly #_data: Partial<ErrorData> = {};
+
+    /**
+     * Indicates whether token generation has already occurred.
+     *
+     * Once sealed:
+     *
+     * - additional sections cannot be assigned
+     * - token generation cannot be performed again
+     *
+     * This enforces one-time generation semantics and prevents mutation
+     * after final envelope construction.
+     *
+     * @internal
+     * @since 1.0.0
+     */
+    #_sealed: boolean = false;
+
+    /**
+     * Creates a new deferred error rendering cache.
      *
      * @param error
-     * The error start token that defines the identity of this cache.
+     * The error start token that defines the logical identity of the error.
      *
-     * The token's `id` is used as the canonical error identifier for
-     * all tracked sections.
+     * The token's id is used to associate all collected sections with the
+     * same error instance throughout rendering.
      *
-     * @param closeTokens
-     * A static list of trailing tokens used to emit closing boundaries
-     * for error sections during rendering.
-     *
-     * These tokens are not modified by the cache. They act as structural
-     * markers consumed by the renderer after section lifecycle completion.
+     * @param envelope
+     * Deferred envelope token template used to construct the final error
+     * representation once generation occurs.
      *
      * @since 1.0.0
      */
-    constructor(error: ErrorStartToken, closeTokens: Token[]) {
+    constructor(
+        error: ErrorStartToken,
+        envelope: EnvelopeDeferredTokens
+    ) {
         this.#_id = error.id;
-        this.#_closeTokens = closeTokens;
+        this.#_envelope = envelope;
+    }
+
+    readonly #_helpers = {
+        /**
+         * Generates the payload token sequence representing the collected
+         * error data.
+         *
+         * The supplied tokenizer is used to serialize a temporary object
+         * representation of the collected error sections.
+         *
+         * When a cause is present, a placeholder value is temporarily inserted
+         * into the object and later replaced with the previously captured cause
+         * token sequence.
+         *
+         * This allows nested error causes to retain their original token
+         * structure while still benefiting from normal object tokenization and
+         * canonical property ordering.
+         *
+         * The outer object wrapper tokens generated by the tokenizer are
+         * removed so that only payload tokens remain.
+         *
+         * @param tokenizer
+         * Object tokenizer used to serialize the collected error data.
+         *
+         * @returns
+         * The token sequence representing the error payload only.
+         *
+         * @throws Error
+         * If required error data is missing.
+         * If the cause placeholder cannot be located.
+         *
+         * @internal
+         * @since 1.0.0
+         */
+        getDataTokens: (tokenizer: Tokenizer): Token[] => {
+            if (!('name' in this.#_data)) {
+                throw new Error(`Invariant violation: Error name was not set.`);
+            }
+
+            const data: Record<string, unknown> = {
+                name: this.#_data.name,
+            }
+
+            if ('message' in this.#_data) {
+                data.message = this.#_data.message;
+            }
+
+            if ('cause' in this.#_data) {
+                data.cause = '<cause_placeholder>';
+            }
+
+            if ('stack' in this.#_data) {
+                data.stack = this.#_data.stack;
+            }
+
+            const errTokens = [...tokenizer(data)];
+
+            if ('cause' in this.#_data) {
+                const causeIndex = errTokens.findIndex(t => t.kind === 'primitive' && t.value === '<cause_placeholder>');
+                if (causeIndex === -1) {
+                    throw new Error(`Invariant violation: Cause placeholder token was not found.`);
+                }
+
+                errTokens.splice(causeIndex, 1, ...this.#_data.cause!);
+            }
+
+            /**
+             * Ignoring the object start and end tokens
+             * 
+             * Start tokens:
+             * "group-start", "object-name", "object-open", "soft-line", "indent-start"
+             * 
+             * End tokens:
+             * "indent-end", "soft-line",  "object-close", "group-end"
+             */
+            return errTokens.slice(5, -4);
+        }
     }
 
     /**
-     * Registers a new error section for tracking.
+     * Returns the unique identifier of the error instance represented by
+     * this cache.
      *
-     * Each section can only be registered once per cache instance.
-     *
-     * @param section
-     * Logical error section name (e.g. `"name"`, `"message"`).
-     *
-     * @param id
-     * The group id associated with the section's token boundary.
-     *
-     * @throws
-     * If the section has already been tracked.
-     * If the section is an invalid section name.
-     *
-     * @since 1.0.0
-     */
-    track(section: ErrorSection, id: symbol): void {
-        if (this.#_data.has(section)) {
-            throw new Error(`section "${section}" already tracked`);
-        }
-
-        if (!ERROR_SECTIONS.includes(section)) {
-            throw new Error(`invalid section "${section}"`);
-        }
-
-        this.#_data.set(section, { groupId: id, closed: false });
-    }
-
-    /**
-     * Checks whether a section has been registered in this cache.
-     *
-     * This does NOT indicate whether the section has been consumed.
-     *
-     * @param section
-     * The section to check.
+     * This identifier is inherited from the originating error token and is
+     * used to verify ownership of collected error sections.
      *
      * @returns
-     * `true` if the section is tracked, otherwise `false`.
-     *
-     * @since 1.0.0
-     */
-    isRegistered(section: ErrorSection): boolean {
-        return this.#_data.has(section);
-    }
-
-    /**
-     * Checks whether a section has already been consumed (closed).
-     *
-     * A section is considered consumed after its group has been closed
-     * via `consume()`.
-     *
-     * @param section
-     * The section to check.
-     *
-     * @returns
-     * `true` if the section has been consumed, otherwise `false`.
-     *
-     * @since 1.0.0
-     */
-    isConsumed(section: ErrorSection): boolean {
-        const data = this.#_data.get(section);
-
-        return data ? data.closed : false;
-    }
-
-    /**
-     * Consumes a tracked error section and returns its group identifier.
-     *
-     * This method:
-     *
-     * - marks the section as consumed (if not already)
-     * - returns the associated group id for closing tokens
-     *
-     * @param section
-     * The section to consume.
-     *
-     * @returns
-     * The group id associated with the section.
-     *
-     * @throws
-     * If the section has not been previously tracked.
-     * If the section is an invalid section name.
-     *
-     * @since 1.0.0
-     */
-    consume(section: ErrorSection): symbol {
-        if (!ERROR_SECTIONS.includes(section)) {
-            throw new Error(`invalid section "${section}"`);
-        }
-
-        if (!this.isRegistered(section)) {
-            throw new Error(`section "${section}" not tracked`);
-        }
-
-        const data = this.#_data.get(section)!;
-
-        if (!data.closed) {
-            data.closed = true;
-        }
-
-        return data.groupId;
-    }
-
-    /**
-     * Returns the unique identifier of the error instance.
-     *
-     * This id is used to ensure that all tracked sections belong to the
-     * same logical error during rendering.
+     * The unique error identifier.
      *
      * @since 1.0.0
      */
     get errorId(): symbol { return this.#_id; }
 
     /**
-     * Returns the trailing tokens used for closing error sections.
+     * Indicates whether token generation has already occurred.
      *
-     * These tokens define the structural end of error rendering segments
-     * (such as message, cause, stack) and are emitted after section
-     * consumption is complete.
-     *
-     * The returned array is the same reference provided at construction
-     * time and is not modified by this cache.
+     * A sealed cache is immutable and cannot accept additional section
+     * assignments.
      *
      * @returns
-     * The static list of closing tokens associated with this error cache.
+     * `true` if generation has completed; otherwise `false`.
      *
      * @since 1.0.0
      */
-    get closeTokens(): Token[] { return this.#_closeTokens; }
+    get isSealed(): boolean { return this.#_sealed; }
+
+    /**
+     * Assigns a value to an error section.
+     *
+     * Each section may be assigned at most once during the lifetime of the
+     * cache.
+     *
+     * Values are validated according to the expected type of the target
+     * section before being stored.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SECTION TYPES
+     * ---------------------------------------------------------------------
+     *
+     * - `name` → string
+     * - `message` → string
+     * - `cause` → token sequence
+     * - `stack` → stack trace lines
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 IMMUTABILITY
+     * ---------------------------------------------------------------------
+     *
+     * Cause token arrays are frozen before storage to prevent accidental
+     * mutation after capture.
+     *
+     * ---------------------------------------------------------------------
+     * @template T
+     * Error section name.
+     *
+     * @param section
+     * Section to assign.
+     *
+     * @param value
+     * Value associated with the section.
+     *
+     * @throws Error
+     * If the cache has already been sealed.
+     * If the section has already been assigned.
+     * If the value type is invalid.
+     *
+     * @since 1.0.0
+     */
+    set<T extends ErrorSection>(section: T, value: ErrorData[T]) {
+        if (this.#_sealed) {
+            throw new Error(`Invariant violation: Cannot set error section "${section}" after completion.`);
+        }
+
+        if (!ERROR_SECTIONS.includes(section)) {
+            throw new Error(`Invalid error section "${section}"`);
+        }
+
+        if (section in this.#_data) {
+            throw new Error(`Invariant violation: Error section "${section}" already set`);
+        }
+
+        switch (section) {
+            case 'name':
+            case "message": {
+                if (typeof value !== 'string') {
+                    throw new Error(`Invariant violation: Error section "${section}" must be a string, received "${typeof value}"`);
+                }
+
+                break;
+            }
+
+            case 'cause': {
+                if (!Array.isArray(value)) {
+                    throw new Error(`Invariant violation: Error section "${section}" must be an array, received "${typeof value}"`);
+                }
+
+                if (!Object.isFrozen(value)) {
+                    Object.freeze(value);
+                }
+
+                break;
+            }
+
+            case 'stack': {
+                if (!Array.isArray(value)) {
+                    throw new Error(`Invariant violation: Error section "${section}" must be an array, received "${typeof value}"`);
+                }
+
+                break;
+            }
+        }
+
+        this.#_data[section] = value;
+    }
+
+    /**
+     * Generates the final envelope token sequence for the collected error.
+     *
+     * Generation seals the cache and prevents any further modifications.
+     *
+     * The resulting token sequence consists of:
+     *
+     * - envelope opening tokens
+     * - generated error payload tokens
+     * - envelope trailing tokens
+     *
+     * The returned token array is frozen and safe for injection into the
+     * renderer token stream.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 GENERATION LIFECYCLE
+     * ---------------------------------------------------------------------
+     *
+     * Calling this method:
+     *
+     * 1. validates generation state
+     * 2. seals the cache
+     * 3. generates payload tokens
+     * 4. constructs the final envelope token sequence
+     *
+     * ---------------------------------------------------------------------
+     * @param tokenizer
+     * Tokenizer used to serialize collected error data.
+     *
+     * @returns
+     * Frozen token sequence representing the complete error envelope.
+     *
+     * @throws Error
+     * If generation has already occurred.
+     * If required error data is missing.
+     *
+     * @since 1.0.0
+     */
+    generateTokens(tokenizer: Tokenizer): readonly Token[] {
+        if (this.#_sealed) {
+            throw new Error(`Invariant violation: Cannot generate tokens after completion.`);
+        }
+
+        this.#_sealed = true;
+
+        // Generate error payload tokens
+        const errTokens = this.#_helpers.getDataTokens(tokenizer);
+
+        // Construct final token sequence
+        const finalTokens = [
+            ...this.#_envelope.tokens.start,
+            ...errTokens,
+            ...this.#_envelope.tokens.trailing
+        ];
+
+        return Object.freeze(finalTokens);
+    }
 }
 
 export default ErrorCache;

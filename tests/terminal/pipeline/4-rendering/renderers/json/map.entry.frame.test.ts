@@ -1,63 +1,13 @@
-import GraphBuilder from "../../../../../../src/core/terminal/pipeline/1-graphing/builder";
-import RepresentationBuilder from "../../../../../../src/core/terminal/pipeline/2-representation/builder";
-import TokensBuffer from "../../../../../../src/core/terminal/pipeline/3-tokenization/container/tokens.buffer";
-import Tokenizer from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizer";
-import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
 
-import type { GraphConfig } from "../../../../../../src/core/terminal/pipeline/4-rendering/types/types";
 import type { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+
+import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
 import MapEntryFrame from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/assets/map.entry.frame";
 
-// Helpers (ONLY allowed pipeline entry point)
-const tokenize = (
-    value: unknown,
-    preset: 'json' | 'ignoredCycles' | 'markedCycles'
-): readonly Token[] => {
-    const config: GraphConfig = {
-        cycles: 'ignore',
-        canonical: false
-    };
+import _rendering from "../../helpers/helpers";
 
-    switch (preset) {
-        case 'json': {
-            config.canonical = true;
-            config.cycles = 'throw';
-            break;
-        }
-
-        case 'ignoredCycles': {
-            config.cycles = 'ignore';
-            break;
-        }
-
-        case 'markedCycles': {
-            config.cycles = 'mark';
-            break;
-        }
-    }
-
-    const graph = GraphBuilder.build(value, config);
-    const rep = RepresentationBuilder.build(graph);
-    const buffer = Tokenizer.tokenize(rep);
-    return TokensBuffer.toArray(buffer);
-}
-
-const extractKinds = (tokens: readonly any[]) => tokens.map(t => t.kind);
-
-const tokenizer = {
-    json: (value: unknown) => tokenize(value, "json"),
-    ignoredCycles: (value: unknown) => tokenize(value, "ignoredCycles"),
-    markedCycles: (value: unknown) => tokenize(value, "markedCycles"),
-} as const;
-
-const tokenizers = [
-    tokenizer.json,
-    tokenizer.ignoredCycles,
-    tokenizer.markedCycles
-] as const;
-
-const makeFrame = (fn: (v: unknown) => readonly Token[]) => {
-    return new MapEntryFrame(fn);
+const makeFrame = (tokenizer: (v: unknown) => readonly Token[]) => {
+    return new MapEntryFrame(tokenizer);
 };
 
 const generatedTokensKinds = [
@@ -77,7 +27,7 @@ const generatedTokensKinds = [
 
 describe("MapEntryFrame contracts", () => {
 
-    it.each(tokenizers)("implements the insertion contract for %s", (tokenizer) => {
+    it.each(_rendering.tokenizers)("implements the insertion contract for %s", (_name, tokenizer) => {
         const frame = makeFrame(tokenizer);
 
         expect(frame.isComplete).toBe(false);
@@ -92,7 +42,7 @@ describe("MapEntryFrame contracts", () => {
             expect(frame.isComplete).toBe(false);
 
             const newTokens = frame.getTokens();
-            const kinds = extractKinds(newTokens);
+            const kinds = _rendering.extractKinds(newTokens);
 
             const parts = {
                 start: generatedTokensKinds.slice(0, 10),
@@ -121,7 +71,7 @@ describe("MapEntryFrame contracts", () => {
             expect(frame.isComplete).toBe(true);
 
             const newTokens = frame.getTokens();
-            const kinds = extractKinds(newTokens);
+            const kinds = _rendering.extractKinds(newTokens);
 
             const parts = {
                 start: generatedTokensKinds.slice(0, 10),
@@ -156,18 +106,18 @@ describe("MapEntryFrame contracts", () => {
         }
     });
 
-    it.each(tokenizers)(
+    it.each(_rendering.tokenizers)(
         "rejects applying an empty stream for %s",
-        (tokenizer) => {
+        (_name, tokenizer) => {
             const frame = makeFrame(tokenizer);
 
             expect(() => frame.apply()).toThrow('Invariant violation: Cannot apply empty tokens.');
         }
     );
 
-    it.each(tokenizers)(
+    it.each(_rendering.tokenizers)(
         "rejects applying after completion for %s",
-        (tokenizer) => {
+        (_name, tokenizer) => {
             const frame = makeFrame(tokenizer);
 
             frame.add(new TOKENS.Primitive('string', 'a'));
@@ -178,16 +128,15 @@ describe("MapEntryFrame contracts", () => {
 
             expect(frame.isComplete).toBe(true);
 
-            expect(() => frame.apply())
-                .toThrow(
-                    'Invariant violation: Cannot apply tokens after its completion.'
-                );
+            expect(() => frame.apply()).toThrow(
+                'Invariant violation: Cannot apply tokens after its completion.'
+            );
         }
     );
 
-    it.each(tokenizers)(
+    it.each(_rendering.tokenizers)(
         "rejects adding tokens after completion for %s",
-        (tokenizer) => {
+        (_name, tokenizer) => {
             const frame = makeFrame(tokenizer);
 
             frame.add(new TOKENS.Primitive('string', 'a'));
@@ -208,9 +157,9 @@ describe("MapEntryFrame contracts", () => {
         }
     );
 
-    it.each(tokenizers)(
+    it.each(_rendering.tokenizers)(
         "returns an immutable token snapshot for %s",
-        (tokenizer) => {
+        (_name, tokenizer) => {
             const frame = makeFrame(tokenizer);
 
             const tokens = frame.getTokens();

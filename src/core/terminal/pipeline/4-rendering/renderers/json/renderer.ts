@@ -2,247 +2,430 @@ import ZexiRenderingContext from "../../shared/context/context";
 import { resolveRendererConfig } from "../../shared/helpers";
 import { hasOwnProp } from "../../../../../../utils/utils";
 
-import GraphBuilder from "../../../1-graphing/builder";
-import PropertyNode from "../../../1-graphing/nodes/assets/property.node";
-import RepresentationBuilder from "../../../2-representation/builder";
-import Tokenizer from "../../../3-tokenization/tokenizer";
-import TokensBuffer from "../../../3-tokenization/container/tokens.buffer";
+import keys from "./helpers/keys";
 import TOKENS from "../../../3-tokenization/tokens";
 import DataEnvelope from "../../shared/envelope/data.envelope";
-import { PropertyToken } from "../../../3-tokenization/tokens/tokenization/property.token";
+import JSONTokenizer from "./helpers/tokenizer";
+import JSONHelpers from "./helpers/helpers";
 
-import ErrorCache, { ERROR_SECTIONS } from "./assets/error.cache";
+import ErrorCache from "./assets/error.cache";
 import ObjectCache from "./assets/object.cache";
-import MapEntryFrame from "./assets/map.entry.frame";
 
-import type { JSONConfig } from "./types";
+import type { JSONConfig, JSONRendererFlags } from "./types";
 import type { JsonOptions } from "../../../types";
 import type { Token } from "../../../3-tokenization/types";
-
-const ERROR_CACHE_KEY = Symbol.for('error_cache');
-const OBJECT_CACHE_KEY = Symbol.for('object_cache');
 
 /**
  * JSONRenderer
  * ------------
  *
- * A deterministic token-stream renderer that converts Zexi token graphs
- * into a structured JSON-compatible output.
+ * A deterministic, token-driven execution engine that converts a Zexi
+ * token stream into a final JSON string representation.
  *
- * This renderer does NOT operate on raw JavaScript objects directly.
- * Instead, it consumes a pre-tokenized representation produced by the
- * Zexi pipeline:
+ * This renderer operates strictly on the output of the Zexi pipeline:
  *
- *    GraphBuilder → RepresentationBuilder → Tokenizer → TokensBuffer → JSONRenderer
+ *    GraphBuilder
+ *        ↓
+ *    RepresentationBuilder
+ *        ↓
+ *    Tokenizer
+ *        ↓
+ *    TokensBuffer
+ *        ↓
+ *    JSONRenderer
  *
  * ---------------------------------------------------------------------
- * 🔷 DESIGN GOALS
+ * 🔷 CORE RESPONSIBILITY
  * ---------------------------------------------------------------------
  *
- * 1. **Token-Driven Rendering**
- *    - Rendering is fully driven by immutable token streams
- *    - No structural introspection of runtime JS objects occurs here
- *    - Ensures deterministic output across all environments
+ * The JSONRenderer is NOT a serializer in the traditional sense.
  *
- * 2. **Layout-Aware Serialization**
- *    - Supports compact and formatted layouts via renderer config
- *    - Layout decisions are applied at render-time, not tokenization-time
+ * It is a **token execution engine** that:
  *
- * 3. **Behavior-Aware Exclusion Rules**
- *    - Certain JS constructs are intentionally NOT serialized:
+ * - consumes immutable token streams
+ * - executes structural rendering logic
+ * - applies layout decisions (inline vs block)
+ * - coordinates multi-pass transformations (object / set / map / error)
+ * - produces a final string output
  *
- *      ❌ Methods (function-valued properties)
- *      ❌ Getters / setters (accessor side effects risk)
- *      ❌ Symbols (non-serializable identity values)
- *      ❌ Undefined values (omitted from JSON output)
+ * It explicitly avoids:
  *
- *    - Reason:
- *      JSONRenderer is strictly a *data representation layer*, not a
- *      behavior-preserving serializer.
+ * ❌ direct object traversal
+ * ❌ runtime reflection-based serialization
+ * ❌ mutation of input values
  *
- * 4. **Side-Effect Safety Model**
- *    - The renderer must never invoke user code
- *    - Avoids accidental execution of:
- *        - getters
- *        - methods
- *        - computed properties
- *    - Guarantees serialization is PURE and OBSERVATION-ONLY
+ * ---------------------------------------------------------------------
+ * 🔷 ARCHITECTURAL ROLE
+ * ---------------------------------------------------------------------
  *
- * 5. **Anchor-Based Structural Injection**
- *    - Uses `Anchor` tokens to inject envelopes and structured segments
- *    - Enables late-stage composition of nested structures (Map, Set, Error)
- *    - Prevents reliance on fragile index arithmetic
+ * The renderer is the *final stage of a multi-phase pipeline*, and is
+ * responsible for:
+ *
+ * - interpreting structural tokens
+ * - delegating specialized structures to helpers/passes
+ * - resolving layout at render-time (not build-time)
+ * - enforcing deterministic output rules
+ *
+ * It is tightly coupled with:
+ *
+ * - JSONHelpers (pass orchestration + utilities)
+ * - LayoutResolver (inline/block decision system)
+ * - ErrorCache / ObjectCache (cross-pass state coordination)
+ * - DataEnvelope (structured injection system)
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 DESIGN PRINCIPLES
+ * ---------------------------------------------------------------------
+ *
+ * 1. **Deterministic Execution**
+ *    - Same token stream ALWAYS produces identical output
+ *
+ * 2. **Single-Pass Traversal with Controlled Rewrites**
+ *    - Token stream is consumed linearly
+ *    - Structural injections occur via anchors (not mutation hacks)
+ *
+ * 3. **Multi-Pass Structural Expansion**
+ *    - Complex types are expanded via envelopes:
+ *        - Map
+ *        - Set
+ *        - Error
+ *        - RegExp
+ *        - Function metadata
+ *
+ * 4. **Layout Decoupling**
+ *    - Layout decisions are made at render-time
+ *    - Controlled by LayoutResolver + context inheritance
+ *
+ * 5. **Strict Scope Integrity**
+ *    - Every group-start MUST eventually resolve to group-end
+ *    - Rendering failure = structural inconsistency
  *
  * ---------------------------------------------------------------------
  * 🔷 INTERNAL STATE MODEL
  * ---------------------------------------------------------------------
  *
- * - `#_ctx`
- *   Rendering context holding:
- *   - token cursor state
- *   - scope stack
- *   - writer buffer
- *   - shared renderer data (caches)
+ * ### #_ctx (ZexiRenderingContext)
+ * Central execution context containing:
  *
- * - `#_ignoredTokens`
- *   Tokens explicitly skipped during rendering traversal
+ * - token cursor
+ * - scope stack (group tracking)
+ * - writer buffer
+ * - shared renderer data (caches, metadata)
  *
- * - `#_flags`
- *   Controls rendering behavior:
- *   - `ignoreCurrentGroup`: skip entire group subtree
- *   - `skipNextSeparator`: suppress trailing commas
- *   - `skipNextSoftLine`: suppress formatting line breaks
+ * ### #_ignoredTokens
+ * A transient skip-set used to avoid double processing of injected tokens.
+ *
+ * ### #_flags (JSONRendererFlags)
+ * Ephemeral execution controls:
+ *
+ * - ignoreCurrentGroup
+ * - skipNextSeparator
+ * - skipNextSoftLine
+ * - forceNextGroupAsBlock
+ *
+ * ### #_helpers
+ * JSONHelpers instance providing:
+ *
+ * - layout resolution
+ * - pass execution (object/map/set)
+ * - abort control
+ * - structural utilities
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 RENDERING MODEL
+ * ---------------------------------------------------------------------
+ *
+ * Rendering is performed via a **token execution loop**, where each token
+ * is interpreted according to its kind.
+ *
+ * The renderer may:
+ *
+ * - write directly to output buffer
+ * - inject new tokens into stream (envelopes)
+ * - delegate to structural passes
+ * - modify layout state
+ * - skip tokens via ignored set
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 STRUCTURAL PASSES
+ * ---------------------------------------------------------------------
+ *
+ * Some token groups are not rendered directly but delegated:
+ *
+ * - objectLiteral → objectPass (via JSONHelpers)
+ * - Set → setPass (envelope + size computation)
+ * - Map → mapPass (entry framing + envelope construction)
+ * - Error → ErrorCache + envelope reconstruction
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 ERROR MODEL
+ * ---------------------------------------------------------------------
+ *
+ * Errors are treated as **structured envelopes**, not plain strings.
+ *
+ * - Error data is accumulated in ErrorCache
+ * - cause/stack/name/message are resolved separately
+ * - final emission happens at `error-end`
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 SAFETY GUARANTEES
+ * ---------------------------------------------------------------------
+ *
+ * ✔ No mutation of input values
+ * ✔ No execution of user-provided code (except explicit callback tokens)
+ * ✔ Deterministic output
+ * ✔ Strict scope validation
+ * ✔ Controlled token injection only via anchors
  *
  * ---------------------------------------------------------------------
  * @since 1.0.0
  */
 class JSONRenderer {
     /**
-     * Immutable renderer configuration derived from user options
-     * and resolved through the JSON rendering preset system.
+     * Rendering mode selector.
      *
      * ---------------------------------------------------------------------
-     * 🔷 PURPOSE
+     * 🔷 MODES
      * ---------------------------------------------------------------------
      *
-     * Controls all formatting decisions during rendering:
+     * - `compact`
+     *   Produces minimal output with reduced whitespace and inline formatting.
      *
-     * - layout mode (compact / pretty / strict)
+     * - `pretty`
+     *   Produces human-readable output with layout-aware spacing and line breaks.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN NOTE
+     * ---------------------------------------------------------------------
+     *
+     * This value is immutable after construction and determines:
+     *
+     * - layout resolution strategy
+     * - whitespace normalization behavior
+     * - inline vs block rendering decisions
+     *
+     * @since 1.0.0
+     */
+    readonly #_mode: 'compact' | 'pretty' = 'compact';
+
+    /**
+     * Normalized renderer configuration.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 RESPONSIBILITY
+     * ---------------------------------------------------------------------
+     *
+     * Derived from:
+     * - user-provided options
+     * - renderer preset system (`resolveRendererConfig`)
+     *
+     * Controls formatting rules applied during rendering:
+     *
      * - indentation size (spaces)
-     * - whitespace normalization rules
-     * - line-break strategy
+     * - line break strategy (soft / strict / preserve)
+     * - whitespace normalization mode
+     * - layout constraints
      *
-     * This value is computed once at construction time and never mutated.
+     * ---------------------------------------------------------------------
+     * 🔷 IMMUTABILITY GUARANTEE
+     * ---------------------------------------------------------------------
+     *
+     * This object is computed once at construction time and is never mutated
+     * during rendering execution.
      *
      * @since 1.0.0
      */
     readonly #_config: JSONConfig;
 
     /**
-     * Core rendering execution context.
+     * Shared rendering execution context.
      *
      * ---------------------------------------------------------------------
      * 🔷 ROLE
      * ---------------------------------------------------------------------
      *
-     * Acts as the central state container for the renderer pipeline:
+     * Central state container for the entire rendering pipeline.
      *
-     * - token stream traversal state (cursor, peek, next)
-     * - scope stack tracking (group nesting)
-     * - writer buffer (final output accumulation)
-     * - shared cross-renderer metadata storage
+     * Provides:
+     *
+     * - token stream traversal (peek / next / inject)
+     * - scope tracking (group nesting, commits)
+     * - writer buffer (final output assembly)
+     * - cross-pass metadata storage (`ctx.data`)
      *
      * ---------------------------------------------------------------------
-     * 🔷 DESIGN NOTE
+     * 🔷 DESIGN PRINCIPLE
      * ---------------------------------------------------------------------
      *
-     * This object is intentionally shared across all render helpers
-     * (object / map / set / error / regex) to maintain:
+     * The renderer is strictly token-driven; this context is the ONLY
+     * mutable runtime state used during rendering.
      *
-     * - deterministic traversal order
-     * - consistent scope resolution
-     * - unified output stream
+     * It is shared across:
+     *
+     * - JSONHelpers
+     * - object/map/set/error passes
+     * - layout resolution system
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SAFETY MODEL
+     * ---------------------------------------------------------------------
+     *
+     * - No direct mutation of token values
+     * - Only controlled structural mutation via `inject`
+     * - Scope integrity enforced via `scopes`
      *
      * @since 1.0.0
      */
     readonly #_ctx: ZexiRenderingContext;
 
     /**
-     * Mutable rendering control flags used to influence
-     * local traversal behavior during token processing.
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 FLAG SEMANTICS
-     * ---------------------------------------------------------------------
-     *
-     * - ignoreCurrentGroup
-     *   Skips rendering of the current structural group.
-     *   Used when an object/map/set is collapsed or replaced.
-     *
-     * - skipNextSeparator
-     *   Prevents the next separator token from being written.
-     *   Used for trailing comma suppression in object-like structures.
-     *
-     * - skipNextSoftLine
-     *   Suppresses the next soft-line token.
-     *   Used to avoid orphaned formatting after structural removals.
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 DESIGN NOTE
-     * ---------------------------------------------------------------------
-     *
-     * These flags are *ephemeral control signals*, not state.
-     * They are expected to flip frequently during rendering.
-     *
-     * @since 1.0.0
-     */
-    readonly #_flags = {
-        ignoreCurrentGroup: false,
-        skipNextSeparator: false,
-        skipNextSoftLine: false
-    }
-
-    /**
-     * A transient registry of tokens that must be skipped
-     * during the rendering pass.
+     * Transient skip registry for token suppression.
      *
      * ---------------------------------------------------------------------
      * 🔷 PURPOSE
      * ---------------------------------------------------------------------
      *
-     * Allows structural renderers (Map, Set, Object, Error)
-     * to inject tokens into the stream without them being processed
-     * by the main rendering loop.
+     * Tracks tokens that must be ignored exactly once during traversal.
+     *
+     * Used for:
+     *
+     * - anchor-based injection cleanup
+     * - structural pass transformations
+     * - preventing double-processing of injected tokens
      *
      * ---------------------------------------------------------------------
-     * 🔷 BEHAVIOR
+     * 🔷 BEHAVIOR MODEL
      * ---------------------------------------------------------------------
      *
-     * - Tokens added here are skipped exactly once
-     * - After skipping, they are automatically removed
-     * - Prevents double-processing during injection-based rendering
+     * - Tokens are added before injection or transformation
+     * - When encountered in the main loop, they are skipped and removed
+     * - Guarantees single-pass suppression semantics
      *
      * ---------------------------------------------------------------------
      * 🔷 DESIGN NOTE
      * ---------------------------------------------------------------------
      *
-     * This set is critical for supporting:
-     * - anchor-based injection
-     * - deferred envelope composition
-     * - safe mid-stream token mutation
+     * This mechanism is critical for safe mid-stream mutation of the
+     * token graph without invalidating traversal order.
      *
      * @since 1.0.0
      */
     readonly #_ignoredTokens = new Set<Token>();
 
     /**
-     * Creates a new JSONRenderer instance.
-     *
-     * The constructor initializes:
-     * - Renderer configuration (layout + spacing rules)
-     * - Rendering context bound to the provided token stream
-     *
-     * It also validates and normalizes user-provided formatting options,
-     * ensuring safe constraints for indentation.
+     * Shared helper utility layer for rendering operations.
      *
      * ---------------------------------------------------------------------
-     * 🔷 OPTION VALIDATION RULES
+     * 🔷 RESPONSIBILITY
      * ---------------------------------------------------------------------
      *
-     * - `spaces` must be a number in range [0, 8]
-     * - Invalid values result in immediate exceptions
+     * Provides high-level rendering utilities including:
+     *
+     * - visibility rules (`isVisibleToken`)
+     * - layout resolution (`getLayout`)
+     * - structural transforms (object / map / set passes)
+     * - rendering control actions (abort, ignore group)
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN NOTE
+     * ---------------------------------------------------------------------
+     *
+     * This abstraction exists to:
+     *
+     * - isolate structural rendering logic from main loop
+     * - reuse pass logic across object/map/set rendering
+     * - reduce complexity in `#_render`
+     *
+     * @since 1.0.0
+     */
+    readonly #_helpers: JSONHelpers;
+
+    /**
+     * Ephemeral rendering control flags.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * Controls short-lived rendering behaviors during traversal.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 FLAGS
+     * ---------------------------------------------------------------------
+     *
+     * - `ignoreCurrentGroup`
+     *   Skips rendering of the current structural group entirely.
+     *
+     * - `skipNextSeparator`
+     *   Suppresses the next separator token (e.g. trailing commas).
+     *
+     * - `skipNextSoftLine`
+     *   Suppresses the next soft-line token (formatting cleanup).
+     *
+     * - `forceNextGroupAsBlock`
+     *   Forces the next detected group to be rendered in block layout.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN NOTE
+     * ---------------------------------------------------------------------
+     *
+     * These flags are:
+     *
+     * - temporary (often set and cleared within a single pass)
+     * - mutation-heavy by design
+     * - NOT part of long-term renderer state
+     *
+     * @since 1.0.0
+     */
+    readonly #_flags: JSONRendererFlags = {
+        ignoreCurrentGroup: false,
+        skipNextSeparator: false,
+        skipNextSoftLine: false,
+        forceNextGroupAsBlock: false
+    }
+
+    /**
+     * Constructs a new JSONRenderer instance.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INITIALIZATION FLOW
+     * ---------------------------------------------------------------------
+     *
+     * 1. Resolve rendering mode (`compact | pretty`)
+     * 2. Build normalized configuration via preset system
+     * 3. Validate and override spacing rules (if provided)
+     * 4. Initialize rendering context
+     * 5. Create shared helper layer (`JSONHelpers`)
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 CONFIG VALIDATION RULES
+     * ---------------------------------------------------------------------
+     *
+     * - `spaces` must be a number
+     * - Must be in range [0, 8]
+     * - Invalid values throw immediately
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN GUARANTEE
+     * ---------------------------------------------------------------------
+     *
+     * After construction:
+     *
+     * - configuration is immutable
+     * - context is fully initialized
+     * - helper layer is bound to shared state
      *
      * @param tokens
-     * The immutable token stream produced by the Zexi pipeline.
+     * Immutable token stream from Zexi pipeline.
      *
      * @param options
-     * Rendering configuration controlling formatting and layout behavior.
+     * Rendering configuration (layout, spacing, maxWidth).
      *
      * @throws {TypeError}
      * If `spaces` is not a number.
      *
      * @throws {RangeError}
-     * If `spaces` is outside the allowed range.
+     * If `spaces` is outside [0, 8].
      *
      * @since 1.0.0
      */
@@ -250,9 +433,10 @@ class JSONRenderer {
         tokens: readonly Token[],
         options: JsonOptions
     ) {
-        this.#_config = resolveRendererConfig('json', options?.mode ?? 'compact');
+        this.#_mode = options?.mode ?? 'compact';
+        this.#_config = resolveRendererConfig('json', this.#_mode);
 
-        if (options) {
+        if (this.#_mode === 'compact' && options) {
             if (hasOwnProp(options, 'spaces')) {
                 if (typeof options.spaces !== 'number') {
                     throw new TypeError('Spaces must be a number');
@@ -273,535 +457,18 @@ class JSONRenderer {
 
         this.#_ctx = new ZexiRenderingContext(
             tokens,
-            { spaces: this.#_config.spaces }
+            {
+                spaces: this.#_config.spaces,
+                maxWidth: this.#_mode === 'pretty' ? options.maxWidth : undefined
+            }
         );
-    }
 
-    /**
-     * Internal helper collection used during rendering traversal.
-     *
-     * These helpers provide:
-     * - Token visibility filtering
-     * - Controlled skipping of token groups
-     * - Delegation into structural renderers (Map / Set / Object)
-     *
-     * @since 1.0.0
-     */
-    readonly #_helpers = {
-        /**
-         * Determines whether a token should be included in JSON output.
-         *
-         * ---------------------------------------------------------------------
-         * 🔷 VISIBILITY RULES
-         * ---------------------------------------------------------------------
-         *
-         * A token is considered invisible if:
-         *
-         * - It is a `symbol`
-         * - It is `undefined`
-         *
-         * All other tokens are considered renderable.
-         *
-         * @param token
-         * Token to evaluate.
-         *
-         * @returns
-         * `true` if token should be rendered, otherwise `false`.
-         *
-         * @since 1.0.0
-         */
-        isVisibleToken: (token: Token): boolean => {
-            if (token.kind !== 'primitive') {
-                return true;
-            }
-
-            if (
-                token.type === 'symbol' ||
-                token.type === 'undefined'
-            ) {
-                return false;
-            }
-
-            return true;
-        },
-
-        /**
-         * Marks the current token group as ignored for rendering.
-         *
-         * This prevents further processing of the group in the rendering loop,
-         * effectively skipping its entire subtree.
-         *
-         * @since 1.0.0
-         */
-        ignoreCurrentGroup: () => {
-            this.#_flags.ignoreCurrentGroup = true;
-        },
-
-        skipNext: {
-            /**
-             * Advances the token cursor by a fixed number of steps.
-             *
-             * Used primarily to bypass structural tokens that are already
-             * handled by higher-level renderers (e.g., object/map/set wrappers).
-             *
-             * @param count
-             * Number of tokens to skip.
-             *
-             * @since 1.0.0
-             */
-            tokens: (count: number) => {
-                let skipped = 0;
-                while (
-                    this.#_ctx.tokens.hasNext() &&
-                    skipped < count
-                ) {
-                    this.#_ctx.tokens.next();
-                    skipped++;
-                }
-            }
-        },
-
-        render: {
-            /**
-             * Renders a plain object literal from the token stream.
-             *
-             * ---------------------------------------------------------------------
-             * 🔷 RESPONSIBILITIES
-             * ---------------------------------------------------------------------
-             *
-             * - Detects visible properties
-             * - Filters out non-serializable properties:
-             *     - methods
-             *     - getters/setters
-             *     - symbols
-             *     - undefined values
-             *
-             * - Tracks ignored properties for structural optimization
-             * - Determines whether object should render as `{}` or full structure
-             *
-             * ---------------------------------------------------------------------
-             * 🔷 TRAILING BEHAVIOR
-             * ---------------------------------------------------------------------
-             *
-             * - If all properties are ignored, the object is collapsed into `{}`.
-             * - If only trailing properties are ignored, the final separator is suppressed.
-             *
-             * @since 1.0.0
-             */
-            objectLiteral: () => {
-                const ignoredProps = new Set<PropertyToken>();
-                const cache = new ObjectCache(ignoredProps);
-
-                // Store the cache in the context
-                this.#_ctx.data.set(OBJECT_CACHE_KEY, cache);
-
-                let index = 0;
-                let item = this.#_ctx.tokens.peek(++index);
-                const scopes = { opened: 0, closed: 0 }
-
-                const props = new Set<PropertyToken>();
-
-                do {
-                    try {
-                        if (!item) { break; }
-                        if (item.kind === 'object-close') {
-                            scopes.closed++;
-                            if (scopes.opened === scopes.closed) {
-                                break;
-                            }
-
-                            continue;
-                        }
-
-                        if (item.kind === 'object-open') {
-                            scopes.opened++;
-                            continue;
-                        }
-
-                        // Checking if we're in the correct scope
-                        if (scopes.closed + 1 !== scopes.opened) { continue; }
-
-                        if (
-                            item.kind === 'property' && // The token kind is a property
-                            item.type === 'property'    // The token type is a property, not a method, getter, etc.
-                        ) {
-                            props.add(item);
-
-                            const valueToken = this.#_ctx.tokens.peek(index + 3);
-
-                            const isVisible = valueToken && this.#_helpers.isVisibleToken(valueToken);
-                            if (!isVisible) {
-                                ignoredProps.add(item);
-                            }
-                        }
-                    } finally {
-                        index++;
-                        item = this.#_ctx.tokens.peek(index);
-                    }
-                } while (item);
-
-                if (props.size === 0) {
-                    return;
-                }
-
-                if (props.size === ignoredProps.size) {
-                    this.#_helpers.ignoreCurrentGroup();
-                    this.#_ctx.writer.write('{}');
-                }
-
-                // Detect if the last property is ignored
-                const allProps = Array.from(props);
-                const ignored = Array.from(ignoredProps);
-
-                const lastProp = allProps[allProps.length - 1];
-                const lastIgnoredProp = ignored[ignored.length - 1];
-
-                if (lastProp === lastIgnoredProp) {
-                    // Mark the last visible property to ignore its separator
-                    const visibleProps = allProps.filter(prop => !ignored.includes(prop));
-                    const lastVisibleProp = visibleProps[visibleProps.length - 1];
-                    cache.suppressTrailingOf(lastVisibleProp);
-                }
-            },
-
-            /**
-             * Renders a Set structure into a JSON-compatible envelope.
-             *
-             * ---------------------------------------------------------------------
-             * 🔷 SERIALIZATION FORMAT
-             * ---------------------------------------------------------------------
-             *
-             * Sets are serialized as:
-             *
-             * {
-             *   "$codec": "zexi@1.0",
-             *   "$kind": "set",
-             *   "$payload": {
-             *     "size": number,
-             *     "values": [...]
-             *   }
-             * }
-             *
-             * ---------------------------------------------------------------------
-             * 🔷 IMPLEMENTATION DETAILS
-             * ---------------------------------------------------------------------
-             *
-             * - Uses token skipping to bypass structural wrappers
-             * - Injects envelope boundaries using anchor tokens
-             * - Computes size by counting separator tokens
-             * - Defers payload injection until token resolution phase
-             *
-             * @since 1.0.0
-             */
-            set: () => {
-                const initialCursor = this.#_ctx.tokens.cursor;
-
-                // Skipping set tokens
-                let skipped = 0;
-                this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `object-open`
-                this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `soft-line`
-                this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `indent-start`
-
-                const envelopeStartAnchor = new TOKENS.Anchor('set:envelope-start');
-                const dataEndAnchor = new TOKENS.Anchor('set:data-end');
-                this.#_ctx.tokens.inject(envelopeStartAnchor, { at: initialCursor + skipped + 1 });
-
-                const size = (() => {
-                    let separators = 0;
-                    let scanned = skipped; // The skipped tokens
-
-                    let item = this.#_ctx.tokens.peek(++scanned);
-                    const scopes = { opened: 1, closed: 0 }
-
-                    do {
-                        try {
-                            if (!item) { break; }
-                            if (item.kind === 'object-close') {
-                                scopes.closed++;
-                                if (scopes.opened === scopes.closed) {
-                                    const closeIndex = initialCursor + scanned;
-                                    this.#_ctx.tokens.inject(dataEndAnchor, {
-                                        // The index of the closing token - 2 tokens (`soft-line` and `indent-end`)
-                                        at: closeIndex - 2
-                                    });
-                                    break;
-                                }
-
-                                continue;
-                            }
-
-                            if (item.kind === 'object-open') {
-                                scopes.opened++;
-                                continue;
-                            }
-
-                            // Checking if we're in the correct scope
-                            if (scopes.closed + 1 !== scopes.opened) { continue; }
-
-                            if (item.kind === 'separator') {
-                                separators++;
-                            }
-                        } finally {
-                            scanned++;
-                            item = this.#_ctx.tokens.peek(scanned);
-                        }
-                    } while (item);
-
-                    return separators + 1;
-                })();
-
-                const envelop = new DataEnvelope('set', { size, values: [] });
-                const result = envelop.tokenize(this.#_tokenize);
-
-                // Add the envelope data to the stream
-                this.#_ctx.tokens.inject(result.tokens.start, { at: envelopeStartAnchor });
-
-                this.#_ctx.tokens.inject([
-                    ...result.tokens.trailing,
-                    new TOKENS.Callback(() => {
-                        this.#_ignoredTokens.add(this.#_ctx.tokens.peek(1)!); // Ignoring `indent-end`
-                        this.#_ignoredTokens.add(this.#_ctx.tokens.peek(2)!); // Ignoring `soft-line`
-                        this.#_ignoredTokens.add(this.#_ctx.tokens.peek(3)!); // Ignoring `object-close`
-                    })
-                ], { at: dataEndAnchor });
-            },
-
-            /**
-             * Renders a Map structure into a JSON-compatible envelope.
-             *
-             * ---------------------------------------------------------------------
-             * 🔷 SERIALIZATION FORMAT
-             * ---------------------------------------------------------------------
-             *
-             * {
-             *   "$codec": "zexi@1.0",
-             *   "$kind": "map",
-             *   "$payload": {
-             *     "entries": [
-             *       { "key": ..., "value": ... }
-             *     ],
-             *     "size": number
-             *   }
-             * }
-             *
-             * ---------------------------------------------------------------------
-             * 🔷 ENTRY MODEL
-             * ---------------------------------------------------------------------
-             *
-             * - Each Map entry is processed through a MapEntryFrame
-             * - Entry frames ensure correct key/value anchoring
-             * - Frames are only committed when fully closed (group-balanced)
-             *
-             * ---------------------------------------------------------------------
-             * 🔷 DESIGN CONSTRAINTS
-             * ---------------------------------------------------------------------
-             *
-             * - Entries MUST NOT be emitted before group closure
-             * - Frames enforce structural correctness via group counters
-             * - Anchors are used instead of index arithmetic for safety
-             *
-             * @since 1.0.0
-             */
-            map: () => {
-                const initialCursor = this.#_ctx.tokens.cursor;
-
-                // Skipping set tokens
-                let skipped = 0;
-                this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `object-open`
-                this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `soft-line`
-                this.#_ignoredTokens.add(this.#_ctx.tokens.peek(++skipped)!); // Ignoring `indent-start`
-
-                const envelopeStartAnchor = new TOKENS.Anchor('map:envelope-start');
-                const dataEndAnchor = new TOKENS.Anchor('map:data-end');
-                this.#_ctx.tokens.inject(envelopeStartAnchor, { at: initialCursor + skipped + 1 });
-
-                const metadata = (() => {
-                    let separators = 0;
-                    let scanned = skipped; // The skipped tokens
-
-                    let item = this.#_ctx.tokens.peek(++scanned);
-                    const objects = { opened: 1, closed: 0 }
-                    const groups = { opened: 0, closed: 0 }
-
-                    const sameObject = () => objects.closed + 1 === objects.opened;
-
-                    let entry: MapEntryFrame | undefined;
-                    const entries: (readonly Token[])[] = [];
-
-                    scanning: do {
-                        try {
-                            if (!item) { break; }
-                            this.#_ignoredTokens.add(item);
-
-                            if (item.kind === 'object-close') {
-                                objects.closed++;
-
-                                // Inject the data anchor
-                                if (objects.opened === objects.closed) {
-                                    const closeIndex = initialCursor + scanned;
-
-                                    this.#_ctx.tokens.inject(dataEndAnchor, {
-                                        // The index of the closing token - 2 tokens (`soft-line` and `indent-end`)
-                                        at: closeIndex - 2
-                                    });
-
-                                    break;
-                                }
-
-                                entry!.add(item);
-
-                                continue;
-                            } else if (item.kind === 'object-open') {
-                                objects.opened++;
-
-                                entry!.add(item);
-
-                                continue;
-                            }
-
-                            // Checking if we're in the correct scope
-                            if (!sameObject()) {
-                                entry!.add(item);
-                                continue;
-                            }
-
-                            // We're in the same object
-                            switch (item.kind) {
-                                case 'group-start': {
-                                    groups.opened++;
-
-                                    if (groups.closed + 1 === groups.opened) {
-                                        entry = new MapEntryFrame(this.#_tokenize);
-                                    }
-
-                                    continue scanning;
-                                }
-
-                                case 'group-end': {
-                                    groups.closed++;
-
-                                    if (groups.opened === groups.closed) {
-                                        if (!entry) {
-                                            throw new Error('Invariant violation: Group end without group start.');
-                                        }
-
-                                        entry.apply();
-
-                                        if (!entry.isComplete) {
-                                            throw new Error('Invariant violation: attempting to close an entry before streaming its "end" tokens.')
-                                        }
-
-                                        entries.push(entry.getTokens());
-                                        entry = undefined;
-                                    }
-
-                                    continue scanning;
-                                }
-
-                                case 'key-value-separator': {
-                                    entry?.apply();
-
-                                    continue scanning;
-                                }
-
-                                case 'separator': {
-                                    separators++;
-                                    continue scanning;
-                                }
-                            }
-
-                            if (entry && item.kind === 'primitive') {
-                                entry.add(item);
-                            }
-                        } finally {
-                            scanned++;
-                            item = this.#_ctx.tokens.peek(scanned);
-                        }
-                    } while (item);
-
-                    const mapDataTokens: Token[] = [];
-                    for (let i = 0; i < entries.length; i++) {
-                        const entryTokens = entries[i];
-                        const hasMore = i < entries.length - 1;
-
-                        mapDataTokens.push(new TOKENS.Anchor(`entry-${i}`));
-                        mapDataTokens.push(...entryTokens);
-
-                        if (hasMore) {
-                            // The group-end token of the entry object
-                            const groupEnd = mapDataTokens.pop()! as InstanceType<typeof TOKENS.GroupEnd>;
-                            console.assert(groupEnd.kind === 'group-end'), `Invariant violation: Expected 'group-end' token, but got '${groupEnd.kind}' instead.`;
-
-                            mapDataTokens.push(
-                                new TOKENS.Separator,
-                                new TOKENS.SoftLine,
-                                groupEnd
-                            )
-                        }
-                    }
-
-                    return {
-                        size: separators + 1,
-                        entriesTokens: mapDataTokens,
-                    }
-                })();
-
-                const envelop = new DataEnvelope('map', { size: metadata.size, entries: [] });
-                const result = envelop.tokenize(this.#_tokenize);
-
-                // Add the envelope data to the stream
-                this.#_ctx.tokens.inject(result.tokens.start, { at: envelopeStartAnchor });
-
-                // this.#_helpers.skipNext.tokens(metadata.skipCount);
-
-                this.#_ctx.tokens.inject([
-                    ...metadata.entriesTokens,
-                    ...result.tokens.trailing,
-                    new TOKENS.Callback(() => {
-                        this.#_ignoredTokens.add(this.#_ctx.tokens.peek(1)!); // Ignoring `indent-end`
-                        this.#_ignoredTokens.add(this.#_ctx.tokens.peek(2)!); // Ignoring `soft-line`
-                        this.#_ignoredTokens.add(this.#_ctx.tokens.peek(3)!); // Ignoring `object-close`
-                    })
-                ], { at: dataEndAnchor });
-            }
-        }
-    }
-
-    /**
-     * Converts a runtime value into a deterministic token stream.
-     *
-     * This is the ONLY entry point into the Graph → Representation → Token pipeline.
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 PIPELINE STEPS
-     * ---------------------------------------------------------------------
-     *
-     * 1. GraphBuilder builds structural graph
-     * 2. RepresentationBuilder converts graph into intermediate model
-     * 3. Tokenizer produces raw token stream
-     * 4. TokensBuffer materializes final immutable array
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 DESIGN NOTE
-     * ---------------------------------------------------------------------
-     *
-     * This function enforces canonical serialization:
-     * - cycles are always thrown (strict mode)
-     * - output is deterministic
-     *
-     * @param value
-     * Arbitrary JS value to serialize.
-     *
-     * @returns
-     * Immutable token stream representing the value.
-     *
-     * @since 1.0.0
-     */
-    #_tokenize(value: unknown): readonly Token[] {
-        const graph = GraphBuilder.build(value, { cycles: 'throw', canonical: true });
-        const rep = RepresentationBuilder.build(graph);
-        const buffer = Tokenizer.tokenize(rep);
-        return TokensBuffer.toArray(buffer);
+        this.#_helpers = new JSONHelpers({
+            ctx: this.#_ctx,
+            flags: this.#_flags,
+            ignoredTokens: this.#_ignoredTokens,
+            mode: this.#_mode
+        })
     }
 
     /**
@@ -811,34 +478,69 @@ class JSONRenderer {
      * 🔷 EXECUTION MODEL
      * ---------------------------------------------------------------------
      *
-     * - Iterates sequentially through token stream
-     * - Maintains scope stack for nested structures
-     * - Applies layout rules (spaces, line breaks)
-     * - Delegates structured types to specialized renderers:
-     *     - object
-     *     - map
-     *     - set
-     *     - error
-     *     - regex
-     *     - function envelope
+     * The renderer operates as a single deterministic pass over the token stream:
+     *
+     * 1. Sequential token traversal
+     * 2. Scope tracking (group nesting)
+     * 3. Layout resolution (inline vs block)
+     * 4. Structural delegation (object / map / set / error)
+     * 5. Controlled injection via anchors
      *
      * ---------------------------------------------------------------------
-     * 🔷 SIDE-EFFECT GUARANTEE
+     * 🔷 CORE PRINCIPLES
      * ---------------------------------------------------------------------
      *
-     * - Does NOT mutate input tokens
-     * - Only mutates internal ignored-token tracking set
-     * - Uses controlled injection via anchors
+     * 1. **Determinism**
+     *    - Same input tokens always produce same output
+     *
+     * 2. **No Token Mutation**
+     *    - Input stream is never modified in-place
+     *
+     * 3. **Injection Safety**
+     *    - All structural transformations are anchor-based
+     *
+     * 4. **Single-Pass Semantics**
+     *    - Each token is processed at most once unless re-injected
      *
      * ---------------------------------------------------------------------
-     * 🔷 OUTPUT GUARANTEE
+     * 🔷 CONTROL FLOW RULES
      * ---------------------------------------------------------------------
      *
-     * - Must end at root scope
-     * - Otherwise rendering is considered structurally invalid
+     * - `ignoredTokens` take highest priority
+     * - `ignoreCurrentGroup` overrides all rendering output
+     * - layout resolution can force fallback to block rendering
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 STRUCTURAL DELEGATION
+     * ---------------------------------------------------------------------
+     *
+     * Specialized token types are delegated to:
+     *
+     * - ObjectPass → object structures
+     * - MapPass → Map serialization
+     * - SetPass → Set serialization
+     * - ErrorCache → error envelopes
+     * - DataEnvelope → function/regex/date wrapping
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SAFETY GUARANTEES
+     * ---------------------------------------------------------------------
+     *
+     * - Never executes user code (except explicit callback tokens)
+     * - Never mutates input token objects
+     * - Never writes outside controlled writer buffer
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 FAILURE MODES
+     * ---------------------------------------------------------------------
+     *
+     * Rendering is considered invalid if:
+     *
+     * - scope stack is not empty at end
+     * - unknown token type is encountered
      *
      * @returns
-     * Final serialized JSON string output.
+     * Fully serialized JSON string.
      *
      * @throws {Error}
      * If rendering ends outside root scope.
@@ -848,15 +550,12 @@ class JSONRenderer {
     #_render() {
         const tokens = this.#_ctx.tokens;
 
-        while (tokens.hasNext()) {
+        rendering: while (tokens.hasNext()) {
             const token = tokens.next()!;
-            const ignore = this.#_ignoredTokens.has(token);
 
-            // console.debug(`[${logNow ? 'Set_' : ''}Token:${token.kind}]${ignore ? ' (Ignored)' : ''}`);
-
-            if (ignore) {
+            if (this.#_ignoredTokens.has(token)) {
                 this.#_ignoredTokens.delete(token);
-                continue;
+                continue rendering;
             }
 
             if (this.#_flags.ignoreCurrentGroup) {
@@ -867,106 +566,163 @@ class JSONRenderer {
                     this.#_ctx.scopes.commit();
                 }
 
-                continue;
+                continue rendering;
             }
 
             switch (token.kind) {
                 case 'group-start': {
                     this.#_ctx.scopes.begin({ id: token.id });
+
+                    if (this.#_flags.forceNextGroupAsBlock) {
+                        this.#_ctx.data.set(keys.RENDERING_LAYOUT_KEY, 'block', { overwrite: true });
+
+                        this.#_flags.forceNextGroupAsBlock = false;
+                    } else {
+                        if (!this.#_ctx.data.hasOwn(keys.RENDERING_LAYOUT_KEY)) {
+                            const layout = this.#_helpers.createResolver().resolve(token);
+                            this.#_ctx.data.set(keys.RENDERING_LAYOUT_KEY, layout);
+                        }
+                    }
+
                     this.#_ctx.data.set('currentGroup', token.id);
-                    continue;
+                    continue rendering;
                 }
 
                 case 'group-end': {
                     this.#_ctx.scopes.commit();
-                    continue;
+                    continue rendering;
                 }
 
                 case 'anchor':
                 case 'ansi':
                 case 'reference-start':
-                case 'reference-end': continue;
+                case 'reference-end': continue rendering;
 
                 case 'date': {
-                    this.#_ctx.writer.write(`"${token.value.toISOString()}"`);
-                    continue;
+                    const valueToWrite = this.#_ctx.scopes.isRoot
+                        ? token.value.toISOString()
+                        : `"${token.value.toISOString()}"`;
+
+                    const layout = this.#_helpers.getLayout();
+                    if (layout && layout === 'inline') {
+                        if (!this.#_ctx.writer.canFitInline(valueToWrite)) {
+                            this.#_helpers.abortWriting();
+                            continue rendering;
+                        }
+                    }
+
+                    this.#_ctx.writer.write(valueToWrite);
+                    continue rendering;
                 }
 
                 case 'function': {
                     const funcName = token.value.name ?? 'anonymous';
                     const envelope = new DataEnvelope('function', { name: funcName });
 
-                    const result = envelope.tokenize(this.#_tokenize);
+                    const result = envelope.tokenize(JSONTokenizer);
                     this.#_ctx.tokens.inject(result.tokens);
-                    continue;
+                    continue rendering;
                 }
 
                 case 'indent-start': {
                     this.#_ctx.depth.increase();
-                    continue;
+                    continue rendering;
                 }
 
                 case 'indent-end': {
                     this.#_ctx.depth.decrease()
-                    continue;
+                    continue rendering;
                 }
 
                 case 'primitive': {
-                    primitive: switch (token.type) {
-                        case 'boolean':
-                        case 'null':
-                        case 'number':
-                        case 'undefined':
-                        case 'bigint': {
-                            this.#_ctx.writer.write(String(token.value));
-                            break primitive;
-                        }
+                    const contentToWrite = (() => {
+                        switch (token.type) {
+                            case 'boolean':
+                            case 'null':
+                            case 'number':
+                            case 'undefined':
+                            case 'bigint': {
+                                return String(token.value);
+                            }
 
-                        case 'string': {
-                            this.#_ctx.writer.write(JSON.stringify(token.value));
-                            break primitive;
-                        }
+                            case 'string': {
+                                const valueToWrite = this.#_ctx.scopes.isRoot
+                                    ? token.value as string
+                                    : JSON.stringify(token.value);
 
-                        case 'symbol': {
-                            break primitive;
+                                return valueToWrite;
+                            }
+
+                            case 'symbol': {
+                                return (
+                                    this.#_ctx.scopes.isRoot
+                                        ? (token.value as symbol).toString()
+                                        : JSON.stringify(token.value)
+                                );
+                            }
+                        }
+                    })();
+
+                    if (!contentToWrite) {
+                        continue rendering;
+                    }
+
+                    const layout = this.#_helpers.getLayout();
+                    if (layout && layout === 'inline') {
+                        if (!this.#_ctx.writer.canFitInline(contentToWrite)) {
+                            this.#_helpers.abortWriting();
+                            continue rendering;
                         }
                     }
-                    continue;
+
+                    this.#_ctx.writer.write(contentToWrite);
+                    continue rendering;
                 }
 
                 case 'separator': {
                     if (this.#_flags.skipNextSeparator) {
                         this.#_flags.skipNextSeparator = false;
-                        continue;
+                        continue rendering;
                     }
 
                     this.#_ctx.writer.write(token.value);
-                    continue;
+                    continue rendering;
                 }
 
                 case 'hard-line': {
                     this.#_ctx.writer.newLine();
-                    continue;
+                    continue rendering;
                 }
 
                 case 'soft-line': {
                     if (this.#_flags.skipNextSoftLine) {
                         this.#_flags.skipNextSoftLine = false;
-                        continue;
+                        continue rendering;
                     }
 
-                    if (
-                        this.#_config.layout.lineBreaks === 'soft' ||
-                        this.#_config.layout.lineBreaks === 'strict'
-                    ) {
-                        this.#_ctx.writer.newLine();
+                    const isArrayElement = this.#_ctx.data.hasInherited(keys.ARRAY_RENDERING_KEY, 2);
+
+                    const layout = this.#_helpers.getLayout({ ofParent: !isArrayElement });
+                    if (layout && layout === 'inline') {
+                        this.#_ctx.writer.write(' ');
+                    } else {
+                        if (
+                            this.#_config.layout.lineBreaks === 'soft' ||
+                            this.#_config.layout.lineBreaks === 'strict'
+                        ) {
+                            this.#_ctx.writer.newLine();
+                        }
                     }
-                    continue;
+
+                    continue rendering;
                 }
 
                 case 'hard-space': {
-                    this.#_ctx.writer.write(' ');
-                    continue;
+                    if (this.#_mode === 'compact') {
+                        this.#_ctx.writer.write(' ');
+                    }
+
+                    continue rendering;
                 }
 
                 case 'soft-space': {
@@ -976,19 +732,19 @@ class JSONRenderer {
                     ) {
                         this.#_ctx.writer.write(' ');
                     }
-                    continue;
+                    continue rendering;
                 }
 
                 case 'key-value-separator': {
                     this.#_ctx.writer.write(token.value);
-                    continue;
+                    continue rendering;
                 }
 
                 case 'soft-wrap': {
                     if (this.#_config.layout.lineBreaks === 'soft') {
                         this.#_ctx.writer.newLine();
                     }
-                    continue;
+                    continue rendering;
                 }
 
                 case 'regex': {
@@ -998,18 +754,18 @@ class JSONRenderer {
                         flags: regex.flags
                     });
 
-                    const result = envelope.tokenize(this.#_tokenize);
+                    const result = envelope.tokenize(JSONTokenizer);
                     this.#_ctx.tokens.inject(result.tokens);
-                    continue;
+                    continue rendering;
                 }
 
                 case 'property': {
                     if (token.type !== 'property') {
                         this.#_helpers.ignoreCurrentGroup();
-                        continue;
+                        continue rendering;
                     }
 
-                    const objectCache = this.#_ctx.data.get<ObjectCache>(OBJECT_CACHE_KEY);
+                    const objectCache = this.#_ctx.data.get<ObjectCache>(keys.OBJECT_CACHE_KEY);
                     if (!objectCache) {
                         throw new Error(`Invariant violation: Attempting to render a property without an object cache`);
                     }
@@ -1023,7 +779,6 @@ class JSONRenderer {
 
                         // Find the index of the closing group token
                         // and insert the callback 2 tokens before that index
-
                         const injectAnchor = () => {
                             const cursor = this.#_ctx.tokens.cursor;
                             const groups = { opened: 1, closed: 0 };
@@ -1033,7 +788,7 @@ class JSONRenderer {
 
                             scanning: do {
                                 try {
-                                    if (!item) { break; }
+                                    if (!item) { break scanning; }
 
                                     switch (item.kind) {
                                         case 'group-start': {
@@ -1066,254 +821,200 @@ class JSONRenderer {
 
                     if (objectCache.isIgnored(token)) {
                         this.#_helpers.ignoreCurrentGroup();
-                        continue;
+                        continue rendering;
                     }
 
                     this.#_ctx.writer.write(JSON.stringify(token.value));
-                    continue;
+                    continue rendering;
                 }
 
                 case 'object-name': {
-                    if (token.className && token.className !== 'Array') {
+                    const is = {
+                        set: token.className === 'Set',
+                        map: token.className === 'Map',
+                        array: token.className === 'Array',
+                        literal: !token.className,
+                        get custom(): boolean {
+                            return (
+                                !this.literal &&
+                                !(
+                                    this.set ||
+                                    this.map ||
+                                    this.array
+                                )
+                            )
+                        }
+                    }
 
-                        switch (token.className) {
-                            case 'Set': {
-                                this.#_helpers.render.set();
-                                continue;
-                            }
-
-                            case 'Map': {
-                                this.#_helpers.render.map();
-                                continue;
-                            }
+                    // handle objects (literals)
+                    if (is.literal || is.custom) {
+                        if (is.literal) {
+                            this.#_helpers.transforms.object();
+                        } else {
+                            this.#_helpers.ignoreCurrentGroup();
+                            this.#_ctx.writer.write('{}');
                         }
 
-                        this.#_helpers.ignoreCurrentGroup();
-                        this.#_ctx.writer.write('{}');
+                        continue rendering;
                     }
 
-                    // handle objects (literals and classes)
-                    if (!token.className) {
-                        this.#_helpers.render.objectLiteral();
+                    if (is.array) {
+                        this.#_ctx.data.set(keys.ARRAY_RENDERING_KEY, true);
+                        continue rendering;
                     }
 
-                    continue;
+                    if (is.set || is.map) {
+                        if (is.set) {
+                            this.#_helpers.transforms.set();
+                        } else if (is.map) {
+                            this.#_helpers.transforms.map();
+                        }
+
+                        continue rendering;
+                    }
+
+                    continue rendering;
                 }
 
                 case 'object-open':
                 case 'object-close': {
                     this.#_ctx.writer.write(token.token)
-                    continue;
+                    continue rendering;
                 }
 
                 case 'error-start': {
+                    this.#_ctx.data.set(keys.RENDERING_LAYOUT_KEY, 'block', { overwrite: true });
                     this.#_ctx.scopes.begin({ id: token.id });
-                    const envelop = new DataEnvelope('error', {});
-                    const result = envelop.tokenize(this.#_tokenize);
 
-                    this.#_ctx.tokens.inject([
-                        ...result.tokens.start,
-                        new TOKENS.IndentStart
-                    ]);
+                    const envelop = new DataEnvelope('error', {});
+                    const result = envelop.tokenize(JSONTokenizer);
 
                     // Set the scope type
                     this.#_ctx.data.set('type', 'error');
-                    this.#_ctx.data.set(ERROR_CACHE_KEY, new ErrorCache(token, [...result.tokens.trailing]));
-                    continue;
+                    this.#_ctx.data.set(keys.ERROR_CACHE_KEY, new ErrorCache(token, result));
+
+                    continue rendering;
                 }
 
                 case 'error-data': {
-                    if (!this.#_ctx.data.hasResolvable(ERROR_CACHE_KEY)) {
+                    if (!this.#_ctx.data.hasResolvable(keys.ERROR_CACHE_KEY)) {
                         throw new Error(`Invariant violation: Attempting to render error data outside of an error scope.`);
                     }
 
-                    const error = this.#_ctx.data.get<ErrorCache>(ERROR_CACHE_KEY)!;
+                    const error = this.#_ctx.data.get<ErrorCache>(keys.ERROR_CACHE_KEY)!;
                     if (error.errorId !== token.errorId) {
                         throw new Error(`Invariant violation: Attempting to render error data for a different error scope.`);
                     }
 
-                    const nameStart = new TOKENS.GroupStart;
-                    error.track('name', nameStart.id);
+                    // Set the error name
+                    error.set('name', token.name);
 
-                    const errData: Token[] = [];
-
-                    errData.push(
-                        nameStart,
-                        PropertyToken.from(PropertyNode.create('name', 'property')),
-                        new TOKENS.KeyValueSeparator,
-                        new TOKENS.SoftSpace,
-                        new TOKENS.Primitive('string', token.name)
-                    );
-
-                    if (token.message !== undefined) {
-                        if (!error.isConsumed('name')) {
-                            errData.push(
-                                new TOKENS.Separator,
-                                new TOKENS.SoftLine,
-                                new TOKENS.GroupEnd(error.consume('name')!),
-                            )
-                        }
-
-                        const msgStart = new TOKENS.GroupStart;
-                        error.track('message', msgStart.id);
-
-                        errData.push(
-                            msgStart,
-                            PropertyToken.from(PropertyNode.create('message', 'property')),
-                            new TOKENS.KeyValueSeparator,
-                            new TOKENS.SoftSpace,
-                            new TOKENS.Primitive('string', token.message),
-                        );
+                    if (token.message) {
+                        // Set the error message
+                        error.set('message', token.message);
                     }
 
-                    this.#_ctx.tokens.inject(errData);
-                    continue;
+                    continue rendering;
                 }
 
                 case 'error-cause-start': {
-                    if (!this.#_ctx.data.hasResolvable(ERROR_CACHE_KEY)) {
+                    if (!this.#_ctx.data.hasResolvable(keys.ERROR_CACHE_KEY)) {
                         throw new Error(`Invariant violation: Attempting to render error data outside of an error scope.`);
                     }
 
-                    const error = this.#_ctx.data.get<ErrorCache>(ERROR_CACHE_KEY)!;
+                    const error = this.#_ctx.data.get<ErrorCache>(keys.ERROR_CACHE_KEY)!;
                     if (error.errorId !== token.errorId) {
                         throw new Error(`Invariant violation: Attempting to render error data for a different error scope.`);
                     }
 
-                    const errData: Token[] = [];
-                    for (const segmentName of ERROR_SECTIONS.filter(s => s === 'name' || s === 'message')) {
-                        if (!error.isRegistered(segmentName) || error.isConsumed(segmentName)) {
-                            continue;
+                    const causeTokens: Token[] = (() => {
+                        const output: Token[] = [];
+                        let index = 0;
+
+                        const hasNext = () => {
+                            const item = tokens.peek(index + 1);
+                            if (!item) { return false }
+
+                            this.#_ignoredTokens.add(item);
+                            if (
+                                item.kind === 'error-cause-end' &&
+                                item.errorId === token.errorId &&
+                                item.causeId === token.id
+                            ) {
+                                return false;
+                            }
+
+                            return true;
                         }
 
-                        errData.push(
-                            new TOKENS.Separator,
-                            new TOKENS.SoftLine,
-                            new TOKENS.GroupEnd(error.consume(segmentName)!),
-                        );
-                    }
+                        const next = () => {
+                            if (!hasNext()) {
+                                return null;
+                            }
 
-                    const causeStart = new TOKENS.GroupStart;
-                    error.track('cause', causeStart.id);
+                            return tokens.peek(++index)!;
+                        }
 
-                    errData.push(
-                        causeStart,
-                        PropertyToken.from(PropertyNode.create('cause', 'property')),
-                        new TOKENS.KeyValueSeparator,
-                        new TOKENS.SoftSpace,
-                    );
+                        while (hasNext()) {
+                            output.push(next()!);
+                        }
 
-                    this.#_ctx.tokens.inject(errData);
-                    continue;
+                        return output;
+                    })();
+
+                    // Set the error cause
+                    error.set('cause', causeTokens);
+
+                    continue rendering;
                 }
 
                 case 'error-cause-end': {
-                    if (!this.#_ctx.data.hasResolvable(ERROR_CACHE_KEY)) {
-                        throw new Error(`Invariant violation: Attempting to render error data outside of an error scope.`);
-                    }
-
-                    const error = this.#_ctx.data.get<ErrorCache>(ERROR_CACHE_KEY)!;
-                    if (error.errorId !== token.errorId) {
-                        throw new Error(`Invariant violation: Attempting to render error data for a different error scope.`);
-                    }
-
-                    const errData: Token[] = [
-                        new TOKENS.Separator,
-                        new TOKENS.SoftLine,
-                        new TOKENS.GroupEnd(error.consume('cause')!)
-                    ];
-
-                    this.#_ctx.tokens.inject(errData);
-                    continue;
+                    // Handled in error-cause-start
+                    continue rendering;
                 }
 
                 case 'stack-trace': {
                     if (token.ownership === 'error') {
-                        if (!this.#_ctx.data.hasResolvable(ERROR_CACHE_KEY)) {
+                        if (!this.#_ctx.data.hasResolvable(keys.ERROR_CACHE_KEY)) {
                             throw new Error(`Invariant violation: Attempting to render error data outside of an error scope.`);
                         }
 
-                        const error = this.#_ctx.data.get<ErrorCache>(ERROR_CACHE_KEY)!;
+                        const error = this.#_ctx.data.get<ErrorCache>(keys.ERROR_CACHE_KEY)!;
                         if (error.errorId !== token.errorId) {
                             throw new Error(`Invariant violation: Attempting to render error data for a different error scope.`);
                         }
 
-                        const errData: Token[] = [];
-                        for (const segmentName of ERROR_SECTIONS.filter(s => s === 'name' || s === 'message')) {
-                            if (!error.isRegistered(segmentName) || error.isConsumed(segmentName)) {
-                                continue;
-                            }
-
-                            errData.push(
-                                new TOKENS.Separator,
-                                new TOKENS.SoftLine,
-                                new TOKENS.GroupEnd(error.consume(segmentName)!),
-                            );
-                        }
-
-                        const traceStart = new TOKENS.GroupStart;
-                        error.track('stack', traceStart.id);
-
-                        errData.push(
-                            traceStart,
-                            PropertyToken.from(PropertyNode.create('stack', 'property')),
-                            new TOKENS.KeyValueSeparator,
-                            new TOKENS.SoftSpace,
-                            ...this.#_tokenize(token.lines)
-                        );
-
-                        this.#_ctx.tokens.inject(errData);
+                        // Set the error stack trace
+                        error.set('stack', token.lines);
                     }
 
-                    continue;
+                    continue rendering;
                 }
 
                 case 'error-end': {
-                    if (!this.#_ctx.data.hasResolvable(ERROR_CACHE_KEY)) {
+                    if (!this.#_ctx.data.hasResolvable(keys.ERROR_CACHE_KEY)) {
                         throw new Error(`Invariant violation: Attempting to render error data outside of an error scope.`);
                     }
 
-                    const error = this.#_ctx.data.get<ErrorCache>(ERROR_CACHE_KEY)!;
+                    const error = this.#_ctx.data.get<ErrorCache>(keys.ERROR_CACHE_KEY)!;
                     if (error.errorId !== token.errorId) {
                         throw new Error(`Invariant violation: Attempting to render error data for a different error scope.`);
                     }
 
-                    const errData: Token[] = [];
-                    const segments = (ERROR_SECTIONS).map(sName => {
-                        if (!error.isRegistered(sName) || error.isConsumed(sName)) {
-                            return undefined
-                        }
+                    // Closing the error scope
+                    this.#_ctx.scopes.commit();
 
-                        return { name: sName }
-                    }).filter(s => s !== undefined);
+                    const generated = error.generateTokens(JSONTokenizer);
 
-                    for (let i = 0; i < segments.length; i++) {
-                        const segment = segments[i];
-                        const hasMore = i < segments.length - 1;
+                    // Inject error tokens
+                    this.#_ctx.tokens.inject(generated);
 
-                        if (hasMore) {
-                            errData.push(new TOKENS.Separator);
-                        }
-
-                        errData.push(
-                            new TOKENS.SoftLine,
-                            new TOKENS.GroupEnd(error.consume(segment!.name)!),
-                        );
-                    }
-
-                    errData.push(
-                        new TOKENS.IndentEnd,
-                        ...error.closeTokens,
-                        new TOKENS.Callback(() => this.#_ctx.scopes.commit())
-                    );
-
-                    this.#_ctx.tokens.inject(errData);
-                    continue;
+                    continue rendering;
                 }
 
                 case 'callback': {
                     token.run();
-                    continue;
+                    continue rendering;
                 }
 
                 default: {
@@ -1330,20 +1031,34 @@ class JSONRenderer {
     }
 
     /**
-     * Static entry point for JSON rendering.
+     * Public JSON rendering entry point.
      *
-     * Creates a new renderer instance and executes the full rendering pipeline.
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
      *
-     * This is the primary API surface for consumers.
+     * Provides a simple functional API over the class-based renderer:
+     *
+     * - constructs renderer instance
+     * - executes full rendering pipeline
+     * - returns final JSON string
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN NOTE
+     * ---------------------------------------------------------------------
+     *
+     * This is the only intended external entry point for consumers.
+     * Direct instantiation of `JSONRenderer` is discouraged unless
+     * advanced control is required.
      *
      * @param tokens
      * Pre-tokenized Zexi representation.
      *
      * @param options
-     * Rendering configuration (layout, spacing, etc).
+     * Rendering configuration (layout, spacing rules).
      *
      * @returns
-     * Fully serialized JSON string.
+     * Final serialized JSON output.
      *
      * @since 1.0.0
      */

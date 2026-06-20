@@ -1,25 +1,9 @@
-import GraphBuilder from "../../../../../../src/core/terminal/pipeline/1-graphing/builder";
-import { GraphNode } from "../../../../../../src/core/terminal/pipeline/1-graphing/types";
-import RepresentationBuilder from "../../../../../../src/core/terminal/pipeline/2-representation/builder";
-import { RepresentationNode } from "../../../../../../src/core/terminal/pipeline/2-representation/types";
-import TokensBuffer from "../../../../../../src/core/terminal/pipeline/3-tokenization/container/tokens.buffer";
-import Tokenizer from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizer";
 import JSONRenderer from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/renderer";
-import { JsonOptions } from "../../../../../../src/core/terminal/pipeline/types";
-
-const helpers = {
-    graph: (value: unknown): GraphNode => GraphBuilder.build(value, { cycles: 'throw', canonical: true }),
-    rep: (graph: GraphNode): RepresentationNode => RepresentationBuilder.build(graph),
-    tokenize: (repNode: RepresentationNode) => Tokenizer.tokenize(repNode),
-    extractTokens: (buffer: TokensBuffer) => TokensBuffer.toArray(buffer),
-}
+import _rendering from "../../helpers/helpers";
+import type { JsonOptions } from "../../../../../../src/core/terminal/pipeline/types";
 
 const render = (value: unknown, options: JsonOptions = {}) => {
-    const graph = helpers.graph(value);
-    const rep = helpers.rep(graph);
-    const buffer = helpers.tokenize(rep);
-    const tokens = helpers.extractTokens(buffer);
-
+    const tokens = _rendering.tokenize(value, 'json');
     return JSONRenderer.render(tokens, options);
 }
 
@@ -30,7 +14,7 @@ describe('JSON renderer', () => {
 
     it("renders primitives deterministically", () => {
         expect(render(123)).toBe("123");
-        expect(render("abc")).toBe('"abc"');
+        expect(render("abc")).toBe('abc');
         expect(render(true)).toBe("true");
         expect(render(null)).toBe("null");
         expect(render(undefined)).toBe("undefined");
@@ -42,8 +26,8 @@ describe('JSON renderer', () => {
         expect(render(-Infinity)).toBe("-Infinity");
     });
 
-    it("renders symbols as empty output", () => {
-        expect(render(Symbol("x"))).toBe("");
+    it("renders symbols as string output", () => {
+        expect(render(Symbol("x"))).toBe("Symbol(x)");
     });
 
     // ---------------------------------------------------------------------
@@ -66,9 +50,33 @@ describe('JSON renderer', () => {
         expect(render(new A())).toBe("{}");
     });
 
-    it("collapses Map and Set", () => {
-        expect(render(new Map([["a", 1]]))).toBe("{}");
-        expect(render(new Set([1, 2]))).toBe("{}");
+    it("renders Map and Set", () => {
+
+        {
+            const entries = [["a", 1]] as const;
+            const map = new Map(entries);
+
+            const out = render(map);
+            const outObj = JSON.parse(out);
+
+            expect(outObj.$codec).toMatch(/zexi@[0-9].[0-9]/);
+            expect(outObj.$kind).toBe("map");
+            expect(outObj.$payload.size).toBe(1)
+            expect(outObj.$payload.entries).toEqual(entries.map(e => ({ key: e[0], value: e[1] })));
+        }
+
+        {
+            const data = [1, 2] as const;
+            const set = new Set(data);
+
+            const out = render(set);
+            const outObj = JSON.parse(out);
+
+            expect(outObj.$codec).toMatch(/zexi@[0-9].[0-9]/);
+            expect(outObj.$kind).toBe("set");
+            expect(outObj.$payload.size).toBe(2);
+            expect(outObj.$payload.values).toEqual(data);
+        }
     });
 
     // ---------------------------------------------------------------------
@@ -82,7 +90,7 @@ describe('JSON renderer', () => {
     });
 
     it("respects spaces configuration override", () => {
-        const out = render({ a: 1 }, { spaces: 4 });
+        const out = render({ a: 1 }, { mode: 'pretty', spaces: 4 });
 
         // Just ensure output still deterministic and formatted
         expect(typeof out).toBe("string");
@@ -97,9 +105,12 @@ describe('JSON renderer', () => {
         const fn = () => 1;
 
         const out = render({ fn });
+        // {\"fn\":{\"$codec\":\"zexi@1.0\",\"$kind\":\"function\",\"$payload\":{\"name\":\"fn\"}}}
+        const outObj = JSON.parse(out);
 
-        // Function should expand into metadata object (deterministic shape)
-        expect(out).toBe('{"fn":{"type":"function","name":"fn"}}');
+        expect(outObj.fn.$codec).toMatch(/zexi@[0-9].[0-9]/);
+        expect(outObj.fn.$kind).toBe("function");
+        expect(outObj.fn.$payload.name).toBe("fn");
     });
 
     // ---------------------------------------------------------------------

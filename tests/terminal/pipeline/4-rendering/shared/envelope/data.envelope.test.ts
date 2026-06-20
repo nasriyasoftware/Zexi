@@ -1,15 +1,11 @@
-import contracts from "./assets/contracts";
+import type { EnvelopeKind } from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/types";
+import type { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 
-import GraphBuilder from "../../../../../../src/core/terminal/pipeline/1-graphing/builder";
-import RepresentationBuilder from "../../../../../../src/core/terminal/pipeline/2-representation/builder";
-import TokensBuffer from "../../../../../../src/core/terminal/pipeline/3-tokenization/container/tokens.buffer";
-import Tokenizer from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizer";
 import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
 import DataEnvelope from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
 
-import type { GraphConfig } from "../../../../../../src/core/terminal/pipeline/4-rendering/types/types";
-import type { EnvelopeKind } from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/types";
-import type { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import contracts from "./assets/contracts";
+import _rendering from "../../helpers/helpers";
 
 describe("DataEnvelope", () => {
 
@@ -176,58 +172,11 @@ describe("DataEnvelope", () => {
     });
 
     describe("tokenization", () => {
-        // Helpers (ONLY allowed pipeline entry point)
-        const tokenize = (
-            value: unknown,
-            preset: 'json' | 'ignoredCycles' | 'markedCycles'
-        ): readonly Token[] => {
-            const config: GraphConfig = {
-                cycles: 'ignore',
-                canonical: false
-            };
-
-            switch (preset) {
-                case 'json': {
-                    config.canonical = true;
-                    config.cycles = 'throw';
-                    break;
-                }
-
-                case 'ignoredCycles': {
-                    config.cycles = 'ignore';
-                    break;
-                }
-
-                case 'markedCycles': {
-                    config.cycles = 'mark';
-                    break;
-                }
-            }
-
-            const graph = GraphBuilder.build(value, config);
-            const rep = RepresentationBuilder.build(graph);
-            const buffer = Tokenizer.tokenize(rep);
-            return TokensBuffer.toArray(buffer);
-        }
-
-        const extractKinds = (tokens: readonly any[]) => tokens.map(t => t.kind);
-
-        const tokenizer = {
-            json: (value: unknown) => tokenize(value, "json"),
-            ignoredCycles: (value: unknown) => tokenize(value, "ignoredCycles"),
-            markedCycles: (value: unknown) => tokenize(value, "markedCycles"),
-        } as const;
-
-        const tokenizers = [
-            tokenizer.json,
-            tokenizer.ignoredCycles,
-            tokenizer.markedCycles
-        ] as const;
 
         describe("deferred envelopes", () => {
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "tokenizes set envelopes as deferred",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
                         size: 2
                     });
@@ -243,9 +192,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "tokenizes map envelopes as deferred",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("map", {
                         size: 1
                     });
@@ -261,9 +210,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "returns anchor tokens",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
                         size: 1
                     });
@@ -279,9 +228,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "places start anchor inside start partition",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
                         size: 1
                     });
@@ -298,9 +247,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "places end anchor inside trailing partition",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
                         size: 1
                     });
@@ -317,9 +266,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "uses identical anchor instances in partitions and anchor map",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
                         size: 1
                     });
@@ -343,9 +292,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "returns frozen token partitions",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
                         size: 1
                     });
@@ -366,9 +315,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "creates fresh anchor instances for every tokenization",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
                         size: 1
                     });
@@ -388,9 +337,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "places start and end anchors adjacent for empty body envelopes",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
                         size: 0
                     });
@@ -416,9 +365,9 @@ describe("DataEnvelope", () => {
         });
 
         describe("complete envelopes", () => {
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "tokenizes regex envelopes as complete",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("regex", {
                         pattern: "abc",
                         flags: "g"
@@ -435,9 +384,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "tokenizes function envelopes as complete",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("function", {
                         name: "testFn"
                     });
@@ -453,9 +402,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "tokenizes error envelopes as incomplete",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("error", {});
 
                     const result = env.tokenize(tokenizer);
@@ -464,9 +413,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "returns frozen token stream",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("regex", {
                         pattern: "abc",
                         flags: ""
@@ -484,9 +433,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "does not expose anchors",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     const env = new DataEnvelope("regex", {
                         pattern: "abc",
                         flags: ""
@@ -506,9 +455,9 @@ describe("DataEnvelope", () => {
         });
 
         describe("tokenization mode selection", () => {
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "uses deferred tokenization for all deferred envelope kinds",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     expect(
                         new DataEnvelope("set", {
                             size: 1
@@ -523,9 +472,9 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(tokenizers)(
+            it.each(_rendering.tokenizers)(
                 "uses complete tokenization for all non-deferred envelope kinds",
-                (tokenizer) => {
+                (_name, tokenizer) => {
                     expect(
                         new DataEnvelope("regex", {
                             pattern: "",
@@ -547,45 +496,29 @@ describe("DataEnvelope", () => {
             );
         });
 
-        describe("tokenization contracts", () => {
-            it.each(contracts)(
-                "contracts are valid",
-                (contract) => {
+        describe.each(contracts)(
+            "tokenization of %s contract",
+            (_cName, contract) => {
+
+                it(`applies a valid ${_cName} contract`, () => {
                     const env = new DataEnvelope(contract.kind, contract.payload);
                     expect(env.debug.$kind).toBe(contract.kind);
                     expect(env.debug.$codec).toMatch(/zexi@[0-9].[0-9]/);
 
                     for (const tokenization of contract.tokenizers) {
-                        const result = env.tokenize(tokenizer[tokenization.name as keyof typeof tokenizer]);
+                        const tokenizer = _rendering.tokenizers.find(e => e[0] === tokenization.name)![1];
+                        const result = env.tokenize(tokenizer);
                         const tokens = result.deferred ? [...result.tokens.start, ...result.tokens.trailing] : result.tokens;
 
                         if (result.deferred) {
-                            if (contract.kind === 'map') {
-                                console.debug({
-                                    contract: contract.kind,
-                                    tokenizer: tokenization.name,
-                                    inspect: [5, 8, 13, 16, 21, 30, 33].map(i => {
-                                        const token = tokens[i]
-                                        return {
-                                            token: token.kind,
-                                            value: token.kind === 'property' ? token.value : 'N/A',
-                                            index: i
-                                        }
-                                    }).sort((a, b) => {
-                                        if (a.index < b.index) { return -1; }
-                                        if (a.index > b.index) { return 1; }
-                                        return 0;
-                                    })
-                                })
-                            }
                             const stream = tokenization.stream as unknown as {
                                 full: Token[];
                                 start: Token[];
                                 trailing: Token[];
                             }
 
-                            expect(stream.start).toEqual(extractKinds(result.tokens.start));
-                            expect(stream.trailing).toEqual(extractKinds(result.tokens.trailing));
+                            expect(stream.start).toEqual(_rendering.extractKinds(result.tokens.start));
+                            expect(stream.trailing).toEqual(_rendering.extractKinds(result.tokens.trailing));
 
                             expect(result.tokens.start[result.tokens.start.length - 1]).toBeInstanceOf(TOKENS.Anchor);
                             expect(result.tokens.trailing[0]).toBeInstanceOf(TOKENS.Anchor);
@@ -597,7 +530,7 @@ describe("DataEnvelope", () => {
                                 }
                             }
                         } else {
-                            expect(tokenization.stream).toEqual(extractKinds(result.tokens));
+                            expect(tokenization.stream).toEqual(_rendering.extractKinds(result.tokens));
 
                         }
 
@@ -621,8 +554,8 @@ describe("DataEnvelope", () => {
                             }
                         }
                     }
-                }
-            )
-        });
+                })
+            }
+        );
     });
 });

@@ -1,148 +1,363 @@
-import { ErrorStartToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/error";
+
+import type { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import type { ErrorStartToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/error";
+
 import ErrorCache, { ERROR_SECTIONS } from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/assets/error.cache";
+import DataEnvelope from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
+import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
 
-function createErrorToken(): ErrorStartToken {
-    return {
-        id: Symbol("error")
-    } as any;
-}
+import _rendering from "../../helpers/helpers";
 
-function createCache() {
-    return new ErrorCache(createErrorToken(), []);
-}
+describe.each(_rendering.tokenizers)(
+    "ErrorCache (%s)",
+    (_name, tokenize) => {
 
-describe("ErrorCache", () => {
+        // --------------------------------------------------
+        // Identity
+        // --------------------------------------------------
 
-    // --------------------------------------------------
-    // Identity
-    // --------------------------------------------------
+        it("stores immutable error identity", () => {
+            const token = new TOKENS.ErrorStart();
 
-    it("stores immutable error identity", () => {
-        const token = createErrorToken();
-        const cache = new ErrorCache(token, []);
+            const cache = createCache(
+                tokenize,
+                token
+            );
 
-        expect(cache.errorId).toBe(token.id);
-    });
+            expect(cache.errorId).toBe(token.id);
+        });
 
-    it("stores closeTokens by reference (no cloning)", () => {
-        const trailingTokens: any[] = [];
+        // --------------------------------------------------
+        // Initial state
+        // --------------------------------------------------
 
-        const token = createErrorToken();
-        const cache = new ErrorCache(token, trailingTokens);
+        it("starts unsealed", () => {
+            const cache = createCache(tokenize);
 
-        expect(cache.closeTokens).toBe(trailingTokens);
-    });
+            expect(cache.isSealed).toBe(false);
+        });
 
-    // --------------------------------------------------
-    // Registration lifecycle
-    // --------------------------------------------------
+        // --------------------------------------------------
+        // Section assignment
+        // --------------------------------------------------
 
-    it("registers a section", () => {
-        const cache = createCache();
+        it("stores name section", () => {
+            const cache = createCache(tokenize);
 
-        cache.track("name", Symbol("name"));
+            expect(() => {
+                cache.set("name", "Error");
+            }).not.toThrow();
+        });
 
-        expect(cache.isRegistered("name")).toBe(true);
-    });
+        it("stores message section", () => {
+            const cache = createCache(tokenize);
 
-    it("prevents duplicate section registration", () => {
-        const cache = createCache();
+            expect(() => {
+                cache.set("message", "target");
+            }).not.toThrow();
+        });
 
-        const id = Symbol("name");
+        it("stores cause section", () => {
+            const cache = createCache(tokenize);
 
-        cache.track("name", id);
+            expect(() => {
+                cache.set(
+                    "cause",
+                    tokenize(new Error("cause"))
+                );
+            }).not.toThrow();
+        });
 
-        expect(() => {
-            cache.track("name", id);
-        }).toThrow();
-    });
+        it("stores stack section", () => {
+            const cache = createCache(tokenize);
 
-    it("reports unregistered sections as not registered", () => {
-        const cache = createCache();
+            expect(() => {
+                cache.set("stack", []);
+            }).not.toThrow();
+        });
 
-        expect(cache.isRegistered("message")).toBe(false);
-    });
+        it("supports assigning all sections", () => {
+            const cache = createCache(tokenize);
 
-    // --------------------------------------------------
-    // Consumption semantics
-    // --------------------------------------------------
+            cache.set("name", "Error");
+            cache.set("message", "target");
+            cache.set(
+                "cause",
+                tokenize(new Error("cause"))
+            );
+            cache.set("stack", []);
+        });
 
-    it("consume returns groupId", () => {
-        const cache = createCache();
+        it("prevents duplicate section assignment", () => {
+            const cache = createCache(tokenize);
 
-        const id = Symbol("name");
+            cache.set("name", "Error");
 
-        cache.track("name", id);
+            expect(() => {
+                cache.set("name", "TypeError");
+            }).toThrow();
+        });
 
-        expect(cache.consume("name")).toBe(id);
-    });
+        // --------------------------------------------------
+        // Runtime validation
+        // --------------------------------------------------
 
-    it("marks section as consumed on first consume", () => {
-        const cache = createCache();
+        it("rejects non-string name", () => {
+            const cache = createCache(tokenize);
 
-        cache.track("name", Symbol("name"));
+            expect(() => {
+                cache.set(
+                    "name",
+                    123 as any
+                );
+            }).toThrow();
+        });
 
-        cache.consume("name");
+        it("rejects non-string message", () => {
+            const cache = createCache(tokenize);
 
-        expect(cache.isConsumed("name")).toBe(true);
-    });
+            expect(() => {
+                cache.set(
+                    "message",
+                    {} as any
+                );
+            }).toThrow();
+        });
 
-    it("consume is idempotent in effect but not repeated tracking", () => {
-        const cache = createCache();
+        it("rejects non-array cause", () => {
+            const cache = createCache(tokenize);
 
-        const id = Symbol("name");
+            expect(() => {
+                cache.set(
+                    "cause",
+                    {} as any
+                );
+            }).toThrow();
+        });
 
-        cache.track("name", id);
+        it("rejects non-array stack", () => {
+            const cache = createCache(tokenize);
 
-        const first = cache.consume("name");
-        const second = cache.consume("name");
+            expect(() => {
+                cache.set(
+                    "stack",
+                    {} as any
+                );
+            }).toThrow();
+        });
 
-        expect(first).toBe(id);
-        expect(second).toBe(id);
-        expect(cache.isConsumed("name")).toBe(true);
-    });
+        it("freezes cause token arrays", () => {
+            const cache = createCache(tokenize);
 
-    it("isConsumed returns false for untracked sections", () => {
-        const cache = createCache();
+            const cause = [
+                ...tokenize(
+                    new Error("cause")
+                )
+            ];
 
-        expect(cache.isConsumed("stack")).toBe(false);
-    });
+            cache.set("cause", cause);
 
-    // --------------------------------------------------
-    // Full lifecycle behavior
-    // --------------------------------------------------
+            expect(
+                Object.isFrozen(cause)
+            ).toBe(true);
+        });
 
-    it("tracks and consumes multiple independent sections", () => {
-        const cache = createCache();
+        // --------------------------------------------------
+        // Generation invariants
+        // --------------------------------------------------
 
-        const nameId = Symbol("name");
-        const msgId = Symbol("message");
+        it("requires name before generating tokens", () => {
+            const cache = createCache(tokenize);
 
-        cache.track("name", nameId);
-        cache.track("message", msgId);
+            expect(() => {
+                cache.generateTokens(tokenize);
+            }).toThrow();
+        });
 
-        expect(cache.consume("name")).toBe(nameId);
-        expect(cache.consume("message")).toBe(msgId);
+        it("returns frozen generated tokens", () => {
+            const cache = createCache(tokenize);
 
-        expect(cache.isConsumed("name")).toBe(true);
-        expect(cache.isConsumed("message")).toBe(true);
-    });
+            cache.set("name", "Error");
 
-    it("does not cross-contaminate section state", () => {
-        const cache = createCache();
+            const result =
+                cache.generateTokens(tokenize);
 
-        cache.track("name", Symbol("a"));
-        cache.track("message", Symbol("b"));
+            expect(
+                Object.isFrozen(result)
+            ).toBe(true);
+        });
 
-        cache.consume("name");
+        it("returns token output", () => {
+            const cache = createCache(tokenize);
 
-        expect(cache.isConsumed("name")).toBe(true);
-        expect(cache.isConsumed("message")).toBe(false);
-    });
+            cache.set("name", "Error");
 
-    // --------------------------------------------------
-    // ERROR_SECTIONS contract
-    // --------------------------------------------------
+            const result =
+                cache.generateTokens(tokenize);
+
+            expect(Array.isArray(result))
+                .toBe(true);
+
+            expect(result.length)
+                .toBeGreaterThan(0);
+        });
+
+        it("generates property tokens for error data", () => {
+            const cache = createCache(tokenize);
+
+            cache.set("name", "Error");
+            cache.set("message", "target");
+
+            const result = cache.generateTokens(tokenize);
+
+            const kinds = _rendering.extractKinds(result);
+
+            expect(
+                kinds.includes("property")
+            ).toBe(true);
+        });
+
+        it("generates primitive tokens for error values", () => {
+            const cache = createCache(tokenize);
+
+            cache.set("name", "Error");
+            cache.set("message", "target");
+
+            const result = cache.generateTokens(tokenize);
+
+            const kinds = _rendering.extractKinds(result);
+
+            expect(
+                kinds.includes("primitive")
+            ).toBe(true);
+        });
+
+        // --------------------------------------------------
+        // Cause injection
+        // --------------------------------------------------
+
+        it("replaces cause placeholder with cause tokens", () => {
+            const cache = createCache(tokenize);
+
+            cache.set("name", "Error");
+
+            const causeTokens =
+                tokenize(
+                    new Error("cause")
+                );
+
+            cache.set(
+                "cause",
+                causeTokens
+            );
+
+            const result =
+                cache.generateTokens(tokenize);
+
+            expect(
+                result.some(
+                    t =>
+                        t.kind === "primitive" &&
+                        (t as any).value === "<cause_placeholder>"
+                )
+            ).toBe(false);
+        });
+
+        it("injects nested error tokens into cause", () => {
+            const cache = createCache(tokenize);
+
+            cache.set("name", "Error");
+
+            cache.set(
+                "cause",
+                tokenize(
+                    new Error("cause")
+                )
+            );
+
+            const result = cache.generateTokens(tokenize);
+
+            const kinds = _rendering.extractKinds(result);
+
+            expect(
+                kinds.includes("error-start")
+            ).toBe(true);
+        });
+
+        // --------------------------------------------------
+        // Sealing
+        // --------------------------------------------------
+
+        it("seals after token generation", () => {
+            const cache = createCache(tokenize);
+
+            cache.set("name", "Error");
+
+            cache.generateTokens(tokenize);
+
+            expect(cache.isSealed)
+                .toBe(true);
+        });
+
+        it("prevents mutation after sealing", () => {
+            const cache = createCache(tokenize);
+
+            cache.set("name", "Error");
+
+            cache.generateTokens(tokenize);
+
+            expect(() => {
+                cache.set(
+                    "message",
+                    "target"
+                );
+            }).toThrow();
+        });
+
+        it("prevents token generation twice", () => {
+            const cache = createCache(tokenize);
+
+            cache.set("name", "Error");
+
+            cache.generateTokens(tokenize);
+
+            expect(() => {
+                cache.generateTokens(
+                    tokenize
+                );
+            }).toThrow();
+        });
+
+        // --------------------------------------------------
+        // Full lifecycle
+        // --------------------------------------------------
+
+        it("supports complete lifecycle", () => {
+            const cache = createCache(tokenize);
+
+            cache.set("name", "Error");
+            cache.set("message", "target");
+            cache.set("stack", []);
+
+            const result =
+                cache.generateTokens(tokenize);
+
+            expect(
+                cache.isSealed
+            ).toBe(true);
+
+            expect(
+                result.length
+            ).toBeGreaterThan(0);
+        });
+    }
+);
+
+// --------------------------------------------------
+// Static contract
+// --------------------------------------------------
+
+describe("ERROR_SECTIONS", () => {
 
     it("exposes canonical error sections", () => {
         expect(ERROR_SECTIONS).toEqual([
@@ -153,29 +368,20 @@ describe("ErrorCache", () => {
         ]);
     });
 
-    it("type system only allows valid sections", () => {
-        const cache = createCache();
-
-        // @ts-expect-error invalid section
-        expect(() => cache.track("invalid", Symbol("x"))).toThrow();
-    });
-
-    // --------------------------------------------------
-    // Integration-style invariants
-    // --------------------------------------------------
-
-    it("supports full lifecycle pattern (track → consume → query)", () => {
-        const cache = createCache();
-
-        const id = Symbol("name");
-
-        cache.track("name", id);
-
-        expect(cache.isRegistered("name")).toBe(true);
-        expect(cache.isConsumed("name")).toBe(false);
-
-        expect(cache.consume("name")).toBe(id);
-
-        expect(cache.isConsumed("name")).toBe(true);
-    });
 });
+
+// --------------------------------------------------
+// Helpers
+// --------------------------------------------------
+function createCache(
+    tokenizer: (value: unknown) => readonly Token[],
+    errorStart?: ErrorStartToken
+): ErrorCache {
+    const env = new DataEnvelope('error', {})
+    const result = env.tokenize(tokenizer);
+
+    return new ErrorCache(
+        errorStart ?? new TOKENS.ErrorStart(),
+        result
+    );
+}

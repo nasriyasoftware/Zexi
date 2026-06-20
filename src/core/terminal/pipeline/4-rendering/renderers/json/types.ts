@@ -93,3 +93,10 @@ export interface JSONConfig {
      */
     layout: OutputLayout;
 }
+
+export interface JSONRendererFlags {
+    ignoreCurrentGroup: boolean;
+    skipNextSeparator: boolean;
+    skipNextSoftLine: boolean;
+    forceNextGroupAsBlock: boolean;
+}

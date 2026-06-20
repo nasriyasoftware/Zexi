@@ -1,5 +1,5 @@
 import { DEFAULT_DEBUG_CONFIG } from "../renderers/debug/defaults";
-import { DEFAULT_JSON_CONFIG } from "../renderers/json/defaults";
+import { DEFAULT_JSON_CONFIG } from "../renderers/json/configs";
 import { DEFAULT_TERMINAL_CONFIG } from "../renderers/terminal/defaults";
 
 export type CircularReferencePolicy = 'ignore' | 'mark' | 'throw';

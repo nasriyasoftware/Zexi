@@ -4,143 +4,439 @@ import type RenderingWriter from "../writer/writer";
  * Defines the API for interacting with scope-local and chain-resolved
  * rendering state data.
  *
- * The `ScopeDataController` provides a controlled interface for:
+ * The `ScopeDataController` is a deterministic lexical scope storage system
+ * used during rendering to manage contextual state across nested structures.
  *
- * - reading scoped values
- * - checking local scope ownership
- * - checking inherited bindings
- * - checking chain-wide resolvability
- * - setting values with overwrite protection
+ * It provides controlled access to scoped data through:
  *
- * ---------------------------------------------------------------------
- * 🔷 DESIGN MODEL
- * ---------------------------------------------------------------------
- *
- * This controller operates on a stack of scope frames where:
- *
- * - each scope owns its own isolated data map
- * - lookup operations traverse the scope chain (top → bottom)
- * - write operations always target the current active scope
+ * - local scope writes (isolation)
+ * - hierarchical reads (lexical resolution)
+ * - inheritance-aware queries
+ * - resolvability checks
  *
  * ---------------------------------------------------------------------
- * 🔷 RESOLUTION MODEL
+ * 🔷 CORE MODEL
  * ---------------------------------------------------------------------
  *
- * Key existence can be queried at three different levels:
+ * The system is based on a stack of scope frames:
  *
- * - `hasOwn()` → current scope only
- * - `hasInherited()` → parent scopes only
- * - `hasResolvable()` → current scope or any parent scope
+ * ```text
+ * [Root Scope]
+ * [Parent Scope]
+ * [Current Scope]
+ * ```
  *
- * This allows renderers to distinguish between:
+ * Each scope owns an independent key-value map.
  *
- * - locally-owned values
- * - inherited values
- * - values that can be resolved regardless of origin
+ * ---------------------------------------------------------------------
+ * 🔷 CRITICAL DESIGN RULES
+ * ---------------------------------------------------------------------
  *
+ * 1. Writes NEVER propagate upward or downward
+ * 2. Reads ALWAYS traverse upward (nearest-first)
+ * 3. The current scope is always index N (top of stack)
+ * 4. Parent scopes are N-1 → 0
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 LOOKUP SEMANTICS
+ * ---------------------------------------------------------------------
+ *
+ * All lookup operations follow this deterministic order:
+ *
+ * ```text
+ * current → parent → grandparent → ... → root
+ * ```
+ *
+ * The first match always wins.
+ *
+ * This guarantees:
+ *
+ * - predictable shadowing behavior
+ * - deterministic rendering output
+ * - no non-local mutation side effects
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 NULL CONTRACT
+ * ---------------------------------------------------------------------
+ *
+ * All "get" operations return:
+ *
+ * - a concrete value if found
+ * - `null` if not found
+ *
+ * IMPORTANT:
+ *
+ * `null` is a semantic sentinel meaning:
+ *
+ * > "The key does not exist anywhere in the resolved scope chain."
+ *
+ * It is NOT equivalent to:
+ *
+ * - undefined
+ * - missing return
+ * - optional property access failure
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 RESOLUTION CATEGORIES
+ * ---------------------------------------------------------------------
+ *
+ * The API exposes three distinct resolution modes:
+ *
+ * | Method            | Scope Coverage         |
+ * |-------------------|------------------------|
+ * | `hasOwn`          | current only           |
+ * | `hasInherited`    | parent → root          |
+ * | `hasResolvable`   | current → root         |
+ * | `get`             | current → root         |
+ * | `getInherited`    | parent → root          |
+ *
+ * ---------------------------------------------------------------------
  * @since 1.0.0
  */
 export interface ScopeDataController {
     /**
-     * Retrieves a value from the scope chain.
+     * Retrieves a value from the active scope chain using lexical resolution.
      *
-     * The lookup starts from the current scope and traverses downward
-     * through parent scopes until a matching key is found.
+     * Lookup begins at the current scope and proceeds upward:
      *
-     * @typeParam T
-     * Expected return type of the stored value.
+     * ```text
+     * current → parent → grandparent → ... → root
+     * ```
+     *
+     * The first matching key is returned immediately.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SHADOWING RULE
+     * ---------------------------------------------------------------------
+     *
+     * Inner scopes override outer scopes without modifying them.
+     *
+     * Example:
+     *
+     * ```text
+     * Root    { a: 1 }
+     * Parent  { a: 2 }
+     * Current { }
+     * ```
+     *
+     * Result:
+     * ```ts
+     * get("a") → 2
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DEEP BEHAVIOR GUARANTEE
+     * ---------------------------------------------------------------------
+     *
+     * - traversal is linear and deterministic
+     * - no scope is skipped
+     * - no backtracking occurs
+     * - evaluation stops immediately on match
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 FAILURE MODE
+     * ---------------------------------------------------------------------
+     *
+     * If no scope contains the key:
+     *
+     * ```ts
+     * return null;
+     * ```
+     *
+     * This is intentional and distinguishes:
+     *
+     * - missing value
+     * - falsy value
+     * - undefined JavaScript behavior
+     *
+     * ---------------------------------------------------------------------
+     * @template T
+     * Expected type of the resolved value.
      *
      * @param key
-     * The key to retrieve from the scope chain.
+     * Scope key to resolve.
      *
      * @returns
-     * The value associated with the key, or `null` if not found.
+     * Nearest matching value in the scope chain, or `null` if not found.
      *
      * @since 1.0.0
      */
     get<T = unknown>(key: ScopeKey): T | null;
 
     /**
-     * Checks whether a key is owned by the current active scope.
+     * Retrieves the nearest value from ancestor scopes only.
      *
-     * This operation does NOT traverse parent scopes.
+     * This method explicitly excludes the current scope from lookup.
+     *
+     * Lookup order:
+     *
+     * ```text
+     * parent → grandparent → ... → root
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DIFFERENCE FROM `get()`
+     * ---------------------------------------------------------------------
+     *
+     * | Method          | Includes Current Scope |
+     * |-----------------|------------------------|
+     * | `get()`         | YES                    |
+     * | `getInherited()`| NO                     |
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 USE CASE MODEL
+     * ---------------------------------------------------------------------
+     *
+     * This method is designed for:
+     *
+     * - inheritance inspection
+     * - parent-state introspection
+     * - detecting overrides from outer scopes
+     * - preventing local shadow resolution
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 FAILURE MODE
+     * ---------------------------------------------------------------------
+     *
+     * If no ancestor scope contains the key:
+     *
+     * ```ts
+     * return null;
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * @template T
+     * Expected type.
      *
      * @param key
-     * The key to check.
+     * Key to resolve in ancestor scopes only.
      *
      * @returns
-     * `true` if the key exists in the current scope, otherwise `false`.
+     * Nearest ancestor value or `null` if not found.
+     *
+     * @since 1.0.0
+     */
+    getInherited<T extends any = unknown>(key: ScopeKey): T | null;
+
+    /**
+     * Checks whether a key exists in the current scope only.
+     *
+     * This is a strict local existence check.
+     *
+     * No ancestor scopes are evaluated.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SCOPE RULE
+     * ---------------------------------------------------------------------
+     *
+     * ```text
+     * current → checked
+     * parent  → ignored
+     * root    → ignored
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SEMANTIC DIFFERENCE
+     * ---------------------------------------------------------------------
+     *
+     * This method answers:
+     *
+     * > "Was this value defined in THIS scope?"
+     *
+     * NOT:
+     *
+     * > "Can this value be resolved?"
+     *
+     * ---------------------------------------------------------------------
+     * @param key
+     * Key to check.
+     *
+     * @returns
+     * `true` if defined in current scope only.
      *
      * @since 1.0.0
      */
     hasOwn(key: ScopeKey): boolean;
 
     /**
-     * Checks whether a key exists in any parent scope.
+     * Checks whether a key exists in ancestor scopes.
      *
-     * The current scope is intentionally excluded from this lookup.
+     * The current scope is excluded from the lookup.
      *
-     * This is useful for detecting inherited values or determining
-     * whether a local binding shadows an ancestor binding.
+     * Traversal begins at the immediate parent scope and proceeds upward:
      *
+     * ```text
+     * parent → grandparent → ... → root
+     * ```
+     *
+     * The first match terminates the search.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DEPTH CONTROL SEMANTICS
+     * ---------------------------------------------------------------------
+     *
+     * `maxDepth` limits how far upward the search may travel.
+     *
+     * Depth is defined relative to the current scope:
+     *
+     * | Depth | Scopes Checked            |
+     * |-------|---------------------------|
+     * | 1     | parent only               |
+     * | 2     | parent + grandparent      |
+     * | 3     | parent + grandparent + 1  |
+     *
+     * If omitted, all ancestor scopes are checked.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 EXAMPLE STACK
+     * ---------------------------------------------------------------------
+     *
+     * ```text
+     * Root   { a }
+     * Mid    { b }
+     * Leaf   { c }
+     * ```
+     *
+     * ```ts
+     * hasInherited("b", 1) → true
+     * hasInherited("a", 1) → false
+     * hasInherited("a", 2) → true
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SEMANTIC INTENT
+     * ---------------------------------------------------------------------
+     *
+     * This method answers:
+     *
+     * > "Does ANY ancestor scope define this key?"
+     *
+     * WITHOUT:
+     *
+     * - resolving value
+     * - considering current scope
+     * - mutating state
+     *
+     * ---------------------------------------------------------------------
      * @param key
-     * The key to search for.
+     * Key to search for.
+     *
+     * @param maxDepth
+     * Optional maximum ancestor depth to traverse.
      *
      * @returns
-     * `true` if the key exists in a parent scope, otherwise `false`.
+     * `true` if found within allowed ancestor range.
      *
      * @since 1.0.0
      */
-    hasInherited(key: ScopeKey): boolean;
+    hasInherited(key: ScopeKey, maxDepth?: number): boolean;
 
     /**
-     * Checks whether a key can be resolved from the current scope chain.
+     * Determines whether a key can be resolved from the full scope chain.
      *
-     * This operation searches:
+     * This includes:
      *
-     * - the current scope
-     * - all parent scopes
+     * - current scope
+     * - all ancestor scopes
      *
-     * and returns whether a matching binding exists anywhere in the
-     * active scope hierarchy.
+     * Equivalent to:
      *
-     * This is equivalent to asking whether a subsequent call to
-     * `get()` would return a non-null value.
+     * ```ts
+     * get(key) !== null
+     * ```
      *
+     * ---------------------------------------------------------------------
+     * 🔷 LOOKUP ORDER
+     * ---------------------------------------------------------------------
+     *
+     * ```text
+     * current → parent → grandparent → ... → root
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SEMANTIC INTENT
+     * ---------------------------------------------------------------------
+     *
+     * This method answers:
+     *
+     * > "Would a `get()` call succeed for this key?"
+     *
+     * It does NOT:
+     *
+     * - return values
+     * - distinguish ownership
+     * - exclude current scope
+     *
+     * ---------------------------------------------------------------------
      * @param key
-     * The key to search for.
+     * Key to resolve.
      *
      * @returns
-     * `true` if the key can be resolved from the scope chain,
-     * otherwise `false`.
+     * `true` if resolvable from any scope.
      *
      * @since 1.0.0
      */
     hasResolvable(key: ScopeKey): boolean;
 
     /**
-     * Sets a value in the current active scope.
+     * Writes a value into the current scope only.
      *
-     * By default, overwriting an existing key in the current scope is
-     * considered a violation and will throw an error.
+     * Scope writes are strictly local and never propagate to ancestors.
+     *
+     * This guarantees deterministic isolation between nested rendering contexts.
      *
      * ---------------------------------------------------------------------
-     * 🔷 OVERWRITE BEHAVIOR
+     * 🔷 MUTATION MODEL
      * ---------------------------------------------------------------------
      *
-     * - `overwrite: false` → throws if key already exists in current scope
-     * - `overwrite: true` → allows replacing the value in current scope
+     * ```text
+     * current → modified
+     * parent  → unchanged
+     * root    → unchanged
+     * ```
      *
-     * This does NOT affect parent scopes.
+     * ---------------------------------------------------------------------
+     * 🔷 SHADOWING BEHAVIOR
+     * ---------------------------------------------------------------------
      *
+     * Writing a key that exists in a parent scope creates a shadow:
+     *
+     * ```ts
+     * root.set("a", 1);
+     * child.set("a", 2);
+     * ```
+     *
+     * Both values coexist in different scopes.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 OVERWRITE RULE
+     * ---------------------------------------------------------------------
+     *
+     * By default, duplicate keys in the SAME scope are forbidden.
+     *
+     * This prevents accidental mutation of established state.
+     *
+     * Overwrite must be explicit:
+     *
+     * ```ts
+     * set(key, value, { overwrite: true });
+     * ```
+     *
+     * ---------------------------------------------------------------------
      * @param key
-     * The key to assign in the current scope.
+     * Scope key.
      *
      * @param value
-     * The value to store in the current scope.
+     * Value to store.
      *
      * @param options
-     * Optional behavior configuration.
+     * Optional mutation configuration.
+     *
+     * @param options.overwrite
+     * Allows replacing an existing key in the current scope.
+     *
+     * @throws Error
+     * If overwriting a local key without explicit permission.
      *
      * @since 1.0.0
      */

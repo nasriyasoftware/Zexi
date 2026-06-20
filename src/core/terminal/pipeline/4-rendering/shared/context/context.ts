@@ -349,13 +349,17 @@ class ZexiRenderingContext {
         /** Configuration object controlling rendering behavior. */
         config: {
             /** Number of spaces used per indentation level. */
-            spaces: number
+            spaces: number;
+
+            /** Maximum output line width. */
+            maxWidth?: number;
         }
     ) {
         this.#_tokens = new TokensController(tokens);
         this.#_scopes = new ScopesController(new RenderingWriter({
             depth: this.#_depth,
-            spaces: config.spaces
+            spaces: config.spaces,
+            maxWidth: config.maxWidth
         }));
 
         this.scopes = new ScopesRuntime(this.#_scopes, this.#_tokens);

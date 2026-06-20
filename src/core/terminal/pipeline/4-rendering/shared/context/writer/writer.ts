@@ -179,6 +179,8 @@ class RenderingWriter {
      */
     readonly #_lines: WritingLine[] = [];
 
+    readonly #_inheritedWidth: number = 0;
+
     /**
      * Reference to the currently active line.
      *
@@ -253,6 +255,7 @@ class RenderingWriter {
             }
 
             this.#_currentLine = config.subContext.currentLine;
+            this.#_inheritedWidth = this.#_currentLine.width;
             this.#_lines.push(this.#_currentLine);
         } else {
             this.newLine();
@@ -511,6 +514,68 @@ class RenderingWriter {
         }
 
         return this;
+    }
+
+    /**
+     * Determines whether a given string can be rendered inline
+     * within the current rendering line without exceeding width constraints.
+     *
+     * This method is used by layout-sensitive renderers to decide whether
+     * a value can remain on the same line or whether the current scope
+     * should be promoted to a block layout.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INLINE RENDERING RULE
+     * ---------------------------------------------------------------------
+     *
+     * A value is considered inline-capable only if:
+     *
+     * - The writer is still on the first line of the current scope
+     * - The available width is sufficient to fit the entire string
+     *
+     * If either condition fails, inline rendering is disallowed.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 WIDTH MODEL
+     * ---------------------------------------------------------------------
+     *
+     * Available width is computed as:
+     *
+     * - remainingWidth: remaining space in the current line
+     * - inheritedWidth: width carried over from parent scopes
+     *
+     * These values represent the effective horizontal budget available
+     * for rendering without wrapping.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 BEHAVIOR IN LAYOUT DECISION FLOW
+     * ---------------------------------------------------------------------
+     *
+     * This method is typically used inside layout resolvers:
+     *
+     * - If `true`: renderer may continue inline rendering
+     * - If `false`: renderer should prefer or force block layout
+     *
+     * In most cases, a `false` result leads to aborting the current
+     * inline scope to preserve structural readability.
+     *
+     * ---------------------------------------------------------------------
+     * @param value
+     * The string value to evaluate for inline rendering feasibility.
+     *
+     * @returns
+     * `true` if the value fits within the current inline constraints,
+     * otherwise `false`.
+     *
+     * @since 1.0.0
+     */
+    canFitInline(value: string): boolean {
+        if (this.#_lines.length > 1) {
+            return false;
+        }
+
+        const availableWidth = this.#_remainingWidth + this.#_inheritedWidth;
+        return availableWidth >= value.length
     }
 
     /**
