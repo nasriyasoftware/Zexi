@@ -1,7 +1,6 @@
 import { ANSI } from "../../../src/core/terminal/styling/ansi";
 import TagsReplacer from "../../../src/core/terminal/styling/tags";
 
-
 describe("TagsReplacer", () => {
     describe("basic replacements", () => {
         test("replaces reset tag", () => {
