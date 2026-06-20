@@ -1,5 +1,6 @@
+import { hasOwnProp } from "../../../utils/utils";
 import { ANSI } from "./ansi";
-import type { AnsiFgColor, AnsiBgColor, AnsiColor, AnsiStyle, FormatTags } from "./types";
+import type { AnsiFgColor, AnsiBgColor, AnsiColor, AnsiStyle, FormatTags, KnownColorNames } from "./types";
 
 /** Regex fragment representing a valid RGB channel (0–255). */
 const rgbChannel = String.raw`(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)`;
