@@ -1,4 +1,4 @@
-import globalUtils from "../../../../../../utils";
+import { deepFreeze } from "../../../../../../utils/utils";
 import type { TerminalConfig } from "./types";
 
 const SPACES = 2 as const;
@@ -29,4 +29,4 @@ export const DEFAULT_TERMINAL_CONFIG: Record<'compact' | 'pretty', TerminalConfi
     }
 };
 
-globalUtils.deepFreeze(DEFAULT_TERMINAL_CONFIG);
+deepFreeze(DEFAULT_TERMINAL_CONFIG);

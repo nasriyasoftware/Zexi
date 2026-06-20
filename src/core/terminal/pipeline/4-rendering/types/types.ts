@@ -1,6 +1,6 @@
-import { DEFAULT_DEBUG_CONFIG } from "../renderers/debug/defaults";
+import { DEFAULT_DEBUG_CONFIG } from "../renderers/debug/configs";
 import { DEFAULT_JSON_CONFIG } from "../renderers/json/configs";
-import { DEFAULT_TERMINAL_CONFIG } from "../renderers/terminal/defaults";
+import { DEFAULT_TERMINAL_CONFIG } from "../renderers/terminal/configs";
 
 export type CircularReferencePolicy = 'ignore' | 'mark' | 'throw';
 

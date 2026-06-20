@@ -1,5 +1,5 @@
-import globalUtils from "../../../../../../utils";
-import { Token } from "../../../3-tokenization/types";
+import { deepFreeze } from "../../../../../../utils/utils";
+import type { Token } from "../../../3-tokenization/types";
 import type { JSONConfig } from "./types";
 
 const SPACES = 0;
@@ -28,4 +28,4 @@ export const INLINE_SAFE_TOKENS = [
     'date'
 ] as Token['kind'][]
 
-globalUtils.deepFreeze(DEFAULT_JSON_CONFIG);
+deepFreeze(DEFAULT_JSON_CONFIG);

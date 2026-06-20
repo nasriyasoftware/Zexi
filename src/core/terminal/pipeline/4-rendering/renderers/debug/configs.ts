@@ -1,4 +1,4 @@
-import globalUtils from "../../../../../../utils";
+import { deepFreeze } from "../../../../../../utils/utils";
 import type { DebugConfig } from "./types";
 
 const SPACES = 4 as const;
@@ -26,4 +26,4 @@ export const DEFAULT_DEBUG_CONFIG: Record<'compact' | 'pretty', DebugConfig> = {
     }
 };
 
-globalUtils.deepFreeze(DEFAULT_DEBUG_CONFIG);
+deepFreeze(DEFAULT_DEBUG_CONFIG);

@@ -1,7 +1,6 @@
 import consoleStyler from "../../../src/core/terminal/styling/styler";
 
 const ANSI = consoleStyler.ansi;
-const toCharCodes = (str: string) => [...str].map((c) => c.charCodeAt(0));
 
 describe("ConsoleStyler", () => {
     describe("strip", () => {
