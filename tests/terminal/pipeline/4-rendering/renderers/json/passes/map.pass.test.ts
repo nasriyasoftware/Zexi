@@ -7,45 +7,32 @@ import ZexiRenderingContext from "../../../../../../../src/core/terminal/pipelin
 import type { JSONRendererFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
 import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 
-describe("setPass (integration)", () => {
+describe("mapPass (integration)", () => {
 
     /* -------------------------------------------------------- */
-    /* 1. LAYOUT OVERRIDE                                      */
-    /* -------------------------------------------------------- */
-
-    it("forces block layout", () => {
-        const tokens = tokenize(new Set([1]));
-
-        const ctx = makeCtx(tokens);
-        const helpers = createHelpers({ ctx });
-
-        moveToObjectName(ctx);
-        helpers.transforms.set();
-
-        expect(
-            ctx.data.get(keys.RENDERING_LAYOUT_KEY)
-        ).toBe("block");
-    });
-
-    /* -------------------------------------------------------- */
-    /* 2. WRAPPER TOKENS                                       */
+    /* 1. WRAPPER TOKENS                                       */
     /* -------------------------------------------------------- */
 
     it("ignores structural wrapper tokens", () => {
-        const tokens = tokenize(new Set([1]));
+        const tokens = tokenize(
+            new Map([["a", 1]])
+        );
 
         const ignoredTokens = new Set<Token>();
 
         const ctx = makeCtx(tokens);
-        const helpers = createHelpers({ ctx, ignoredTokens });
+        const helpers = createHelpers({
+            ctx,
+            ignoredTokens
+        });
 
         moveToObjectName(ctx);
-        helpers.transforms.set();
-
-        expect(ignoredTokens.size).toBe(3);
+        helpers.transforms.map();
 
         expect(
-            Array.from(ignoredTokens).map(t => t.kind)
+            Array.from(ignoredTokens)
+                .slice(0, 3)
+                .map(t => t.kind)
         ).toEqual([
             "object-open",
             "soft-line",
@@ -54,108 +41,191 @@ describe("setPass (integration)", () => {
     });
 
     /* -------------------------------------------------------- */
-    /* 3. SET SIZE = 1                                         */
+    /* 2. MAP SIZE = 1                                         */
     /* -------------------------------------------------------- */
 
-    it("injects envelope with correct size for single-value set", () => {
-        const tokens = tokenize(new Set([123]));
-
-        const ctx = makeCtx(tokens);
-        const helpers = createHelpers({ ctx });
-
-        moveToObjectName(ctx);
-        helpers.transforms.set();
-
-        const primitives = collectPrimitives(ctx);
-
-        expect(primitives[0]).toMatch(/zexi@[0-9].[0-9]/);
-        expect(primitives.slice(1)).toEqual([
-            'set',
-            1,
-            123
-        ]);
-    });
-
-    /* -------------------------------------------------------- */
-    /* 4. SET SIZE = N                                         */
-    /* -------------------------------------------------------- */
-
-    it("injects envelope with correct size for multi-value set", () => {
+    it("injects envelope with correct size for single-entry map", () => {
         const tokens = tokenize(
-            new Set([1, 2, 3, 4])
+            new Map([
+                ["a", 1]
+            ])
         );
 
         const ctx = makeCtx(tokens);
         const helpers = createHelpers({ ctx });
 
         moveToObjectName(ctx);
-        helpers.transforms.set();
+        helpers.transforms.map();
 
         const primitives = collectPrimitives(ctx);
 
         expect(primitives[0]).toMatch(/zexi@[0-9].[0-9]/);
         expect(primitives.slice(1)).toEqual([
-            'set',
-            4,
-            1, 2, 3, 4
+            "map",
+            'a', 1, // from { key: 'a', value: 1 }
+            'a', 1, // From the map's original tokens
+            1
         ]);
     });
 
     /* -------------------------------------------------------- */
-    /* 5. EMPTY SET                                            */
+    /* 3. MAP SIZE = N                                         */
     /* -------------------------------------------------------- */
 
-    it("injects envelope for empty set", () => {
-        const tokens = tokenize(new Set());
-
-        const ctx = makeCtx(tokens);
-        const helpers = createHelpers({ ctx });
-
-        moveToObjectName(ctx);
-        helpers.transforms.set();
-
-        const properties = collectProperties(ctx);
-
-        expect(properties.length).toBe(5);
-        expect(properties[0]).toBe("$codec");
-        expect(properties[1]).toBe("$kind");
-        expect(properties[2]).toBe("$payload");
-        expect(properties[3]).toBe("size");
-        expect(properties[4]).toBe("values");
-    });
-
-    /* -------------------------------------------------------- */
-    /* 6. SET ENVELOPE SHAPE                                   */
-    /* -------------------------------------------------------- */
-
-    it("injects a set envelope", () => {
+    it("injects envelope with correct size for multi-entry map", () => {
         const tokens = tokenize(
-            new Set([1, 2, 3])
+            new Map([
+                ["a", 1],
+                ["b", 2],
+                ["c", 3]
+            ])
         );
 
         const ctx = makeCtx(tokens);
         const helpers = createHelpers({ ctx });
 
         moveToObjectName(ctx);
-        helpers.transforms.set();
-
-        const properties = collectProperties(ctx);
-
-        expect(properties.length).toBe(5);
-        expect(properties[0]).toBe("$codec");
-        expect(properties[1]).toBe("$kind");
-        expect(properties[2]).toBe("$payload");
-        expect(properties[3]).toBe("size");
-        expect(properties[4]).toBe("values");
+        helpers.transforms.map();
 
         const primitives = collectPrimitives(ctx);
 
         expect(primitives[0]).toMatch(/zexi@[0-9].[0-9]/);
         expect(primitives.slice(1)).toEqual([
-            'set',
-            3,
-            1, 2, 3
-        ])
+            "map",
+            // Injected entries as { key: <char>, value: <int> }
+            "a", 1,
+            "b", 2,
+            "c", 3,
+            // From the map's original tokens
+            "a", 1,
+            "b", 2,
+            "c", 3,
+            // The size of the map
+            3
+        ]);
+    });
+
+    /* -------------------------------------------------------- */
+    /* 4. EMPTY MAP                                            */
+    /* -------------------------------------------------------- */
+
+    it("injects envelope for empty map", () => {
+        const tokens = tokenize(
+            new Map()
+        );
+
+        const ctx = makeCtx(tokens);
+        const helpers = createHelpers({ ctx });
+
+        moveToObjectName(ctx);
+        helpers.transforms.map();
+
+        const properties = collectProperties(ctx);
+        expect(properties).toEqual([
+            "$codec",
+            "$kind",
+            "$payload",
+            "entries",
+            "size"
+        ]);
+    });
+
+    /* -------------------------------------------------------- */
+    /* 5. MAP ENVELOPE SHAPE                                   */
+    /* -------------------------------------------------------- */
+
+    it("injects a map envelope", () => {
+        const tokens = tokenize(
+            new Map([
+                ["x", 10],
+                ["y", 20]
+            ])
+        );
+
+        const ctx = makeCtx(tokens);
+        const helpers = createHelpers({ ctx });
+
+        moveToObjectName(ctx);
+        helpers.transforms.map();
+
+        const properties = collectProperties(ctx);
+        expect(properties).toEqual([
+            "$codec",
+            "$kind",
+            "$payload",
+            "entries",
+
+            // The first entry
+            "key", "value",
+
+            // The second entry
+            "key", "value",
+
+            "size"
+        ]);
+
+        const primitives = collectPrimitives(ctx);
+
+        expect(primitives[0]).toMatch(/zexi@[0-9].[0-9]/);
+        expect(primitives.slice(1)).toEqual([
+            "map",
+            // Injected entries as { key: <char>, value: <int> }
+            "x", 10,
+            "y", 20,
+            // From the map's original tokens
+            "x", 10,
+            "y", 20,
+            // The size of the map
+            2
+        ]);
+    });
+
+    /* -------------------------------------------------------- */
+    /* 6. PRESERVES COMPLEX KEYS                               */
+    /* -------------------------------------------------------- */
+
+    it("preserves object keys inside entry frames", () => {
+        const key = { id: 1 };
+
+        const tokens = tokenize(
+            new Map([
+                [key, "value"]
+            ])
+        );
+
+        const ctx = makeCtx(tokens);
+        const helpers = createHelpers({ ctx });
+
+        moveToObjectName(ctx);
+        helpers.transforms.map();
+
+        const properties = collectProperties(ctx);
+
+        expect(properties).toEqual([
+            "$codec",
+            "$kind",
+            "$payload",
+            "entries",
+
+            "id", // The property of the object
+            "key", "id", "value",
+
+            "size"
+        ]);
+
+        const primitives = collectPrimitives(ctx);
+        console.debug(primitives);
+
+        expect(primitives[0]).toMatch(/zexi@[0-9].[0-9]/);
+        expect(primitives.slice(1)).toEqual([
+            "map",
+            // Injected entries as { key: <char>, value: <int> }
+            1, 'value',
+            // From the map's original tokens
+            1, 'value',
+            // The size of the map
+            1
+        ]);
     });
 
 });
