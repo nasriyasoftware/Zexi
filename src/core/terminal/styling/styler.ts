@@ -1,8 +1,8 @@
+import TagsReplacer from "./tags";
 import { ANSI } from "./ansi";
 import { buildTags, resolveAnsiColor, resolveAnsiStyle } from "./helpers";
 import { hasOwnProp, isRecord } from "../../../utils/utils";
-import type { AnsiCode, AnsiColor, AnsiStyle, KnownColorNames, PredefinedColor, PredefinedStyle } from "./types";
-import TagsReplacer from "./tags";
+import type { AnsiColor, AnsiStyle, PredefinedColor, PredefinedStyle } from "./types";
 
 /**
  * ANSI-based terminal styling and formatting engine.
