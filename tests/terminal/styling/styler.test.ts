@@ -26,6 +26,7 @@ describe("ConsoleStyler", () => {
     });
 
     describe("format", () => {
+
         it("formats with color only", () => {
             const result = consoleStyler.format("Hello", { color: "red" });
 
@@ -60,15 +61,23 @@ describe("ConsoleStyler", () => {
         });
 
         it("does not append reset if no formatting applied", () => {
-            const result = consoleStyler.format("Hello");
+            const result = consoleStyler.format("Hello", {});
 
             expect(result).toBe("Hello");
         });
 
-        it("throws on invalid color", () => {
+        it("throws on invalid foreground color", () => {
+            const color = "invalid" as any;
             expect(() =>
-                consoleStyler.format("Hello", { color: "invalid" as any })
-            ).toThrow("Unknown color");
+                consoleStyler.format("Hello", { color })
+            ).toThrow(`Unknown foreground color "${color}"`);
+        });
+
+        it("throws on invalid background color", () => {
+            const color = "invalid" as any;
+            expect(() =>
+                consoleStyler.format("Hello", { bgColor: color })
+            ).toThrow(`Unknown background color "${color}"`);
         });
 
         it("throws on invalid style type", () => {
@@ -82,13 +91,80 @@ describe("ConsoleStyler", () => {
                 consoleStyler.format("Hello", { style: ["invalid" as any] })
             ).toThrow("Unknown style");
         });
+
+        it("color() applies foreground color only", () => {
+            const result = consoleStyler.color("Hello", "red");
+
+            expect(result).toBe(
+                `${ANSI.color.fg.normal.red}Hello${ANSI.reset}`
+            );
+        });
+
+        it("color() throws on invalid color", () => {
+            const color = "invalid" as any;
+
+            expect(() =>
+                consoleStyler.color("Hello", color)
+            ).toThrow(`Unknown foreground color "${color}"`);
+        });
+
+        it("bgColor() applies background color only", () => {
+            const result = consoleStyler.bgColor("Hello", "blue");
+
+            expect(result).toBe(
+                `${ANSI.color.bg.normal.blue}Hello${ANSI.reset}`
+            );
+        });
+
+        it("bgColor() throws on invalid background color", () => {
+            const color = "invalid" as any;
+
+            expect(() =>
+                consoleStyler.bgColor("Hello", color)
+            ).toThrow(`Unknown background color "${color}"`);
+        });
+
+        it("style() applies single style", () => {
+            const result = consoleStyler.style("Hello", "bold");
+
+            expect(result).toBe(
+                `${ANSI.style.bold}Hello${ANSI.reset}`
+            );
+        });
+
+        it("style() applies multiple styles", () => {
+            const result = consoleStyler.style("Hello", ["bold", "underline"]);
+
+            expect(result).toBe(
+                `${ANSI.style.bold}${ANSI.style.underline}Hello${ANSI.reset}`
+            );
+        });
+
+        it("style() throws on invalid style type", () => {
+            expect(() =>
+                consoleStyler.style("Hello", 123 as any)
+            ).toThrow("Expected options.style");
+        });
+
+        it("style() throws on unknown style", () => {
+            expect(() =>
+                consoleStyler.style("Hello", ["invalid" as any])
+            ).toThrow("Unknown style");
+        });
+
+        it("color(), bgColor(), and style() are equivalent to format()", () => {
+            const a = consoleStyler.color("X", "red");
+            const b = consoleStyler.format("X", { color: "red" });
+
+            expect(a).toBe(b);
+        });
     });
 
-    describe("render", () => {
+    describe("compile", () => {
         it("renders color tags", () => {
             const input = "<:color:red>Hello<:reset>";
 
-            const result = consoleStyler.render(input);
+            const result = consoleStyler.compile(input);
 
             expect(result).toEqual(`${ANSI.color.fg.normal.red}Hello${ANSI.reset}`);
         });
@@ -96,7 +172,7 @@ describe("ConsoleStyler", () => {
         it("renders style tags", () => {
             const input = "<:style:bold>Hello<:reset>";
 
-            const result = consoleStyler.render(input);
+            const result = consoleStyler.compile(input);
 
             expect(result).toBe(
                 `${ANSI.style.bold}Hello${ANSI.reset}`
@@ -106,7 +182,7 @@ describe("ConsoleStyler", () => {
         it("renders mixed tags", () => {
             const input = "<:color:green><:style:bold>Hello<:reset>";
 
-            const result = consoleStyler.render(input);
+            const result = consoleStyler.compile(input);
 
             expect(result).toBe(
                 `${ANSI.color.fg.normal.green}${ANSI.style.bold}Hello${ANSI.reset}`
@@ -116,7 +192,7 @@ describe("ConsoleStyler", () => {
         it("removes unknown tags safely", () => {
             const input = "<:color:unknown>Hello<:reset>";
 
-            const result = consoleStyler.render(input, { strict: true });
+            const result = consoleStyler.compile(input, { strict: true });
 
             expect(result).toBe(`Hello${ANSI.reset}`);
         });

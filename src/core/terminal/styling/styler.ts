@@ -1,7 +1,7 @@
 import { ANSI } from "./ansi";
-import { buildTags } from "./helpers";
+import { buildTags, resolveAnsiColor, resolveAnsiStyle } from "./helpers";
 import { hasOwnProp, isRecord } from "../../../utils/utils";
-import type { KnownColorNames, PredefinedStyle } from "./types";
+import type { AnsiCode, AnsiColor, AnsiStyle, KnownColorNames, PredefinedColor, PredefinedStyle } from "./types";
 import TagsReplacer from "./tags";
 
 /**
@@ -211,7 +211,6 @@ class ConsoleStyler {
         return str.replace(/\x1b\[[0-9;]*m/g, "");
     }
 
-
     /**
      * Detects whether a string contains ANSI escape sequences.
      *
@@ -238,23 +237,31 @@ class ConsoleStyler {
     }
 
     /**
-     * Renders semantic formatting tags into ANSI escape sequences.
+     * Compiles semantic formatting tags into ANSI escape sequences.
      *
-     * This is the core transformation pipeline of the styling system.
+     * This method is the **tag compilation stage** of the styling system.
+     * It transforms a custom inline markup language into terminal-ready ANSI output.
      *
-     * It converts custom inline markup into terminal-safe ANSI output:
+     * ---------------------------------------------------------------------
+     * 🔷 COMPILATION MODEL
+     * ---------------------------------------------------------------------
+     *
+     * The input is treated as a declarative string containing formatting tags:
      *
      * ```text
-     * <:color:red>   → ANSI red foreground
-     * <:style:bold>  → ANSI bold sequence
-     * <:reset>       → ANSI reset sequence
+     * <:color:red>     → ANSI foreground color (red)
+     * <:style:bold>    → ANSI style sequence (bold)
+     * <:reset>         → ANSI reset sequence
      * ```
      *
+     * These tags are replaced with their corresponding ANSI escape codes in a
+     * deterministic, single-pass transformation pipeline.
+     *
      * ---------------------------------------------------------------------
-     * 🔷 RENDERING PIPELINE
+     * 🔷 PROCESSING PIPELINE
      * ---------------------------------------------------------------------
      *
-     * Input string is processed through sequential transformations:
+     * Compilation applies a sequence of ordered replacements:
      *
      * 1. Reset tags
      * 2. Foreground colors
@@ -263,43 +270,67 @@ class ConsoleStyler {
      * 5. Bright background colors
      * 6. Style tags
      *
-     * Each step replaces semantic tags with ANSI codes.
+     * Each stage substitutes recognized tags with their ANSI equivalents.
      *
      * ---------------------------------------------------------------------
-     * 🔷 FALLBACK BEHAVIOR
+     * 🔷 STRICT MODE BEHAVIOR
      * ---------------------------------------------------------------------
      *
-     * If a tag is not recognized:
+     * The `strict` option controls how unknown or invalid tags are handled:
      *
-     * ## Non-strict mode
+     * ## strict = false (default)
      *
-     * The tag is preserved:
+     * Unknown tags are preserved in their original form:
      *
      * ```text
      * <:color:unknown>
      * ```
      *
-     * ## Strict mode
+     * This is useful for debugging, preview systems, or partial compilation.
      *
-     * The tag is removed entirely.
+     * ## strict = true
+     *
+     * Unknown tags are removed from the output entirely:
+     *
+     * ```text
+     * <:color:unknown> → ""
+     * ```
+     *
+     * This produces clean terminal output without artifacts.
      *
      * ---------------------------------------------------------------------
-     * 🔷 USE CASES
+     * 🔷 DESIGN GUARANTEES
      * ---------------------------------------------------------------------
      *
-     * - CLI UI rendering
-     * - debug console formatting
-     * - log beautification
-     * - terminal component styling
+     * - Deterministic string transformation
+     * - No state mutation
+     * - No layout or width awareness
+     * - Pure semantic-to-ANSI compilation
      *
-     * @param input - Raw string containing formatting tags
-     * @param options - Rendering configuration
-     * @param options.strict - If true, invalid tags are removed instead of preserved
-     * @returns ANSI-formatted terminal string
-     * 
+     * ---------------------------------------------------------------------
+     * 🔷 TYPICAL USE CASES
+     * ---------------------------------------------------------------------
+     *
+     * - CLI formatting systems
+     * - structured logging output
+     * - terminal UI text styling
+     * - debug visualization layers
+     *
+     * @param input
+     * Raw string containing formatting tags.
+     *
+     * @param options
+     * Compilation options.
+     *
+     * @param options.strict
+     * If `true`, unknown tags are removed instead of preserved.
+     *
+     * @returns
+     * ANSI-formatted string ready for terminal output.
+     *
      * @since 1.0.0
      */
-    render(input: string, options?: { strict?: boolean }): string {
+    compile(input: string, options?: { strict?: boolean }): string {
         const config = {
             strict: false
         }
@@ -319,6 +350,260 @@ class ConsoleStyler {
         }
 
         return TagsReplacer.replace(input, config.strict);
+    }
+
+    /**
+     * Applies ANSI formatting to a string using foreground color, background color,
+     * and one or more styles.
+     *
+     * This is the primary formatting primitive of the ConsoleStyler system.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 BEHAVIOR MODEL
+     * ---------------------------------------------------------------------
+     *
+     * - Resolves semantic inputs (names or ANSI codes) into ANSI escape sequences
+     * - Applies foreground color (if provided)
+     * - Applies background color (if provided)
+     * - Applies one or more styles (if provided)
+     * - Appends a single ANSI reset at the end of the output
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INPUT NORMALIZATION
+     * ---------------------------------------------------------------------
+     *
+     * - `style` may be:
+     *   - a single style
+     *   - an array of styles
+     *
+     * All styles are normalized into a Set to ensure:
+     * - no duplicates
+     * - deterministic output order (insertion order preserved)
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 VALIDATION RULES
+     * ---------------------------------------------------------------------
+     *
+     * The function is strict and will throw on invalid input:
+     *
+     * - `options` must be a non-null object
+     * - `color`, `bgColor`, and `style` must be strings (or arrays of strings)
+     * - unknown colors/styles result in runtime errors
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 EARLY EXIT BEHAVIOR
+     * ---------------------------------------------------------------------
+     *
+     * If no formatting options are provided (no color, bgColor, or style),
+     * the original text is returned unchanged.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ANSI OUTPUT CONTRACT
+     * ---------------------------------------------------------------------
+     *
+     * Output structure:
+     *
+     * ```text
+     * [foreground][background][styles]text[reset]
+     * ```
+     *
+     * Reset is always appended regardless of input state to ensure terminal safety.
+     *
+     * @param text - Raw input string to format
+     * @param options - Formatting configuration
+     * @param options.color - Foreground color (named or ANSI escape code)
+     * @param options.bgColor - Background color (named or ANSI escape code)
+     * @param options.style - One or more text styles
+     *
+     * @returns ANSI-formatted string with applied styles and reset sequence
+     *
+     * @throws {TypeError} If options is missing or not a valid object
+     * @throws {TypeError} If any provided property is not a string
+     * @throws {Error} If a color or style cannot be resolved
+     *
+     * @since 1.0.0
+     */
+    format(
+        text: string,
+        options: {
+            color?: PredefinedColor | AnsiColor;
+            bgColor?: PredefinedColor | AnsiColor;
+            style?: PredefinedStyle | AnsiStyle | (PredefinedStyle | AnsiStyle)[];
+        }
+    ): string {
+        const formats = {
+            color: null as AnsiColor | null,
+            bgColor: null as AnsiColor | null,
+            style: new Set<AnsiStyle>(),
+        };
+
+        if (options === undefined) {
+            throw new TypeError(`Expected options to be an object, got none was provided`);
+        }
+
+        if (!isRecord(options)) {
+            throw new TypeError(`Expected options (when provided) to be an object, got ${typeof options}`);
+        }
+
+        if (hasOwnProp(options, 'color')) {
+            if (typeof options.color !== 'string') {
+                throw new TypeError(`Expected options.color to be a string, got ${typeof options.color}`);
+            }
+
+            const color = resolveAnsiColor(options.color, 'fg');
+            if (!color) {
+                throw new Error(`Unknown foreground color "${options.color}"`);
+            }
+
+            formats.color = color;
+        }
+
+        if (hasOwnProp(options, 'bgColor')) {
+            if (typeof options.bgColor !== 'string') {
+                throw new TypeError(`Expected options.bgColor to be a string, got ${typeof options.bgColor}`);
+            }
+
+            const color = resolveAnsiColor(options.bgColor, 'bg');
+            if (!color) {
+                throw new Error(`Unknown background color "${options.bgColor}"`);
+            }
+
+            formats.bgColor = color;
+        }
+
+        if (hasOwnProp(options, 'style')) {
+            const styles = Array.isArray(options.style) ? options.style : [options.style];
+
+            for (const style of styles) {
+                if (typeof style !== 'string') {
+                    throw new TypeError(`Expected options.style to be a string, got ${typeof style}`);
+                }
+
+                const resovled = resolveAnsiStyle(style);
+                if (!resovled) {
+                    throw new Error(`Unknown style "${style}"`);
+                }
+
+                formats.style.add(resovled);
+            }
+        }
+
+        if (
+            formats.color === null &&
+            formats.bgColor === null &&
+            formats.style.size === 0
+        ) {
+            return text;
+        }
+
+        const c = formats.color ?? '';
+        const b = formats.bgColor ?? '';
+        const s = Array.from(formats.style).join('');
+
+        return `${c}${b}${s}${text}${ANSI.reset}`;
+    }
+
+    /**
+     * Applies a foreground ANSI color to a string.
+     *
+     * This is a convenience wrapper around `format()` that only affects
+     * foreground color.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 BEHAVIOR
+     * ---------------------------------------------------------------------
+     *
+     * - Resolves the color using the ANSI palette or direct ANSI code
+     * - Applies only foreground coloring
+     * - Leaves background and style unchanged
+     * - Always appends a reset sequence via `format()`
+     *
+     * @param text - Input string to colorize
+     * @param color - Foreground color (named or ANSI escape code)
+     *
+     * @returns ANSI-formatted string with foreground color applied
+     *
+     * @throws {TypeError} If the color is not a string internally
+     * @throws {Error} If the color cannot be resolved
+     *
+     * @since 1.0.0
+     */
+    color(text: string, color: PredefinedColor | AnsiColor): string {
+        return this.format(text, { color });
+    }
+
+    /**
+     * Applies a background ANSI color to a string.
+     *
+     * This is a convenience wrapper around `format()` that only affects
+     * background color.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 BEHAVIOR
+     * ---------------------------------------------------------------------
+     *
+     * - Resolves the background color using the ANSI palette or escape code
+     * - Applies only background coloring
+     * - Leaves foreground and style unchanged
+     * - Always appends a reset sequence via `format()`
+     *
+     * @param text - Input string to style
+     * @param color - Background color (named or ANSI escape code)
+     *
+     * @returns ANSI-formatted string with background color applied
+     *
+     * @throws {TypeError} If the color is not a string internally
+     * @throws {Error} If the color cannot be resolved
+     *
+     * @since 1.0.0
+     */
+    bgColor(text: string, color: PredefinedColor | AnsiColor): string {
+        return this.format(text, { bgColor: color });
+    }
+
+    /**
+     * Applies one or more ANSI text styles to a string.
+     *
+     * This is a convenience wrapper around `format()` that only affects styling
+     * (bold, italic, underline, etc.).
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INPUT MODEL
+     * ---------------------------------------------------------------------
+     *
+     * The style parameter supports both:
+     *
+     * - a single style
+     * - an array of styles
+     *
+     * All styles are normalized internally into a Set to ensure:
+     * - deduplication
+     * - deterministic ordering
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 BEHAVIOR
+     * ---------------------------------------------------------------------
+     *
+     * - Resolves each style against the ANSI style registry
+     * - Applies styles in insertion order
+     * - Does not affect foreground or background colors
+     * - Always appends a reset sequence via `format()`
+     *
+     * @param text - Input string to style
+     * @param style - One or more ANSI styles (named or raw escape codes)
+     *
+     * @returns ANSI-formatted string with styles applied
+     *
+     * @throws {TypeError} If any style is not a string
+     * @throws {Error} If any style cannot be resolved
+     *
+     * @since 1.0.0
+     */
+    style(
+        text: string,
+        style: PredefinedStyle | AnsiStyle | (PredefinedStyle | AnsiStyle)[]
+    ): string {
+        return this.format(text, { style });
     }
 
     /**
