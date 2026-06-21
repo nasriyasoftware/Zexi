@@ -1,10 +1,10 @@
 
-import type { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 
-import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
-import MapEntryFrame from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/assets/map.entry.frame";
+import TOKENS from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
+import MapEntryFrame from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/assets/map.entry.frame";
 
-import _rendering from "../../helpers/helpers";
+import _rendering from "../../../helpers/helpers";
 
 const makeFrame = (tokenizer: (v: unknown) => readonly Token[]) => {
     return new MapEntryFrame(tokenizer);

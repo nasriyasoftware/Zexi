@@ -1,7 +1,6 @@
 import * as helpers from "../../../../../src/core/terminal/pipeline/4-rendering/shared/helpers";
 import { DEFAULT_OUTPUT_CONFIG } from "../../../../../src/core/terminal/pipeline/4-rendering/types/types";
 
-
 describe("resolveRendererConfig (deterministic)", () => {
 
     describe("terminal target", () => {
