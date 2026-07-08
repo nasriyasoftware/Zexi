@@ -1,138 +1,155 @@
 import TOKENS from "../../../../3-tokenization/tokens";
+import JSONTokenizer from "../../../../3-tokenization/tokenizers/json.tokenizer";
 import DataEnvelope from "../../../shared/envelope/data.envelope";
-import JSONTokenizer from "../helpers/tokenizer";
 import MapEntryFrame from "../assets/map.entry.frame";
 
-import type { Token } from "../../../../3-tokenization/types";
 import type { PassedData } from "./types";
+import type { Token } from "../../../../3-tokenization/types";
 
 /**
- * Map Rendering Pass
- * ------------------
+ * Map Structure Normalization Pass
+ * --------------------------------
  *
- * A structural transformation pass responsible for converting a token stream
- * representing a JavaScript `Map` into a JSON-compatible envelope structure.
+ * This pass transforms a token stream representing a JavaScript `Map`
+ * into a deterministic JSON-compatible envelope structure during the
+ * **normalization phase** of the pipeline.
  *
- * This pass operates at the **token mutation layer**, not at the value layer.
- * It does NOT inspect runtime values directly.
+ * It does NOT perform rendering or runtime Map inspection.
  *
- * Instead, it:
- *
- * - Traverses a pre-tokenized representation of a Map
- * - Extracts entry boundaries using group-scoped tokens
- * - Builds entry frames to isolate key/value structure
- * - Injects a structured envelope using anchors
- * - Produces a deterministic serialized Map representation
+ * Instead, it reconstructs Map semantics purely from token structure,
+ * producing a stable intermediate representation for the rendering phase.
  *
  * ---------------------------------------------------------------------
- * 🔷 OUTPUT FORMAT
+ * 🔷 PIPELINE POSITION
  * ---------------------------------------------------------------------
  *
- * The final serialized structure follows this schema:
+ * Graph → Representation → Tokenization → Normalization → Rendering
  *
- * {
- *   "$codec": "zexi@1.0",
- *   "$kind": "map",
- *   "$payload": {
- *     "entries": [...],
- *     "size": number
- *   }
- * }
+ * This pass operates in the normalization stage and is responsible for:
+ *
+ * - detecting Map entry boundaries from token groups
+ * - reconstructing key/value pairs via entry frames
+ * - computing deterministic size metadata
+ * - injecting envelope structure via anchors
+ * - suppressing consumed structural tokens
  *
  * ---------------------------------------------------------------------
- * 🔷 DESIGN GOALS
+ * 🔷 CORE RESPONSIBILITY
  * ---------------------------------------------------------------------
  *
- * 1. **Token-Driven Structural Extraction**
- *    - No runtime Map inspection occurs here
- *    - Structure is derived entirely from token stream semantics
+ * The purpose of this pass is to convert a Map token stream into a
+ * canonical envelope representation:
  *
- * 2. **Entry Frame Isolation**
- *    - Each Map entry is encapsulated in a `MapEntryFrame`
- *    - Ensures correct grouping of key/value pairs
+ *     {
+ *       "$codec": "zexi@1.0",
+ *       "$kind": "map",
+ *       "$payload": {
+ *         "entries": [...],
+ *         "size": number
+ *       }
+ *     }
+ *
+ * This ensures Maps are serialized deterministically regardless of:
+ *
+ * - insertion order variability
+ * - nested structure complexity
+ * - token stream formatting differences
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 DESIGN PRINCIPLES
+ * ---------------------------------------------------------------------
+ *
+ * 1. Token-driven reconstruction
+ *    - No runtime Map inspection occurs
+ *    - All structure is derived from token stream semantics
+ *
+ * 2. Entry-frame isolation
+ *    - Each Map entry is captured in a `MapEntryFrame`
  *    - Prevents cross-entry token leakage
+ *    - Ensures strict key/value grouping integrity
  *
- * 3. **Anchor-Based Injection Model**
- *    - Uses `Anchor` tokens instead of numeric indices
- *    - Ensures stable insertion points during stream mutation
+ * 3. Group-based semantics
+ *    - Map entries are defined by `group-start / group-end`
+ *    - Each completed group represents a single entry
  *
- * 4. **Deferred Envelope Construction**
- *    - Envelope structure is injected AFTER structural parsing
- *    - Ensures size and entries are fully computed before emission
+ * 4. Anchor-based injection
+ *    - Uses named anchors instead of index mutation
+ *    - Guarantees stable insertion under stream changes
  *
- * 5. **Stream Mutation Safety**
- *    - All ignored tokens are explicitly tracked
- *    - Prevents duplicate rendering of consumed structural tokens
+ * 5. Deferred envelope construction
+ *    - Envelope is created only after full structural scan
+ *    - Ensures accurate size and entry metadata
  *
- * ---------------------------------------------------------------------
- * 🔷 INTERNAL SCANNING MODEL
- * ---------------------------------------------------------------------
- *
- * The pass performs a single forward scan with the following state:
- *
- * - `objects.opened / closed`
- *   Tracks Map outer object boundary
- *
- * - `groups.opened / closed`
- *   Tracks Map entry grouping boundaries
- *
- * - `entry: MapEntryFrame`
- *   Accumulates tokens belonging to a single Map entry
- *
- * - `entries: Token[][]`
- *   Final extracted entry token groups
- *
- * - `separators`
- *   Used to compute Map size (entries = separators + 1)
+ * 6. Safe token suppression
+ *    - Consumed tokens are explicitly registered in `ignoredTokens`
+ *    - Prevents duplicate emission in downstream passes
  *
  * ---------------------------------------------------------------------
  * 🔷 GROUP MODEL (CRITICAL)
  * ---------------------------------------------------------------------
  *
- * Map entries are defined by `group-start / group-end` tokens.
+ * Map entries are defined by structural grouping tokens:
  *
- * Each group corresponds to a full Map entry:
+ *   group-start → group-end
+ *
+ * Each group corresponds to exactly one Map entry:
  *
  *   key → value
  *
- * The pass:
+ * Entry lifecycle:
  *
- * - Starts a new MapEntryFrame at first group-start in scope
- * - Accumulates tokens until group-end
- * - Commits entry only when group is fully closed
+ * 1. group-start → create new MapEntryFrame
+ * 2. stream key/value tokens into frame
+ * 3. key-value-separator → flush partial frame state
+ * 4. group-end → finalize entry
+ * 5. commit entry to entries list
  *
  * This guarantees:
  *
  * - no partial entries
- * - no half-emitted key/value pairs
- * - strict structural consistency
+ * - no incomplete key/value pairs
+ * - deterministic grouping semantics
  *
  * ---------------------------------------------------------------------
  * 🔷 OBJECT SCOPE SAFETY
  * ---------------------------------------------------------------------
  *
- * The pass enforces strict object boundary tracking:
+ * The pass enforces strict outer-object boundary tracking:
  *
- * - Only processes tokens within the outer Map object scope
- * - Stops immediately when root object is closed
- * - Ensures no leakage across nested structures
+ * - only processes tokens within the root Map object scope
+ * - stops immediately at root object closure
+ * - prevents cross-structure contamination
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 SIZE COMPUTATION RULE
+ * ---------------------------------------------------------------------
+ *
+ * Map size is derived from structural separators:
+ *
+ *     size = separators + 1
+ *
+ * This assumes:
+ *
+ * - each separator represents a boundary between entries
+ * - at least one entry exists during scanning
  *
  * ---------------------------------------------------------------------
  * 🔷 ENVELOPE INJECTION STRATEGY
  * ---------------------------------------------------------------------
  *
- * Two anchors are used:
+ * Two anchors coordinate deterministic mutation:
  *
  * - `map:envelope-start`
- *   → Injects envelope header before data region
+ *   → insertion point for envelope header tokens
  *
  * - `map:data-end`
- *   → Injects trailing metadata + cleanup callbacks
+ *   → insertion point for payload + cleanup callback
  *
- * These anchors ensure:
+ * This ensures:
  *
- * - stable insertion despite stream mutation
- * - separation of metadata and payload regions
+ * - stable ordering under token stream mutation
+ * - separation of metadata vs payload regions
+ * - predictable downstream rendering behavior
  *
  * ---------------------------------------------------------------------
  * 🔷 FINAL OUTPUT CONSTRUCTION
@@ -140,47 +157,91 @@ import type { PassedData } from "./types";
  *
  * After scanning:
  *
- * 1. Entries are converted into token arrays
+ * 1. Each entry is converted into a token array
  * 2. Each entry is prefixed with an Anchor (`entry-i`)
  * 3. Entry separators are reconstructed:
  *    - group-end
  *    - separator
  *    - soft-line
  *
- * 4. Envelope is created using DataEnvelope('map', ...)
- * 5. Envelope tokens are injected into stream
+ * 4. DataEnvelope('map', ...) is created
+ * 5. Envelope tokens are injected into the stream
  *
  * ---------------------------------------------------------------------
- * 🔷 SIZE COMPUTATION RULE
+ * 🔷 CLEANUP PHASE
  * ---------------------------------------------------------------------
  *
- * Map size is computed as:
+ * After payload injection, a deferred callback is registered to:
  *
- *   size = separators + 1
+ * - ignore `indent-end`
+ * - ignore `soft-line`
+ * - ignore `object-close`
  *
- * This assumes:
- *
- * - every separator represents a boundary between entries
- * - at least one entry exists when parsing begins
+ * This ensures structural formatting artifacts do not leak into output.
  *
  * ---------------------------------------------------------------------
- * @param passedData
- * Pass context containing:
+ * 🔷 CONTEXT INTERACTIONS
+ * ---------------------------------------------------------------------
  *
- * - `ctx`
- *   Rendering context with token stream and injection APIs
+ * This pass interacts with:
  *
- * - `ignoredTokens`
- *   Global registry of tokens excluded from rendering output
+ * - ctx.tokens
+ *   → stream traversal, injection, and mutation
+ *
+ * - ctx.data
+ *   → shared normalization state (layout + metadata if needed)
+ *
+ * - ignoredTokens
+ *   → global registry of consumed structural tokens
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 SIDE EFFECTS
+ * ---------------------------------------------------------------------
+ *
+ * This pass may:
+ *
+ * - mutate token stream via injection and cursor-relative logic
+ * - mark tokens as ignored
+ * - inject structural anchors and envelope frames
+ * - compute and attach deterministic metadata (size, entries)
+ * - register deferred cleanup callbacks
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 SAFETY MODEL
+ * ---------------------------------------------------------------------
+ *
+ * This pass depends on strict structural invariants:
+ *
+ * - group-start / group-end pairing must remain consistent
+ * - object nesting must not change unexpectedly
+ * - anchor insertion points must remain valid under mutation
+ *
+ * Violations in these assumptions may result in:
+ *
+ * - incorrect entry reconstruction
+ * - misaligned envelope injection
+ * - corrupted size calculation
+ *
+ * ---------------------------------------------------------------------
+ * @param passedData.ctx
+ * Normalization context providing:
+ *
+ * - token stream access
+ * - injection APIs
+ * - scope tracking
+ * - shared normalization state
+ *
+ * @param passedData.ignoredTokens
+ * Registry of tokens excluded from final output emission
  *
  * ---------------------------------------------------------------------
  * @throws Error
- * Throws invariant violations when:
+ * May propagate invariant errors when:
  *
  * - group-end is encountered without matching group-start
- * - entry is closed before completion
- * - expected group or object structure is malformed
- * - group-end token is not of expected type during reconstruction
+ * - entry is closed prematurely or incompletely
+ * - token structure violates expected Map grouping semantics
+ * - frame reconstruction detects invalid group termination
  *
  * ---------------------------------------------------------------------
  * @since 1.0.0
@@ -200,8 +261,9 @@ export default function mapPass(
     const envelopeStartAnchor = new TOKENS.Anchor('map:envelope-start');
     const dataEndAnchor = new TOKENS.Anchor('map:data-end');
     ctx.tokens.inject(envelopeStartAnchor, { at: initialCursor + skipped + 1 });
-
+    
     const metadata = (() => {
+        const isEmptyMap = ctx.tokens.peek(skipped + 2)?.kind === 'indent-end';
         let separators = 0;
         let scanned = skipped; // The skipped tokens
 
@@ -212,7 +274,7 @@ export default function mapPass(
         const sameObject = () => objects.closed + 1 === objects.opened;
 
         let entry: MapEntryFrame | undefined;
-        const entries: (readonly Token[])[] = [];
+        const entries: (readonly Token[])[] = [];        
 
         scanning: do {
             try {
@@ -329,7 +391,7 @@ export default function mapPass(
         }
 
         return {
-            size: separators + 1,
+            size: isEmptyMap ? 0 : separators + 1,
             entriesTokens: mapDataTokens,
         }
     })();

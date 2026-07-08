@@ -1,8 +1,8 @@
-import GraphBuilder from "../../../../1-graphing/builder";
-import RepresentationBuilder from "../../../../2-representation/builder";
-import TokensBuffer from "../../../../3-tokenization/container/tokens.buffer";
-import Tokenizer from "../../../../3-tokenization/tokenizer";
-import type { Token } from "../../../../3-tokenization/types";
+import GraphBuilder from "../../1-graphing/builder";
+import RepresentationBuilder from "../../2-representation/builder";
+import TokensBuffer from "../container/tokens.buffer";
+import Tokenizer from "../tokenizer";
+import type { Token } from "../types";
 
 /**
  * JSONTokenizer

@@ -130,7 +130,9 @@ class ObjectGraphNode extends BaseDataNode {
 
         super(isRecordObject ? 'Record' : 'Object');
         this.#_type = isRecordObject ? 'record' : 'object';
-        this.#_name = isRecordObject ? 'Record' : value.constructor.name;
+        this.#_name = isRecordObject
+            ? 'Record'
+            : (value?.constructor?.name ?? 'Record');
     }
 
     /**

@@ -1,4 +1,5 @@
-import type { CircularReferencePolicy, OutputLayout } from "../../types/types";
+import type { OutputLayout } from "../../types/types";
+import type { CircularReferencePolicy } from "../../../1-graphing/types";
 
 /**
  * Configuration for debug output rendering.
@@ -59,7 +60,7 @@ import type { CircularReferencePolicy, OutputLayout } from "../../types/types";
  */
 
 export interface DebugConfig {
-    
+
     /**
      * Circular reference handling strategy.
      *

@@ -1,6 +1,7 @@
-import TraversalDepth from "../traversal/traversal.depth";
 import WritingLine from "./line/line";
+import type TraversalDepth from "../traversal/traversal.depth";
 import type { WriterConfig } from "./types";
+import consoleStyler from "../../../../../styling/styler";
 
 /**
  * Internal authentication symbol used to validate safe construction
@@ -147,6 +148,7 @@ class RenderingWriter {
      * - hierarchical nesting depth
      *
      * @internal
+     * @since 1.0.0
      */
     readonly #_depth: TraversalDepth;
 
@@ -158,13 +160,49 @@ class RenderingWriter {
      * depth × spaces
      *
      * @internal
+     * @since 1.0.0
      */
     readonly #_spaces: number;
 
     /**
-     * Maximum allowed width for any line.
+     * Maximum allowed width for a line.
      *
-     * If `Infinity`, writer operates in unconstrained mode.
+     * ---------------------------------------------------------------------
+     * 🔷 ROLE IN THE WRITER MODEL
+     * ---------------------------------------------------------------------
+     *
+     * This value is purely informational and does NOT influence rendering
+     * behavior.
+     *
+     * The writer does not perform any wrapping, truncation, or layout
+     * enforcement based on this value.
+     *
+     * Instead, `maxWidth` is exposed as a constraint signal for external
+     * systems (such as layout resolvers and renderers) to make decisions
+     * about formatting strategy.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 RESPONSIBILITY BOUNDARY
+     * ---------------------------------------------------------------------
+     *
+     * The writer is strictly an output accumulator and is responsible only for:
+     *
+     * - collecting written segments
+     * - managing line boundaries explicitly requested via `newLine()`
+     * - tracking line state and indentation metadata
+     *
+     * It does NOT:
+     *
+     * - split long input automatically
+     * - enforce width constraints
+     * - modify input based on layout rules
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN GUARANTEE
+     * ---------------------------------------------------------------------
+     *
+     * Line width constraints are handled entirely outside the writer,
+     * ensuring that layout policy remains decoupled from output generation.
      *
      * @internal
      */
@@ -176,10 +214,9 @@ class RenderingWriter {
      * Each entry represents a finalized or active layout unit.
      *
      * @internal
+     * @since 1.0.0
      */
     readonly #_lines: WritingLine[] = [];
-
-    readonly #_inheritedWidth: number = 0;
 
     /**
      * Reference to the currently active line.
@@ -187,6 +224,7 @@ class RenderingWriter {
      * All write operations mutate this line unless a new line is created.
      *
      * @internal
+     * @since 1.0.0
      */
     #_currentLine!: WritingLine;
 
@@ -211,6 +249,7 @@ class RenderingWriter {
      * - internal state is considered finalized
      *
      * @internal
+     * @since 1.0.0
      */
     #_consumed = false;
 
@@ -255,7 +294,6 @@ class RenderingWriter {
             }
 
             this.#_currentLine = config.subContext.currentLine;
-            this.#_inheritedWidth = this.#_currentLine.width;
             this.#_lines.push(this.#_currentLine);
         } else {
             this.newLine();
@@ -281,6 +319,7 @@ class RenderingWriter {
      * This value determines whether a segment fits directly or must be wrapped.
      *
      * @internal
+     * @since 1.0.0
      */
     get #_remainingWidth() {
         return this.#_maxWidth - this.#_currentLine.width;
@@ -308,49 +347,14 @@ class RenderingWriter {
      * - overflow: whether indentation exceeded max width
      *
      * @internal
+     * @since 1.0.0
      */
     #_getIndentation(extraIndents: number) {
         const indent = this.#_currentLine.hasContent
             ? 0
             : this.#_spaces * (this.#_depth.value + extraIndents);
 
-        const overflow = indent >= this.#_maxWidth;
-
-        return {
-            indent: overflow ? 0 : indent,
-            overflow
-        }
-    }
-
-    /**
-     * Determines optimal wrap position for a segment.
-     *
-     * Strategy:
-     *
-     * - search last whitespace within maxWidth
-     * - if found near end of allowed range (≥ 85%)
-     *   → break at whitespace
-     * - otherwise fallback to forced maxWidth break
-     *
-     * This avoids unnatural mid-word splits when possible.
-     *
-     * @param segment - input string segment
-     * @param maxWidth - available width constraint
-     *
-     * @returns index at which to split segment
-     *
-     * @internal
-     */
-    #_findWrapIndex(segment: string, maxWidth: number) {
-        const spaceIndex = segment.lastIndexOf(' ', maxWidth);
-
-        if (spaceIndex === -1) {
-            return maxWidth;
-        }
-
-        const threshold = Math.floor(maxWidth * 0.85);
-
-        return spaceIndex >= threshold ? spaceIndex : maxWidth;
+        return indent >= this.#_maxWidth ? 0 : indent;
     }
 
     /**
@@ -368,79 +372,11 @@ class RenderingWriter {
      * @param indent - computed indentation (0 if none)
      *
      * @internal
+     * @since 1.0.0
      */
     #_writeToLine(segment: string, indent: number) {
-        if (segment.length === 0) return;
+        if (segment.length === 0) { return; }
         this.#_currentLine.add(segment, indent);
-    }
-
-    /**
-     * Writes a segment with full wrapping and layout resolution.
-     *
-     * This is the core streaming algorithm of the renderer.
-     *
-     * Behavior:
-     *
-     * - splits input into multiple lines if needed
-     * - respects indentation rules
-     * - applies whitespace-aware wrapping strategy
-     * - falls back to forced splits when necessary
-     *
-     * Execution model:
-     *
-     * while segment remains:
-     *   1. compute indentation
-     *   2. check overflow or fit
-     *   3. write full or partial segment
-     *   4. advance to next line if needed
-     *
-     * Overflow behavior:
-     *
-     * If indentation exceeds maxWidth:
-     * - wrapping is bypassed for that segment
-     * - segment is written as-is
-     *
-     * @param segment - input text fragment
-     * @param extraIndents - temporary indentation offset
-     *
-     * @internal
-     */
-    #_writeSegment(segment: string, extraIndents: number) {
-        while (segment.length > 0) {
-            const { indent, overflow } = this.#_getIndentation(extraIndents);
-
-            // Fits entirely
-            if (overflow || segment.length <= this.#_remainingWidth) {
-                this.#_writeToLine(segment, indent);
-                return;
-            }
-
-            const breakIndex = this.#_findWrapIndex(segment, this.#_remainingWidth);
-
-            // Forced split
-            if (breakIndex <= 0) {
-                const forced = Math.max(1, this.#_remainingWidth);
-
-                const head = segment.slice(0, forced);
-
-                this.#_writeToLine(head, indent);
-
-                this.newLine();
-
-                segment = segment.slice(forced);
-                continue;
-            }
-
-            const head = segment.slice(0, breakIndex);
-            this.#_writeToLine(head, indent);
-
-            this.newLine();
-
-            const isSpaceBreak = segment[breakIndex] === ' ';
-            segment = isSpaceBreak
-                ? segment.slice(breakIndex + 1)
-                : segment.slice(breakIndex);
-        }
     }
 
     /**
@@ -506,7 +442,10 @@ class RenderingWriter {
         const parts = value.split('\n');
 
         for (let i = 0; i < parts.length; i++) {
-            this.#_writeSegment(parts[i], extraIndents);
+            const segment = parts[i];
+            const indent = this.#_getIndentation(extraIndents);
+
+            this.#_writeToLine(segment, indent);
 
             if (i < parts.length - 1) {
                 this.newLine();
@@ -517,65 +456,121 @@ class RenderingWriter {
     }
 
     /**
-     * Determines whether a given string can be rendered inline
-     * within the current rendering line without exceeding width constraints.
+     * Determines whether a given string can fit into the current line
+     * without exceeding the available width constraints.
      *
-     * This method is used by layout-sensitive renderers to decide whether
-     * a value can remain on the same line or whether the current scope
-     * should be promoted to a block layout.
+     * This method is a pure width evaluation utility used by layout-sensitive
+     * renderers to determine whether a value can be appended to the current
+     * line or whether rendering should fall back to block layout.
      *
      * ---------------------------------------------------------------------
-     * 🔷 INLINE RENDERING RULE
+     * 🔷 SCOPE OF EVALUATION
      * ---------------------------------------------------------------------
      *
-     * A value is considered inline-capable only if:
+     * This method evaluates only the currently active output line.
      *
-     * - The writer is still on the first line of the current scope
-     * - The available width is sufficient to fit the entire string
+     * It does NOT:
      *
-     * If either condition fails, inline rendering is disallowed.
+     * - inspect previously written lines
+     * - consider overall writer history
+     * - interpret layout state (inline vs block)
+     * - modify the writer state
+     *
+     * The existence of multiple lines has no effect on this calculation.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ANSI-AWARE WIDTH MEASUREMENT
+     * ---------------------------------------------------------------------
+     *
+     * The supplied string may already contain ANSI escape sequences used for
+     * terminal styling (colors, background colors, text styles, etc.).
+     *
+     * These escape sequences occupy characters in the string but produce no
+     * visible output and therefore contribute nothing to the rendered width.
+     *
+     * Before measuring the input, all ANSI escape sequences are removed using:
+     *
+     * ```
+     * consoleStyler.strip(value)
+     * ```
+     *
+     * Width calculations are therefore based solely on the visible characters
+     * that will actually appear in the terminal.
+     *
+     * Example:
+     *
+     * ```
+     * "\x1b[31mHello\x1b[0m"
+     * ```
+     *
+     * is treated as having a width of:
+     *
+     * ```
+     * 5
+     * ```
+     *
+     * rather than the length of the raw escape sequence.
      *
      * ---------------------------------------------------------------------
      * 🔷 WIDTH MODEL
      * ---------------------------------------------------------------------
      *
-     * Available width is computed as:
+     * The decision is based solely on:
      *
-     * - remainingWidth: remaining space in the current line
-     * - inheritedWidth: width carried over from parent scopes
+     * ```
+     * remainingWidth = maxWidth - currentLine.width
+     * visibleLength = consoleStyler.strip(value).length
+     * ```
      *
-     * These values represent the effective horizontal budget available
-     * for rendering without wrapping.
+     * A value is considered fitable if:
      *
-     * ---------------------------------------------------------------------
-     * 🔷 BEHAVIOR IN LAYOUT DECISION FLOW
-     * ---------------------------------------------------------------------
-     *
-     * This method is typically used inside layout resolvers:
-     *
-     * - If `true`: renderer may continue inline rendering
-     * - If `false`: renderer should prefer or force block layout
-     *
-     * In most cases, a `false` result leads to aborting the current
-     * inline scope to preserve structural readability.
+     * ```
+     * visibleLength <= remainingWidth
+     * ```
      *
      * ---------------------------------------------------------------------
+     * 🔷 RESPONSIBILITY BOUNDARY
+     * ---------------------------------------------------------------------
+     *
+     * This method intentionally remains a low-level utility.
+     *
+     * It does NOT:
+     *
+     * - decide whether inline rendering should be used
+     * - trigger layout aborts or retries
+     * - interpret rendering context
+     * - inspect token structure
+     *
+     * Higher-level renderer logic is responsible for:
+     *
+     * - selecting inline or block layout
+     * - aborting rendering when inline capacity is exceeded
+     * - restarting rendering under alternate layout strategies
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN INTENT
+     * ---------------------------------------------------------------------
+     *
+     * By measuring only visible characters, this method guarantees that
+     * terminal styling never influences layout decisions.
+     *
+     * As a result, inline-fit calculations remain deterministic regardless of
+     * whether ANSI rendering is enabled, ensuring identical layout behavior
+     * between styled and unstyled output.
+     *
      * @param value
-     * The string value to evaluate for inline rendering feasibility.
+     * The string to evaluate. The string may contain ANSI escape sequences,
+     * which are ignored when determining its rendered width.
      *
      * @returns
-     * `true` if the value fits within the current inline constraints,
-     * otherwise `false`.
+     * `true` if the visible portion of the string fits within the remaining
+     * space of the current line; otherwise `false`.
      *
      * @since 1.0.0
      */
     canFitInline(value: string): boolean {
-        if (this.#_lines.length > 1) {
-            return false;
-        }
-
-        const availableWidth = this.#_remainingWidth + this.#_inheritedWidth;
-        return availableWidth >= value.length
+        const inputLength = consoleStyler.strip(value).length;
+        return this.#_remainingWidth >= inputLength;
     }
 
     /**

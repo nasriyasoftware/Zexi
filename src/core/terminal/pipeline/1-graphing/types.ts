@@ -12,6 +12,7 @@ import type UnknownGraphNode from "./nodes/unknown.node";
 export type PrimitiveType = 'number' | 'string' | 'boolean' | 'null' | 'undefined' | 'symbol' | 'bigint';
 export type PrimtiveNodeData = number | string | boolean | null | undefined | symbol | bigint;
 export type GraphNodeType = GraphNode['type'];
+export type CircularReferencePolicy = 'ignore' | 'mark' | 'throw';
 
 export type GraphNode =
     | PrimitiveGraphNode

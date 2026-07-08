@@ -1,4 +1,5 @@
 import BaseToken from "../assets/__base.token__";
+import AnsiMeta from "../../container/ansi_meta/ansi.meta";
 import PrimitiveRepresentationNode from "../../../2-representation/nodes/primitive.node";
 import type { PrimitiveType, PrimtiveNodeData } from "../../../1-graphing/types";
 
@@ -92,7 +93,17 @@ import type { PrimitiveType, PrimtiveNodeData } from "../../../1-graphing/types"
  *
  * Both `type` and `value` are immutable after construction to ensure
  * deterministic rendering output across all renderer implementations.
+ * 
+ * ---------------------------------------------------------------------
+ * 🔷 ANSI NOTE
+ * ---------------------------------------------------------------------
  *
+ * ANSI metadata is considered part of the *enrichment layer*, not
+ * the semantic token definition.
+ *
+ * It may be replaced or reset in future pipeline stages without
+ * violating token immutability guarantees.
+ * 
  * ---------------------------------------------------------------------
  * @since 1.0.0
  */
@@ -122,6 +133,46 @@ export class PrimitiveToken extends BaseToken<'primitive'> {
     readonly #_value: PrimtiveNodeData;
 
     /**
+     * ANSI metadata container associated with this primitive token.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ROLE IN PIPELINE
+     * ---------------------------------------------------------------------
+     *
+     * This object stores resolved ANSI styling information applied during
+     * the enrichment phase of the rendering pipeline.
+     *
+     * It allows primitive tokens to carry contextual styling derived from:
+     *
+     * - traversal context (e.g. maps, objects, errors)
+     * - type-based default styling
+     * - renderer-specific formatting rules
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 MUTABILITY MODEL
+     * ---------------------------------------------------------------------
+     *
+     * - Mutated only during enrichment
+     * - Treated as read-only during rendering
+     * - Resolved using first-write-wins semantics internally
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN INTENT
+     * ---------------------------------------------------------------------
+     *
+     * This field decouples:
+     *
+     * - semantic value (`type`, `value`)
+     * - visual representation (ANSI styling)
+     *
+     * allowing renderers to remain stateless.
+     *
+     * ---------------------------------------------------------------------
+     * @internal
+     */
+    readonly #_ansi = new AnsiMeta();
+
+    /**
      * Creates a new primitive token.
      *
      * @param type - Primitive type classification
@@ -136,28 +187,72 @@ export class PrimitiveToken extends BaseToken<'primitive'> {
     }
 
     /**
-     * Returns the primitive type classification.
+     * Semantic classification of the primitive value.
+     *
+     * This type is preserved from the graph and representation layers
+     * without transformation.
+     *
+     * It is used by renderers to determine:
+     *
+     * - formatting rules
+     * - default ANSI styling
+     * - serialization strategy
      *
      * @returns Primitive type identifier
-     *
      * @since 1.0.0
      */
     get type() { return this.#_type; }
 
     /**
-     * Returns the raw primitive value.
+     * Raw primitive value from the representation layer.
      *
-     * Renderers may use this value to:
+     * This value is guaranteed to be unformatted and unescaped.
      *
-     * - format output strings
-     * - apply type-based styling
-     * - perform locale-aware formatting
+     * Renderers may transform this value for display purposes, but
+     * must not mutate the underlying token.
+     *
+     * Typical uses:
+     *
+     * - string formatting (quoted/unquoted)
+     * - number formatting (locale, precision)
+     * - boolean/null rendering
      *
      * @returns Raw primitive value
-     *
      * @since 1.0.0
      */
     get value() { return this.#_value; }
+
+    /**
+     * Exposes the ANSI metadata container for this token.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * Provides controlled access to styling metadata assigned during
+     * the enrichment phase.
+     *
+     * Renderers use this to:
+     *
+     * - read resolved ANSI colors
+     * - apply styling to output strings
+     * - inspect contextual styling decisions
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN NOTES
+     * ---------------------------------------------------------------------
+     *
+     * This getter exposes the underlying `AnsiMeta` instance directly,
+     * not a copy.
+     *
+     * Mutations are allowed only during enrichment phase and are assumed
+     * to be deterministic and controlled by the pipeline.
+     *
+     * ---------------------------------------------------------------------
+     * @returns AnsiMeta instance associated with this token
+     * @since 1.0.0
+     */
+    get ansi() { return this.#_ansi; }
 
     /**
      * Creates a `PrimitiveToken` from a `PrimitiveRepresentationNode`.

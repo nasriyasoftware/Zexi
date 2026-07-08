@@ -1,5 +1,5 @@
 import { INLINE_SAFE_TOKENS as JSON_INLINE_SAFE_TOKENS } from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/configs";
-import _rendering from "../../helpers/helpers";
+import _tokenization from "../../../3-tokenization/helpers/helpers";
 
 /**
  * ---------------------------------------------------------------------
@@ -120,7 +120,7 @@ const data = {
      */
     json: {
         inlineSafe: new Set(JSON_INLINE_SAFE_TOKENS),
-        tokenize: _rendering.tokenizers.find(t => t[0] === 'json')![1]
+        tokenize: _tokenization.tokenizers.find(t => t[0] === 'json')![1]
     },
 
     /**
@@ -132,7 +132,7 @@ const data = {
      */
     ignoredCycles: {
         inlineSafe: new Set(JSON_INLINE_SAFE_TOKENS),
-        tokenize: _rendering.tokenizers.find(t => t[0] === 'ignoredCycles')![1]
+        tokenize: _tokenization.tokenizers.find(t => t[0] === 'ignoredCycles')![1]
     },
 
     /**
@@ -144,7 +144,7 @@ const data = {
      */
     markedCycles: {
         inlineSafe: new Set(JSON_INLINE_SAFE_TOKENS),
-        tokenize: _rendering.tokenizers.find(t => t[0] === 'markedCycles')![1]
+        tokenize: _tokenization.tokenizers.find(t => t[0] === 'markedCycles')![1]
     }
 } as const;
 

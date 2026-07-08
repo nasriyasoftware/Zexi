@@ -1,18 +1,17 @@
-import keys from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/keys";
 import ZexiRenderingContext from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
-import LayoutResolver from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/layout/resolver";
 import JSONHelpers from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/helpers";
 import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
-import type { JSONRendererFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
+import type { JSONPipelineFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
 
 import objectPass from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/object.pass";
 import mapPass from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/map.pass";
 import setPass from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/set.pass";
 
-// -----------------------------------------------------
-// Mocks (important: we only test delegation behavior)
-// -----------------------------------------------------
+import * as utils from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/utils";
 
+// -----------------------------------------------------
+// mocks
+// -----------------------------------------------------
 jest.mock("../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/object.pass", () => ({
     __esModule: true,
     default: jest.fn()
@@ -28,236 +27,285 @@ jest.mock("../../../../../../../src/core/terminal/pipeline/4-rendering/renderers
     default: jest.fn()
 }));
 
-const objectPassMock = objectPass as unknown as jest.Mock;
-const setPassMock = setPass as unknown as jest.Mock;
-const mapPassMock = mapPass as unknown as jest.Mock;
+jest.mock("../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/utils",
+    () => ({
+        createResolver: jest.fn(),
+        abortWriting: jest.fn(),
+        forceBlock: jest.fn(),
+        resolvePrimitiveOverflow: jest.fn(),
+        restoreDepth: jest.fn(),
+        ignoreCurrentGroup: jest.fn(),
+        getLayout: jest.fn(),
+        highlightEnvelope: jest.fn()
+    })
+);
 
-import _rendering from "../../../helpers/helpers";
+const objectPassMock = objectPass as jest.Mock;
+const setPassMock = setPass as jest.Mock;
+const mapPassMock = mapPass as jest.Mock;
 
 /* ------------------------------------------------------------------ */
 /* TESTS                                                             */
 /* ------------------------------------------------------------------ */
+
 describe("JSONHelpers", () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    // -------------------------------------------------
-    // isVisibleToken
-    // -------------------------------------------------
     describe("isVisibleToken", () => {
 
-        it("filters out symbol primitive", () => {
-            const helpers = createHelpers();
-
-            const token = { kind: "primitive", type: "symbol" } as Token;
-            expect(helpers.isVisibleToken(token)).toBe(false);
+        it("filters undefined", () => {
+            const h = createHelpers();
+            expect(h.isVisibleToken({ kind: "primitive", type: "undefined" } as Token)).toBe(false);
         });
 
-        it("filters out undefined primitive", () => {
-            const helpers = createHelpers();
-
-            const token = { kind: "primitive", type: "undefined" } as Token;
-            expect(helpers.isVisibleToken(token)).toBe(false);
+        it("filters symbol", () => {
+            const h = createHelpers();
+            expect(h.isVisibleToken({ kind: "primitive", type: "symbol" } as Token)).toBe(false);
         });
 
-        it("allows normal primitives", () => {
-            const helpers = createHelpers();
-
-            const token = { kind: "primitive", type: "string" } as Token;
-            expect(helpers.isVisibleToken(token)).toBe(true);
+        it("allows primitives", () => {
+            const h = createHelpers();
+            expect(h.isVisibleToken({ kind: "primitive", type: "string" } as Token)).toBe(true);
         });
 
-        it("always allows non-primitives", () => {
-            const helpers = createHelpers();
-
-            expect(helpers.isVisibleToken({ kind: "object" } as any)).toBe(true);
-            expect(helpers.isVisibleToken({ kind: "array" } as any)).toBe(true);
+        it("allows structural tokens", () => {
+            const h = createHelpers();
+            expect(h.isVisibleToken({ kind: "object-open" } as Token)).toBe(true);
+            expect(h.isVisibleToken({ kind: "separator" } as Token)).toBe(true);
         });
     });
 
-    // -------------------------------------------------
-    // createResolver
-    // -------------------------------------------------
-    describe("createResolver", () => {
+    describe("resolveLayout", () => {
 
-        it("returns LayoutResolver instance", () => {
-            const helpers = createHelpers();
+        it("creates resolver with correct config and resolves", () => {
+            const resolveMock = jest.fn(() => "inline");
 
-            expect(helpers.createResolver()).toBeInstanceOf(LayoutResolver);
-        });
+            (utils.createResolver as jest.Mock).mockReturnValue({
+                resolve: resolveMock
+            });
 
-        it("resolves inline-safe simple structure", () => {
-            const tokens = _rendering.tokenize({ a: 1 }, "json");
-            const helpers = createHelpers({ tokens });
+            const h = createHelpers();
 
-            const resolver = helpers.createResolver();
-            const start = tokens[0] as any;
+            const result = h.resolveLayout();
 
-            const result = resolver.resolve(start);
+            expect(utils.createResolver).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    renderer: "json",
+                    inlineSafe: expect.any(Set),
+                    ctx: expect.any(Object)
+                })
+            );
 
+            expect(resolveMock).toHaveBeenCalled();
             expect(result).toBe("inline");
         });
     });
 
-    // -------------------------------------------------
-    // getLayout
-    // -------------------------------------------------
+    describe("abortWriting", () => {
+        it("delegates abortWriting with the rendering context", () => {
+            const ctx = new ZexiRenderingContext([], {
+                spaces: 2,
+                maxWidth: Infinity
+            });
+
+            const h = createHelpers({ ctx });
+
+            h.abortWriting();
+
+            expect(utils.abortWriting).toHaveBeenCalledTimes(1);
+            expect(utils.abortWriting).toHaveBeenCalledWith(ctx);
+        });
+    });
+
+    describe("restoreDepth", () => {
+
+        it("delegates restoreDepth", () => {
+            const h = createHelpers();
+            h.restoreDepth();
+
+            expect(utils.restoreDepth).toHaveBeenCalledWith(expect.any(Object));
+        });
+    });
+
+    describe("ignoreCurrentGroup", () => {
+
+        it("delegates ignoreCurrentGroup", () => {
+            const h = createHelpers();
+            h.ignoreCurrentGroup();
+
+            expect(utils.ignoreCurrentGroup).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    ctx: expect.any(Object),
+                    flags: expect.any(Object)
+                })
+            );
+        });
+    });
+
     describe("getLayout", () => {
 
         it("returns null in compact mode", () => {
-            const helpers = createHelpers({ mode: "compact" });
-
-            expect(helpers.getLayout()).toBe(null);
+            (utils.getLayout as jest.Mock).mockReturnValue(null);
+            const h = createHelpers({ mode: "compact" });
+            expect(h.getLayout()).toBe(null);
         });
 
-        it("returns inline in pretty mode by default", () => {
-            const helpers = createHelpers({ mode: "pretty" });
-
-            expect(helpers.getLayout()).toBe("inline");
-        });
-
-        it("resolves explicit layout from context", () => {
-            const ctx = makeCtx([]);
-            const helpers = createHelpers({ mode: "pretty", ctx });
-
-            ctx.data.set(keys.RENDERING_LAYOUT_KEY, "block");
-
-            expect(helpers.getLayout()).toBe("block");
-        });
-
-        it("resolves parent layout when requested", () => {
-            const ctx = makeCtx([]);
-            const helpers = createHelpers({ mode: "pretty", ctx });
-
-            ctx.data.set(keys.RENDERING_LAYOUT_KEY, "block");
-            ctx.scopes.begin({ name: 'parent' });
-
-            expect(helpers.getLayout()).toBe("inline");
-            expect(helpers.getLayout({ ofParent: true })).toBe("block");
+        it("delegates correctly in pretty mode", () => {
+            (utils.getLayout as jest.Mock).mockReturnValue("inline");
+            const h = createHelpers({ mode: "pretty" });
+            expect(h.getLayout()).toBe("inline");
         });
     });
 
-    // -------------------------------------------------
-    // abortWriting
-    // -------------------------------------------------
-    describe("abortWriting", () => {
+    describe("highlightEnvelope", () => {
 
-        it("sets forceNextGroupAsBlock flag and aborts scope", () => {
+        it("delegates to utils", () => {
+            (utils.highlightEnvelope as jest.Mock).mockReturnValue(["x"]);
+
+            const h = createHelpers();
+            const result = h.highlightEnvelope([{ kind: "primitive" } as Token]);
+
+            expect(utils.highlightEnvelope).toHaveBeenCalled();
+            expect(result).toEqual(["x"]);
+        });
+    });
+
+    describe("transforms", () => {
+
+        it("object pass forwards ctx and ignoredTokens", () => {
+            const h = createHelpers();
+            h.transforms.object();
+
+            expect(objectPassMock).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    ctx: expect.any(Object),
+                    ignoredTokens: expect.any(Set)
+                }),
+                expect.any(JSONHelpers)
+            );
+        });
+
+        it("set pass forwards ctx and ignoredTokens", () => {
+            const h = createHelpers();
+            h.transforms.set();
+
+            expect(setPassMock).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    ctx: expect.any(Object),
+                    ignoredTokens: expect.any(Set)
+                })
+            );
+        });
+
+        it("map pass forwards ctx and ignoredTokens", () => {
+            const h = createHelpers();
+            h.transforms.map();
+
+            expect(mapPassMock).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    ctx: expect.any(Object),
+                    ignoredTokens: expect.any(Set)
+                })
+            );
+        });
+    });
+
+    describe("forceBlock", () => {
+        it("delegates forceBlock with context and flags", () => {
             const flags = createFlags();
-            const ctx = makeCtx([]);
-            const helpers = createHelpers({ ctx, flags });
+            const ctx = new ZexiRenderingContext([], {
+                spaces: 2,
+                maxWidth: Infinity
+            });
 
-            const abortSpy = jest.spyOn(ctx.scopes, "abort");
+            const h = createHelpers({ ctx, flags });
 
-            ctx.scopes.begin({ name: 'parent' });
-            ctx.data.set("currentGroup", Symbol("g"));
+            h.forceBlock();
 
-            helpers.abortWriting();
-
-            expect(flags.forceNextGroupAsBlock).toBe(true);
-            expect(abortSpy).toHaveBeenCalled();
-        });
-
-        it("throws if no current group exists", () => {
-            const helpers = createHelpers();
-
-            expect(() => helpers.abortWriting()).toThrow("current group");
-        });
-
-        it("throws if root scope is active", () => {
-            const ctx = makeCtx([]);
-            const helpers = createHelpers({ ctx });
-
-            ctx.data.set("currentGroup", Symbol("g"));
-            jest.spyOn(ctx.scopes, "isRoot", "get").mockReturnValue(true);
-
-            expect(() => helpers.abortWriting()).toThrow("root scope");
+            expect(utils.forceBlock).toHaveBeenCalledTimes(1);
+            expect(utils.forceBlock).toHaveBeenCalledWith({
+                ctx,
+                flags
+            });
         });
     });
 
-    // -------------------------------------------------
-    // ignoreCurrentGroup
-    // -------------------------------------------------
-    describe("ignoreCurrentGroup", () => {
-
-        it("sets ignore flag", () => {
+    describe("resolvePrimitiveOverflow", () => {
+        it("delegates primitive overflow resolution", () => {
             const flags = createFlags();
-            const helpers = createHelpers({ flags });
+            const ctx = new ZexiRenderingContext([], {
+                spaces: 2,
+                maxWidth: Infinity
+            });
 
-            helpers.ignoreCurrentGroup();
+            const h = createHelpers({
+                ctx,
+                flags,
+                mode: "pretty"
+            });
 
-            expect(flags.ignoreCurrentGroup).toBe(true);
+            h.resolvePrimitiveOverflow();
+
+            expect(utils.resolvePrimitiveOverflow).toHaveBeenCalledTimes(1);
+            expect(utils.resolvePrimitiveOverflow).toHaveBeenCalledWith({
+                ctx,
+                flags,
+                mode: "pretty"
+            });
+        });
+
+        it("forwards compact mode", () => {
+            const flags = createFlags();
+            const ctx = new ZexiRenderingContext([], {
+                spaces: 2,
+                maxWidth: Infinity
+            });
+
+            const h = createHelpers({
+                ctx,
+                flags,
+                mode: "compact"
+            });
+
+            h.resolvePrimitiveOverflow();
+
+            expect(utils.resolvePrimitiveOverflow).toHaveBeenCalledWith({
+                ctx,
+                flags,
+                mode: "compact"
+            });
         });
     });
 
-    // -------------------------------------------------
-    // transforms
-    // -------------------------------------------------
-    describe("transforms delegation", () => {
-
-        it("calls objectPass with ctx and helpers", () => {
-            const helpers = createHelpers();
-
-            helpers.transforms.object();
-
-            expect(objectPassMock).toHaveBeenCalled();
-        });
-
-        it("calls setPass with ctx and ignoredTokens", () => {
-            const helpers = createHelpers();
-
-            helpers.transforms.set();
-
-            expect(setPassMock).toHaveBeenCalled();
-        });
-
-        it("calls mapPass with ctx and ignoredTokens", () => {
-            const helpers = createHelpers();
-
-            helpers.transforms.map();
-
-            expect(mapPassMock).toHaveBeenCalled();
-        });
-    });
 });
 
 /* ------------------------------------------------------------------ */
-/* Test utilities                                                     */
+/* helpers                                                           */
 /* ------------------------------------------------------------------ */
+
 function createHelpers(options?: {
     mode?: 'compact' | 'pretty',
-    flags?: JSONRendererFlags,
+    flags?: JSONPipelineFlags,
     ignoredTokens?: Token[],
     ctx?: ZexiRenderingContext
-    tokens?: readonly Token[]
 }) {
-    const mode = options?.mode ?? 'compact';
-    const tokens = options?.tokens ?? [];
-    const ignoredTokens = new Set(options?.ignoredTokens ?? []);
-    const flags = options?.flags ?? createFlags();
-
     return new JSONHelpers({
-        ctx: options?.ctx ?? makeCtx(tokens),
-        ignoredTokens,
-        flags,
-        mode
+        ctx: options?.ctx ?? new ZexiRenderingContext([], { spaces: 2, maxWidth: Infinity }),
+        flags: options?.flags ?? createFlags(),
+        ignoredTokens: new Set(options?.ignoredTokens ?? []),
+        mode: options?.mode ?? 'compact'
     });
 }
 
-function makeCtx(tokens: readonly Token[]) {
-    return new ZexiRenderingContext(tokens, {
-        spaces: 2,
-        maxWidth: Infinity
-    });
-}
-
-function createFlags(): JSONRendererFlags {
+function createFlags(): JSONPipelineFlags {
     return {
+        ansiEnabled: false,
         ignoreCurrentGroup: false,
         skipNextSeparator: false,
         skipNextSoftLine: false,
         forceNextGroupAsBlock: false
-    }
+    };
 }

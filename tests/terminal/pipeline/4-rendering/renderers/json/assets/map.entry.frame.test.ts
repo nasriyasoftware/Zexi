@@ -4,7 +4,7 @@ import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-to
 import TOKENS from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
 import MapEntryFrame from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/assets/map.entry.frame";
 
-import _rendering from "../../../helpers/helpers";
+import _tokenization from "../../../../3-tokenization/helpers/helpers";
 
 const makeFrame = (tokenizer: (v: unknown) => readonly Token[]) => {
     return new MapEntryFrame(tokenizer);
@@ -27,7 +27,7 @@ const generatedTokensKinds = [
 
 describe("MapEntryFrame contracts", () => {
 
-    it.each(_rendering.tokenizers)("implements the insertion contract for %s", (_name, tokenizer) => {
+    it.each(_tokenization.tokenizers)("implements the insertion contract for %s", (_name, tokenizer) => {
         const frame = makeFrame(tokenizer);
 
         expect(frame.isComplete).toBe(false);
@@ -42,7 +42,7 @@ describe("MapEntryFrame contracts", () => {
             expect(frame.isComplete).toBe(false);
 
             const newTokens = frame.getTokens();
-            const kinds = _rendering.extractKinds(newTokens);
+            const kinds = _tokenization.extractKinds(newTokens);
 
             const parts = {
                 start: generatedTokensKinds.slice(0, 10),
@@ -71,7 +71,7 @@ describe("MapEntryFrame contracts", () => {
             expect(frame.isComplete).toBe(true);
 
             const newTokens = frame.getTokens();
-            const kinds = _rendering.extractKinds(newTokens);
+            const kinds = _tokenization.extractKinds(newTokens);
 
             const parts = {
                 start: generatedTokensKinds.slice(0, 10),
@@ -106,7 +106,7 @@ describe("MapEntryFrame contracts", () => {
         }
     });
 
-    it.each(_rendering.tokenizers)(
+    it.each(_tokenization.tokenizers)(
         "rejects applying an empty stream for %s",
         (_name, tokenizer) => {
             const frame = makeFrame(tokenizer);
@@ -115,7 +115,7 @@ describe("MapEntryFrame contracts", () => {
         }
     );
 
-    it.each(_rendering.tokenizers)(
+    it.each(_tokenization.tokenizers)(
         "rejects applying after completion for %s",
         (_name, tokenizer) => {
             const frame = makeFrame(tokenizer);
@@ -134,7 +134,7 @@ describe("MapEntryFrame contracts", () => {
         }
     );
 
-    it.each(_rendering.tokenizers)(
+    it.each(_tokenization.tokenizers)(
         "rejects adding tokens after completion for %s",
         (_name, tokenizer) => {
             const frame = makeFrame(tokenizer);
@@ -157,7 +157,7 @@ describe("MapEntryFrame contracts", () => {
         }
     );
 
-    it.each(_rendering.tokenizers)(
+    it.each(_tokenization.tokenizers)(
         "returns an immutable token snapshot for %s",
         (_name, tokenizer) => {
             const frame = makeFrame(tokenizer);

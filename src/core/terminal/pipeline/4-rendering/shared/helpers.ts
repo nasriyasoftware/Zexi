@@ -1,5 +1,6 @@
 import { DEFAULT_OUTPUT_CONFIG } from "../types/types";
 import type { TargetConfig } from "../types/types";
+import type { Token } from "../../3-tokenization/types";
 
 /**
  * Resolves the default renderer configuration for a given output target and mode.
@@ -86,20 +87,74 @@ export function resolveRendererConfig<
     mode: M
 ): TargetConfig<T, M> {
     switch (target) {
-        case 'terminal': {
-            return DEFAULT_OUTPUT_CONFIG.terminal[mode];
-        }
-
         case 'debug': {
-            return DEFAULT_OUTPUT_CONFIG.debug[mode];
+            return DEFAULT_OUTPUT_CONFIG.debug()[mode];
         }
 
         case 'json': {
-            return DEFAULT_OUTPUT_CONFIG.json[mode];
+            return DEFAULT_OUTPUT_CONFIG.json()[mode];
         }
 
         default: {
             throw new Error(`Unknown output target: ${target}`);
         }
     }
+}
+
+/**
+ * Determines whether a token contributes visible output.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 PURPOSE
+ * ---------------------------------------------------------------------
+ *
+ * Some semantic tokens exist within the token stream but do not produce
+ * visible output when rendered by the JSON renderer.
+ *
+ * Examples include:
+ *
+ * - `undefined`
+ * - `symbol`
+ *
+ * These values are intentionally omitted from canonical JSON output.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 RENDERING ROLE
+ * ---------------------------------------------------------------------
+ *
+ * Visibility checks are used by layout and grouping logic when deciding:
+ *
+ * - whether a structure is empty
+ * - whether separators should be emitted
+ * - whether groups can collapse inline
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 DESIGN NOTE
+ * ---------------------------------------------------------------------
+ *
+ * This function evaluates renderability rather than semantic validity.
+ *
+ * A token may be semantically valid while still being considered
+ * invisible for JSON output purposes.
+ *
+ * @param token - Token to evaluate
+ * * @returns `true` if the token produces visible JSON output
+ *
+ * @internal
+ */
+export function isVisibleToken(token: Token, renderer: 'json' | 'debug'): boolean {
+    if (renderer === 'json') {
+        if (token.kind !== 'primitive') {
+            return true;
+        }
+
+        if (
+            token.type === 'symbol' ||
+            token.type === 'undefined'
+        ) {
+            return false;
+        }
+    }
+
+    return true;
 }

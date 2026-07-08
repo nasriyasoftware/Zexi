@@ -6,9 +6,9 @@ import ErrorCache, { ERROR_SECTIONS } from "../../../../../../../src/core/termin
 import DataEnvelope from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
 import TOKENS from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
 
-import _rendering from "../../../helpers/helpers";
+import _tokenization from "../../../../3-tokenization/helpers/helpers";
 
-describe.each(_rendering.tokenizers)(
+describe.each(_tokenization.tokenizers)(
     "ErrorCache (%s)",
     (_name, tokenize) => {
 
@@ -210,7 +210,7 @@ describe.each(_rendering.tokenizers)(
 
             const result = cache.generateTokens(tokenize);
 
-            const kinds = _rendering.extractKinds(result);
+            const kinds = _tokenization.extractKinds(result);
 
             expect(
                 kinds.includes("property")
@@ -225,7 +225,7 @@ describe.each(_rendering.tokenizers)(
 
             const result = cache.generateTokens(tokenize);
 
-            const kinds = _rendering.extractKinds(result);
+            const kinds = _tokenization.extractKinds(result);
 
             expect(
                 kinds.includes("primitive")
@@ -277,7 +277,7 @@ describe.each(_rendering.tokenizers)(
 
             const result = cache.generateTokens(tokenize);
 
-            const kinds = _rendering.extractKinds(result);
+            const kinds = _tokenization.extractKinds(result);
 
             expect(
                 kinds.includes("error-start")

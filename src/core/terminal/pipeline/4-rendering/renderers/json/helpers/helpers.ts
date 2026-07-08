@@ -1,215 +1,111 @@
-import type { JSONRendererFlags } from "../types";
-import type { Token } from "../../../../3-tokenization/types";
-
-import keys from "./keys";
 import ZexiRenderingContext from "../../../shared/context/context";
-import LayoutResolver from "../../../shared/layout/resolver";
-
 import objectPass from "../passes/object.pass";
 import setPass from "../passes/set.pass";
 import mapPass from "../passes/map.pass";
+import * as utils from './utils';
 
 import { INLINE_SAFE_TOKENS } from "../configs";
+import { isVisibleToken } from "../../../shared/helpers";
+
+import type { JSONPipelineFlags } from "../types";
+import type { Token } from "../../../../3-tokenization/types";
+
 const JSON_INLINE_SAFE_TOKENS = new Set(INLINE_SAFE_TOKENS);
 
-/**
- * JSONHelpers
- * -----------
- *
- * A structural helper layer for the JSONRenderer pipeline.
- *
- * This class acts as an **intermediate orchestration layer** between:
- *
- * - Token stream inspection (read-only traversal)
- * - Layout resolution (inline vs block decisions)
- * - Structural transforms (Set / Map / Object passes)
- * - Rendering-side mutation (ignored tokens, layout flags, abort logic)
- *
- * It does NOT perform final rendering directly.
- * Instead, it:
- *
- * - Analyzes token structure
- * - Delegates transformation passes
- * - Coordinates layout decisions
- * - Mutates rendering context state when required
- *
- * ---------------------------------------------------------------------
- * 🔷 ARCHITECTURAL ROLE
- * ---------------------------------------------------------------------
- *
- * JSONHelpers sits between:
- *
- *   JSONRenderer (orchestrator)
- *          ↓
- *   JSONHelpers (analysis + transforms)
- *          ↓
- *   Pass modules (object.pass / set.pass / map.pass)
- *
- * This design intentionally isolates:
- *
- * - structural scanning logic
- * - layout decision heuristics
- * - envelope injection logic
- *
- * so that the renderer itself remains minimal and deterministic.
- *
- * ---------------------------------------------------------------------
- * 🔷 DESIGN GOALS
- * ---------------------------------------------------------------------
- *
- * 1. **Separation of Rendering Passes**
- *    - Object, Set, and Map rendering are fully isolated
- *    - Each pass owns its own token traversal rules
- *
- * 2. **Token-Level Control**
- *    - Operates directly on immutable token streams
- *    - Uses controlled mutation only via:
- *        - ignored token registry
- *        - context injection APIs
- *
- * 3. **Layout Awareness**
- *    - Integrates with LayoutResolver for inline/block decisions
- *    - Maintains renderer-mode awareness (compact vs pretty)
- *
- * 4. **Safe Structural Abortion**
- *    - Rendering can be aborted mid-scope via context signals
- *    - Ensures partial structures do not corrupt output stream
- *
- * 5. **Envelope-Based Serialization**
- *    - Complex structures (Set / Map / Error) are emitted via envelopes
- *    - Uses DataEnvelope + anchor injection model
- *
- * ---------------------------------------------------------------------
- * 🔷 INTERNAL STATE MODEL
- * ---------------------------------------------------------------------
- *
- * - `#_ctx`
- *   The rendering context. Provides access to:
- *   - token stream cursor & peek APIs
- *   - scope tracking
- *   - shared renderer data store
- *   - writer output buffer
- *
- * - `#_flags`
- *   Global rendering flags controlling:
- *   - forced block rendering
- *   - group-level ignore suppression
- *   - layout overrides
- *
- * - `#_mode`
- *   Rendering mode:
- *   - `compact` → minimal output, no layout resolution
- *   - `pretty` → layout resolver enabled
- *
- * - `#_ignoredTokens`
- *   A global registry of tokens excluded from output emission.
- *   Used by all structural passes to prevent duplicate rendering.
- *
- * ---------------------------------------------------------------------
- * 🔷 TOKEN VISIBILITY MODEL
- * ---------------------------------------------------------------------
- *
- * Visibility is defined at helper level:
- *
- * - Primitive tokens:
- *   - `symbol` → invisible
- *   - `undefined` → invisible
- *
- * - All other token kinds are considered visible by default
- *
- * This ensures JSON output remains strict and predictable.
- *
- * ---------------------------------------------------------------------
- * 🔷 LAYOUT RESOLUTION STRATEGY
- * ---------------------------------------------------------------------
- *
- * Layout is determined using:
- *
- * 1. Explicit context layout (`RENDERING_LAYOUT_KEY`)
- * 2. Inherited layout from parent scopes
- * 3. Default fallback: `inline`
- *
- * Layout resolution is only active in `pretty` mode.
- *
- * ---------------------------------------------------------------------
- * @since 1.0.0
- */
 class JSONHelpers {
     /**
-     * Rendering mode.
+     * Normalization mode inherited from the renderer configuration.
      *
-     * Controls whether layout resolution is enabled:
+     * Determines whether layout-aware normalization is enabled:
      *
-     * - `compact` → layout resolution disabled
-     * - `pretty` → layout resolution enabled
+     * - `compact` → layout-related transformations are minimized
+     * - `pretty` → layout-aware normalization is enabled
      *
-     * This directly affects spacing, grouping, and structural decisions.
+     * This value influences structural decisions such as:
+     *
+     * - inline vs block grouping
+     * - envelope formatting strategy
+     * - token suppression heuristics
      *
      * @since 1.0.0
      */
     readonly #_mode: 'compact' | 'pretty';
 
     /**
-     * Rendering context instance.
+     * Normalization execution context.
      *
-     * Provides access to:
-     * - token stream traversal APIs
-     * - scope lifecycle state
-     * - shared renderer data
+     * Provides access to the mutable pipeline state during normalization:
      *
-     * This is the central coordination object for all helper operations.
+     * - token stream traversal and mutation APIs
+     * - scope tracking
+     * - shared normalization metadata store
+     * - structural rewrite facilities
+     *
+     * This context is the primary interface between normalization logic
+     * and the pipeline runtime.
      *
      * @since 1.0.0
      */
     readonly #_ctx: ZexiRenderingContext;
 
     /**
-     * Renderer configuration flags.
+     * Shared normalization state flags.
      *
-     * These flags control structural rendering behavior such as:
+     * Used to coordinate behavior across multiple normalization passes.
      *
-     * - forced block rendering
-     * - group-level ignore behavior
-     * - layout overrides and suppression rules
+     * These flags control:
+     *
+     * - group suppression / ignore decisions
+     * - forced block layout promotion
+     * - replacement injection behavior
+     * - ANSI-aware normalization decisions (indirectly)
+     *
+     * Flags are mutable and evolve throughout the normalization phase.
      *
      * @since 1.0.0
      */
-    readonly #_flags: JSONRendererFlags;
+    readonly #_flags: JSONPipelineFlags;
 
     /**
-     * Global ignored token registry.
+     * Registry of tokens excluded from the final normalized stream.
      *
-     * Stores tokens that must NOT be emitted in final output.
+     * Tokens placed in this set will not be emitted to the rendering stage.
      *
-     * This includes:
-     * - structural wrappers consumed by transforms
-     * - tokens replaced by envelope injection
-     * - tokens suppressed by layout decisions
+     * This includes tokens that are:
+     *
+     * - consumed by structural transforms (Map / Set / Object passes)
+     * - replaced by envelope injection
+     * - suppressed by layout resolution logic
+     *
+     * This set acts as the final exclusion filter before rendering.
      *
      * @since 1.0.0
      */
     readonly #_ignoredTokens: Set<Token>;
 
     /**
-     * Creates a new JSONHelpers instance.
+     * Creates a JSON normalization helper instance.
+     *
+     * This helper operates on a mutable token stream and prepares it for
+     * the rendering stage by applying structural transformations.
      *
      * @param data.ctx
-     * Rendering context used for token traversal and state management.
+     * Active normalization context for token traversal and mutation.
      *
      * @param data.flags
-     * Renderer behavior flags controlling structural decisions.
+     * Shared pipeline flags controlling normalization behavior.
      *
      * @param data.ignoredTokens
-     * Shared token exclusion registry.
+     * Global registry of tokens excluded from final output.
      *
      * @param data.mode
-     * Rendering mode (`compact` or `pretty`).
+     * Normalization mode derived from renderer configuration.
      *
      * @since 1.0.0
      */
     constructor(data: {
         ctx: ZexiRenderingContext,
-        flags: JSONRendererFlags,
+        flags: JSONPipelineFlags,
         ignoredTokens: Set<Token>,
         mode: 'compact' | 'pretty'
     }) {
@@ -220,223 +116,499 @@ class JSONHelpers {
     }
 
     /**
-     * Determines whether a token is eligible for JSON output.
+     * Determines whether a token is eligible to participate in normalization.
      *
      * ---------------------------------------------------------------------
      * 🔷 VISIBILITY MODEL
      * ---------------------------------------------------------------------
      *
-     * Primitive tokens are filtered according to JSON semantics:
+     * Visibility is defined at the token level, independent of rendering.
      *
-     * - `symbol` → excluded (non-serializable identity)
-     * - `undefined` → excluded (JSON does not represent undefined)
+     * Primitive exclusion rules:
      *
-     * All other tokens are considered structurally valid.
+     * - `undefined` → excluded (not representable in JSON)
+     * - `symbol` → excluded (non-serializable identity type)
      *
-     * Non-primitive tokens (objects, arrays, structural markers)
-     * are always considered visible because they are resolved later
-     * in the rendering pipeline.
+     * All other tokens remain visible and are processed by later stages.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 IMPORTANT
+     * ---------------------------------------------------------------------
+     *
+     * This method does NOT:
+     *
+     * - serialize values
+     * - format output
+     * - apply rendering rules
+     *
+     * It only determines whether a token participates in normalization.
+     *
+     * @since 1.0.0
+     */
+    isVisibleToken(token: Token): boolean {
+        return isVisibleToken(token, 'json');
+    }
+
+    /**
+     * Resolves the layout of the current token group.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * This method performs layout resolution in a single step:
+     *
+     * - creates a layout resolver
+     * - executes a resolution pass immediately
+     * - returns the final layout decision
+     *
+     * The decision determines whether a token group should be rendered as:
+     *
+     * - `inline` → compact single-line structure
+     * - `block`  → expanded multi-line structure
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 EXECUTION MODEL
+     * ---------------------------------------------------------------------
+     *
+     * Layout resolution is an immediate, deterministic scan over the
+     * token stream for the current group.
+     *
+     * The resolver:
+     *
+     * - starts at the current `group-start` token
+     * - scans forward until the matching `group-end`
+     * - evaluates structural and visibility constraints
+     * - escalates to `block` on the first violating condition
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 VISIBILITY AWARENESS
+     * ---------------------------------------------------------------------
+     *
+     * The resolution process is bound to the active renderer (`json`),
+     * meaning decisions are based on the *effective rendered structure*.
+     *
+     * Tokens that will not survive normalization are ignored when
+     * evaluating layout constraints, including:
+     *
+     * - undefined or removed properties
+     * - renderer-specific exclusions
+     * - envelope or metadata-only tokens
+     *
+     * This ensures layout decisions match the final rendered output.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INLINE SAFETY RULES
+     * ---------------------------------------------------------------------
+     *
+     * A group is eligible for `inline` rendering only if:
+     *
+     * - all structural tokens are inline-safe
+     * - no nested structures exceed inline complexity limits
+     * - no renderer-specific constraints are violated
+     *
+     * Otherwise, the result is escalated to `block`.
      *
      * ---------------------------------------------------------------------
      * 🔷 DESIGN NOTE
      * ---------------------------------------------------------------------
      *
-     * This method operates purely on token metadata.
-     * It does NOT inspect runtime values.
+     * This method replaces the previous two-step flow:
      *
-     * @param token
-     * Token to evaluate for visibility.
+     * - resolver construction
+     * - manual `.resolve()` invocation
      *
-     * @returns
-     * `true` if the token should be rendered, otherwise `false`.
-     *
-     * @since 1.0.0
-     */
-    isVisibleToken(token: Token): boolean {
-        if (token.kind !== 'primitive') {
-            return true;
-        }
-
-        if (
-            token.type === 'symbol' ||
-            token.type === 'undefined'
-        ) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Creates a LayoutResolver instance bound to the current rendering context.
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 PURPOSE
-     * ---------------------------------------------------------------------
-     *
-     * LayoutResolver is responsible for determining whether a structure
-     * should be rendered as:
-     *
-     * - `inline` → compact single-line representation
-     * - `block`  → expanded multi-line representation
-     *
-     * This helper preconfigures it with:
-     * - current rendering context
-     * - inline-safe token set
-     *
-     * ---------------------------------------------------------------------
-     * @returns
-     * A configured LayoutResolver instance.
-     *
-     * @since 1.0.0
-     */
-    createResolver() {
-        return new LayoutResolver(this.#_ctx, JSON_INLINE_SAFE_TOKENS);
-    }
-
-    /**
-     * Aborts the current rendering scope and forces block rendering
-     * for the next group.
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 BEHAVIOR
-     * ---------------------------------------------------------------------
-     *
-     * - Ensures a current group exists in context
-     * - Forces next group to be rendered as block
-     * - Aborts current scope via context scope manager
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 SAFETY RULES
-     * ---------------------------------------------------------------------
-     *
-     * - Cannot abort root scope (fatal invariant violation)
-     * - Requires an active group identifier
-     *
-     * ---------------------------------------------------------------------
-     * @throws Error
-     * If no active group exists or root scope is being aborted.
-     *
-     * @since 1.0.0
-     */
-    abortWriting() {
-        const currentGroup = this.#_ctx.data.get<symbol>('currentGroup');
-        if (!currentGroup) {
-            throw new Error(`Invariant violation: Aborting a scope without a current group identifier.`);
-        }
-
-        this.#_flags.forceNextGroupAsBlock = true;
-        if (this.#_ctx.scopes.isRoot) {
-            throw new Error(`Invariant violation: Aborting the root scope.`);
-        }
-
-        this.#_ctx.scopes.abort();
-    }
-
-    /**
-     * Marks the current token group as ignored.
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 EFFECT
-     * ---------------------------------------------------------------------
-     *
-     * The current group and all its descendants will be excluded
-     * from rendering output.
-     *
-     * This is used when:
-     *
-     * - a structure collapses into a minimal representation
-     * - a transform replaces original tokens with an envelope
-     * - layout resolution decides to bypass rendering
-     *
-     * ---------------------------------------------------------------------
-     * @since 1.0.0
-     */
-    ignoreCurrentGroup() {
-        this.#_flags.ignoreCurrentGroup = true;
-    }
-
-    /**
-     * Resolves the current layout state for rendering.
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 RESOLUTION ORDER
-     * ---------------------------------------------------------------------
-     *
-     * 1. If mode is not `pretty`, returns `null`
-     * 2. If requesting parent layout:
-     *    - uses inherited layout from context (if available)
-     * 3. Otherwise:
-     *    - uses local layout from current context
-     * 4. Defaults to `inline`
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 PURPOSE
-     * ---------------------------------------------------------------------
-     *
-     * Provides a consistent layout decision source for:
-     *
-     * - object rendering
-     * - array rendering
-     * - envelope formatting
-     *
-     * ---------------------------------------------------------------------
-     * @param options.ofParent
-     * If true, resolves layout from parent scope instead of current scope.
+     * It enforces a stricter, simpler API where layout resolution is
+     * always executed immediately with consistent configuration.
      *
      * @returns
-     * - `'inline'` or `'block'` in pretty mode
-     * - `null` in compact mode
+     * Final layout decision for the current token group.
      *
      * @since 1.0.0
      */
-    getLayout(
-        options?: {
-            ofParent?: boolean
-        }
-    ): 'inline' | 'block' | null {
-        if (this.#_mode !== 'pretty') { return null; }
-
-        if (
-            options?.ofParent === true &&
-            this.#_ctx.data.hasInherited(keys.RENDERING_LAYOUT_KEY)
-        ) {
-            return this.#_ctx.data.getInherited<'inline' | 'block'>(keys.RENDERING_LAYOUT_KEY)!;
-        }
-
-        if (this.#_ctx.data.hasOwn(keys.RENDERING_LAYOUT_KEY)) {
-            return this.#_ctx.data.get<'inline' | 'block'>(keys.RENDERING_LAYOUT_KEY)!;
-        }
-
-        return 'inline';
+    resolveLayout() {
+        return utils.createResolver({
+            ctx: this.#_ctx,
+            inlineSafe: JSON_INLINE_SAFE_TOKENS,
+            renderer: 'json'
+        }).resolve();
     }
 
     /**
-     * Structural transformation entry point.
+     * Aborts rendering of the current scope and rolls back layout state.
+     *
+     * This operation performs a structural rollback of the current rendering
+     * group without making any decisions about future layout strategy.
+     *
+     * Unlike previous implementations, this function no longer forces a block
+     * layout. It is purely responsible for restoring consistency after an
+     * invalid or failed rendering attempt.
      *
      * ---------------------------------------------------------------------
      * 🔷 RESPONSIBILITY
      * ---------------------------------------------------------------------
      *
-     * Delegates rendering transformations to dedicated pass modules:
+     * This method:
      *
-     * - Object pass → structural object rendering
-     * - Set pass → Set envelope serialization
-     * - Map pass → Map envelope serialization
+     * - aborts the active rendering scope
+     * - restores traversal and structural state
+     * - ensures the renderer can safely retry from a clean state
+     *
+     * It does NOT:
+     *
+     * - force block layout
+     * - decide inline vs block rendering
+     * - propagate layout changes to parent structures
+     *
+     * Those responsibilities are handled by higher-level helpers such as:
+     *
+     * - `forceBlock`
+     * - `resolvePrimitiveOverflow`
      *
      * ---------------------------------------------------------------------
-     * 🔷 DESIGN PRINCIPLE
+     * 🔷 USAGE CONTEXT
      * ---------------------------------------------------------------------
      *
-     * Each transform is:
+     * This is typically used as a low-level recovery mechanism during:
      *
-     * - isolated (no shared mutation logic)
-     * - stateless at interface level
-     * - context-driven internally
-     *
-     * This ensures predictable and testable rendering behavior.
+     * - overflow detection
+     * - failed inline rendering attempts
+     * - structural rollback before retrying layout decisions
      *
      * ---------------------------------------------------------------------
+     * 🔷 SAFETY GUARANTEE
+     * ---------------------------------------------------------------------
+     *
+     * After execution:
+     *
+     * - the current group is fully aborted
+     * - rendering context is restored to a consistent state
+     * - no layout assumptions are modified
+     *
+     * @throws Error
+     * If no active group exists.
+     *
+     * @throws Error
+     * If an abort is attempted from the root scope.
+     *
+     * @since 1.0.0
+     */
+    abortWriting() {
+        utils.abortWriting(this.#_ctx);
+    }
+
+    /**
+     * Forces the current rendering group into block layout mode.
+     *
+     * This operation explicitly marks the active group so that the next
+     * rendering attempt will use block layout semantics instead of inline.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * Block layout is required when inline rendering cannot safely
+     * accommodate the current structure.
+     *
+     * This function does NOT perform rollback on its own. It only modifies
+     * layout intent for the current and/or next rendering pass.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 EFFECTS
+     * ---------------------------------------------------------------------
+     *
+     * - marks the next group to be rendered as block
+     * - participates in layout propagation when combined with overflow logic
+     *
+     * It does NOT:
+     *
+     * - abort rendering
+     * - modify token state
+     * - restore traversal depth
+     *
+     * Those responsibilities belong to `abortWriting`.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN ROLE
+     * ---------------------------------------------------------------------
+     *
+     * This function is a pure layout directive used by higher-level helpers
+     * to express structural intent without triggering rollback.
+     *
+     * @since 1.0.0
+     */
+    forceBlock() {
+        utils.forceBlock({
+            ctx: this.#_ctx,
+            flags: this.#_flags
+        });
+    }
+
+    /**
+     * Resolves layout overflow caused by a primitive value exceeding
+     * available inline width.
+     *
+     * This is the highest-level overflow handler in the JSON rendering
+     * pipeline and is responsible for coordinating layout correction
+     * across nested structures.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * When a primitive cannot fit in the current inline context, this
+     * function determines how far layout correction must propagate.
+     *
+     * It may trigger:
+     *
+     * - abortion of the current scope
+     * - promotion of the current group to block layout
+     * - cascading block layout propagation through parent structures
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 STRATEGY
+     * ---------------------------------------------------------------------
+     *
+     * The resolution process follows these rules:
+     *
+     * 1. Abort the current primitive scope if necessary
+     * 2. Force the current group into block layout
+     * 3. If the primitive is inside an array, promote the array to block
+     * 4. If the primitive is inside a key-value pair, cascade block layout
+     *    upward through all inline ancestors until stabilization
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 RESPONSIBILITY BOUNDARY
+     * ---------------------------------------------------------------------
+     *
+     * This function:
+     *
+     * - orchestrates overflow recovery
+     * - delegates low-level rollback to `abortWriting`
+     * - delegates layout mutation to `forceBlock`
+     *
+     * It does NOT:
+     *
+     * - directly manipulate tokens
+     * - directly manage traversal state
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN INTENT
+     * ---------------------------------------------------------------------
+     *
+     * This helper exists to guarantee deterministic recovery from inline
+     * overflow while preserving structural correctness across nested JSON
+     * constructs.
+     *
+     * @since 1.0.0
+     */
+    resolvePrimitiveOverflow() {
+        utils.resolvePrimitiveOverflow({
+            mode: this.#_mode,
+            ctx: this.#_ctx,
+            flags: this.#_flags
+        });
+    }
+
+    /**
+     * Restores the traversal depth of the current rendering context
+     * to the value captured at the start of the active rendering group.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * This helper is a thin delegation wrapper over `utils.restoreDepth`,
+     * providing a convenience API bound to the current JSON rendering
+     * context instance.
+     *
+     * It is used during layout rollback operations when a rendering group
+     * must be aborted (e.g. switching from inline to block rendering).
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 BEHAVIOR
+     * ---------------------------------------------------------------------
+     *
+     * When invoked, this method:
+     *
+     * - reads the group-start depth snapshot from the context
+     * - restores `ctx.depth` to that snapshot value
+     * - removes any depth increments performed inside the group
+     *
+     * This ensures that retries operate on a clean and structurally
+     * consistent traversal state.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DELEGATION MODEL
+     * ---------------------------------------------------------------------
+     *
+     * This method does not implement rollback logic itself.
+     *
+     * Instead, it delegates to:
+     *
+     * - `utils.restoreDepth(ctx)`
+     *
+     * ensuring that all rollback semantics remain centralized in the
+     * shared utility layer.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INVARIANTS
+     * ---------------------------------------------------------------------
+     *
+     * - A rendering group must be active
+     * - A valid `currentGroupDepth` snapshot must exist in the context
+     *
+     * Violations indicate incorrect usage of the rendering lifecycle.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SIDE EFFECTS
+     * ---------------------------------------------------------------------
+     *
+     * - Mutates `ctx.depth` only
+     * - Does not modify tokens, scopes, or writer state
+     *
+     * @throws Error
+     * If the context does not contain a valid group depth snapshot
+     * or if the depth state is inconsistent.
+     *
+     * @since 1.0.0
+     */
+    restoreDepth() {
+        utils.restoreDepth(this.#_ctx);
+    }
+
+    /**
+     * Removes the current token group from the normalization stream.
+     *
+     * This operation:
+     *
+     * - reverts the active group in the token stream
+     * - marks the group as ignored
+     * - optionally injects replacement tokens
+     *
+     * Ignored groups will never reach the rendering stage.
+     *
+     * @param replaceWith
+     * Optional replacement token sequence to substitute the removed group.
+     *
+     * @since 1.0.0
+     */
+    ignoreCurrentGroup() {
+        utils.ignoreCurrentGroup({
+            ctx: this.#_ctx,
+            flags: this.#_flags
+        });
+    }
+
+    /**
+     * Resolves the layout strategy for the current normalization scope.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 LAYOUT SEMANTICS
+     * ---------------------------------------------------------------------
+     *
+     * Layout defines structural formatting intent:
+     *
+     * - `inline` → compact single-line structure
+     * - `block` → expanded multi-line structure
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 RESOLUTION RULES
+     * ---------------------------------------------------------------------
+     *
+     * 1. If mode is `compact` → returns `null`
+     * 2. If parent resolution is requested → uses inherited layout
+     * 3. Otherwise → uses current scope layout
+     * 4. Defaults to `inline`
+     *
+     * @param options.ofParent
+     * If true, resolves layout from parent scope instead of current scope.
+     *
+     * @returns Layout decision or `null` in compact mode.
+     *
+     * @since 1.0.0
+     */
+    getLayout(options?: { ofParent?: boolean }) {
+        return utils.getLayout({
+            mode: this.#_mode,
+            ctx: this.#_ctx
+        }, options);
+    }
+
+    /**
+     * Applies ANSI highlighting metadata to envelope-related tokens.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * This function enriches specific structural tokens inside serialized
+     * envelopes (e.g. `$codec`, `$kind`) with ANSI metadata for terminal
+     * rendering.
+     *
+     * It does NOT modify token semantics or structure.
+     *
+     * It only attaches visual metadata used by the rendering stage.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 BEHAVIOR
+     * ---------------------------------------------------------------------
+     *
+     * When `ansiEnabled` is false:
+     * - this function is a no-op
+     *
+     * When enabled:
+     * - specific primitive tokens inside envelopes are styled:
+     *   - codec → cyan background + white bold text
+     *   - kind  → magenta foreground
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DESIGN NOTE
+     * ---------------------------------------------------------------------
+     *
+     * This is a purely cosmetic enhancement pass and does not affect:
+     *
+     * - normalization structure
+     * - token ordering
+     * - rendering logic
+     *
+     * @param tokens
+     * Token sequence representing a normalized envelope structure.
+     *
+     * @since 1.0.0
+     */
+    highlightEnvelope(tokens: readonly Token[]) {
+        return utils.highlightEnvelope(this.#_flags, tokens);
+    }
+
+    /**
+     * Registry of normalization transformation passes.
+     *
+     * Each pass is responsible for converting specific high-level structures
+     * into normalized envelope representations.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 TRANSFORMATION MODEL
+     * ---------------------------------------------------------------------
+     *
+     * Each transformation:
+     *
+     * - operates on the token stream
+     * - may inject or remove tokens
+     * - is isolated from other passes
+     * - is context-driven but stateless in interface
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 AVAILABLE PASSES
+     * ---------------------------------------------------------------------
+     *
+     * - object → normalizes object structures into JSON envelopes
+     * - set    → converts Set instances into serialized representation
+     * - map    → converts Map instances into entry-based envelopes
+     *
+     * These passes ensure that rendering stage receives a fully normalized
+     * and consistent token stream.
+     *
      * @since 1.0.0
      */
     readonly transforms = {
@@ -448,7 +620,10 @@ class JSONHelpers {
          * @since 1.0.0
          */
         object: () => {
-            objectPass(this.#_ctx, this);
+            objectPass({
+                ctx: this.#_ctx,
+                ignoredTokens: this.#_ignoredTokens
+            }, this);
         },
 
         /**

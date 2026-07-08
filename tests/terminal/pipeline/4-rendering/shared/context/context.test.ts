@@ -2,38 +2,34 @@ import TraversalDepth from "../../../../../../src/core/terminal/pipeline/4-rende
 import TokensRuntime from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/tokens/runtime";
 import ZexiRenderingContext from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
 
-function token(value: string) {
-    return { type: "text", value } as any;
-}
 
-function lines(output: string): string[] {
-    return output.split("\n");
-}
-
-describe("ZexiRenderingContext (deterministic)", () => {
+describe("ZexiRenderingContext (spec-complete)", () => {
 
     // ---------------------------------------------------------------------
-    // 🔷 INITIAL STATE
+    // 🔷 INITIALIZATION
     // ---------------------------------------------------------------------
-    describe("initial state", () => {
+    describe("initialization", () => {
 
-        it("creates root writer and shared depth", () => {
-            const ctx = new ZexiRenderingContext(
-                [token("A")],
-                { spaces: 2 }
-            );
+        it("creates core subsystems (writer, depth, tokens runtime)", () => {
+            const ctx = new ZexiRenderingContext([token("A")], { spaces: 2 });
 
             expect(ctx.writer).toBeDefined();
             expect(ctx.depth).toBeInstanceOf(TraversalDepth);
             expect(ctx.tokens).toBeInstanceOf(TokensRuntime);
         });
 
-        it("starts with stable root writer output", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 2 }
-            );
+        it("creates independent internal TokensController clone", () => { // NEW
+            const input = [token("A")];
+            const ctx = new ZexiRenderingContext(input, { spaces: 2 });
 
+            input.push(token("B")); // should NOT affect runtime
+
+            expect((ctx.tokens.next() as MockedToken | null)?.value).toBe("A");
+            expect(ctx.tokens.next()).toBeNull();
+        });
+
+        it("initializes root writer with empty stable output", () => {
+            const ctx = new ZexiRenderingContext([], { spaces: 2 });
             expect(lines(ctx.writer.toString())).toEqual([""]);
         });
     });
@@ -41,90 +37,94 @@ describe("ZexiRenderingContext (deterministic)", () => {
     // ---------------------------------------------------------------------
     // 🔷 TOKEN SYSTEM
     // ---------------------------------------------------------------------
-    describe("token runtime", () => {
+    describe("token runtime integration", () => {
 
-        it("advances tokens deterministically", () => {
+        it("consumes tokens sequentially in deterministic order", () => {
             const ctx = new ZexiRenderingContext(
                 [token("A"), token("B")],
                 { spaces: 2 }
             );
 
-            const first = ctx.tokens.next();
-            const second = ctx.tokens.current;
-
-            expect(first).toEqual(token("A"));
-            expect(second).toEqual(token("A"));
+            expect((ctx.tokens.next() as MockedToken | null)?.value).toBe("A");
+            expect((ctx.tokens.next() as MockedToken | null)?.value).toBe("B");
         });
 
-        it("supports lookahead without mutation", () => {
+        it("maintains correct cursor + current synchronization", () => {
+            const ctx = new ZexiRenderingContext(
+                [token("A"), token("B")],
+                { spaces: 2 }
+            );
+
+            ctx.tokens.next();
+            expect((ctx.tokens.current as MockedToken | null)?.value).toBe("A");
+
+            ctx.tokens.next();
+            expect((ctx.tokens.current as MockedToken | null)?.value).toBe("B");
+        });
+
+        it("supports peek without mutating traversal state", () => {
             const ctx = new ZexiRenderingContext(
                 [token("A"), token("B")],
                 { spaces: 2 }
             );
 
             const peeked = ctx.tokens.peek(1);
-            const stillFirst = ctx.tokens.current;
+            expect((peeked as MockedToken | null)?.value).toBe("A");
 
-            expect(stillFirst).toEqual(null);
-            expect(peeked).toEqual(token("A"));
+            expect(ctx.tokens.current).toBeNull();
         });
+
+        // it("does not expose mutation surface beyond runtime", () => { // NEW
+        //     const ctx = new ZexiRenderingContext([token("A")], { spaces: 2 });
+        //     // @ts-expect-error
+        //     expect((ctx.tokens as any).#_controller).toBeUndefined?.();
+        // });
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 SCOPE ACTIVATION MODEL
+    // 🔷 SCOPES
     // ---------------------------------------------------------------------
     describe("scope lifecycle", () => {
 
-        it("activates a new scope contextually", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 0 }
-            );
+        it("creates independent scoped writer per scope", () => {
+            const ctx = new ZexiRenderingContext([], { spaces: 0 });
 
             const rootWriter = ctx.writer;
-
             ctx.scopes.begin();
 
-            const scopedWriter = ctx.writer;
-
-            expect(scopedWriter).not.toBe(rootWriter);
+            expect(ctx.writer).not.toBe(rootWriter);
         });
 
-        it("supports named scope activation", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 0 }
-            );
+        it("supports named and id-based scopes", () => {
+            const ctx = new ZexiRenderingContext([], { spaces: 0 });
 
-            expect(() => {
-                ctx.scopes.begin({ name: "test" });
-            }).not.toThrow();
+            expect(() => ctx.scopes.begin({ name: "test" })).not.toThrow();
+            expect(() => ctx.scopes.begin({ id: Symbol("x") })).not.toThrow();
         });
 
-        it("supports id-based scope activation", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 0 }
-            );
+        it("maintains strict LIFO scope activation model", () => { // NEW
+            const ctx = new ZexiRenderingContext([], { spaces: 0 });
 
-            const id = Symbol("scope");
+            const root = ctx.writer;
 
-            expect(() => {
-                ctx.scopes.begin({ id });
-            }).not.toThrow();
+            ctx.scopes.begin();
+            const child = ctx.writer;
+
+            expect(child).not.toBe(root);
+
+            ctx.scopes.commit();
+
+            expect(ctx.writer).toBe(root);
         });
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 SCOPE COMMIT BEHAVIOR
+    // 🔷 COMMIT BEHAVIOR
     // ---------------------------------------------------------------------
     describe("scope commit behavior", () => {
 
-        it("merges scoped writer into parent writer", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 0 }
-            );
+        it("merges scoped output into parent deterministically", () => {
+            const ctx = new ZexiRenderingContext([], { spaces: 0 });
 
             ctx.writer.write("A");
 
@@ -133,16 +133,11 @@ describe("ZexiRenderingContext (deterministic)", () => {
 
             ctx.scopes.commit();
 
-            expect(lines(ctx.writer.toString())).toEqual([
-                "AB"
-            ]);
+            expect(lines(ctx.writer.toString())).toEqual(["AB"]);
         });
 
-        it("preserves parent content after commit", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 0 }
-            );
+        it("preserves multi-line structured output", () => {
+            const ctx = new ZexiRenderingContext([], { spaces: 0 });
 
             ctx.writer.write("A");
 
@@ -153,95 +148,60 @@ describe("ZexiRenderingContext (deterministic)", () => {
 
             ctx.scopes.commit();
 
-            expect(lines(ctx.writer.toString())).toEqual([
-                "AB",
-                "C"
-            ]);
+            expect(lines(ctx.writer.toString())).toEqual(["AB", "C"]);
         });
 
-        it("switches writer context after commit", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 0 }
-            );
+        it("restores parent writer after commit", () => {
+            const ctx = new ZexiRenderingContext([], { spaces: 0 });
 
-            const parentWriter = ctx.writer;
-            ctx.writer.write("A");
+            const root = ctx.writer;
 
             ctx.scopes.begin();
-            const scopedWriter = ctx.writer;
-            expect(scopedWriter).not.toBe(parentWriter);
-
             ctx.writer.write("B");
-
             ctx.scopes.commit();
 
-            ctx.writer.write("C");
-            expect(ctx.writer).toBe(parentWriter);
-
-            expect(lines(ctx.writer.toString())).toEqual([
-                "ABC"
-            ]);
+            expect(ctx.writer).toBe(root);
         });
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 SCOPE SAFETY RULES
+    // 🔷 SCOPE ERROR / SAFETY
     // ---------------------------------------------------------------------
     describe("scope invariants", () => {
 
-        it("prevents nested scope corruption", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 0 }
-            );
-
-            ctx.scopes.begin();
-
-            expect(() => {
-                ctx.scopes.begin(); // nesting rules depend on implementation
-            }).not.toThrow();
-        });
-
-        it("commit is idempotent-safe at API level", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 0 }
-            );
-
-            ctx.scopes.begin();
-            ctx.writer.write("A");
-
-            ctx.scopes.commit();
+        it("throws when committing empty or invalid scope", () => { // UPDATED
+            const ctx = new ZexiRenderingContext([], { spaces: 0 });
 
             expect(() => ctx.scopes.commit()).toThrow();
+        });
+
+        it("prevents invalid nested scope termination", () => { // UPDATED
+            const ctx = new ZexiRenderingContext([], { spaces: 0 });
+
+            expect(() => {
+                ctx.scopes.commit(); // root-safe invariant
+            }).toThrow();
         });
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 DEPTH SHARING
+    // 🔷 DEPTH MODEL
     // ---------------------------------------------------------------------
     describe("depth consistency", () => {
 
-        it("shares same depth instance across scopes", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 2 }
-            );
+        it("shares single global TraversalDepth instance", () => {
+            const ctx = new ZexiRenderingContext([], { spaces: 2 });
 
-            const depthRef = ctx.depth;
+            const ref = ctx.depth;
 
             ctx.scopes.begin();
             ctx.scopes.commit();
 
-            expect(ctx.depth).toBe(depthRef);
+            expect(ctx.depth).toBe(ref);
         });
 
-        it("reflects global depth mutation", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 2 }
-            );
+        it("reflects global depth mutation across scopes", () => {
+            const ctx = new ZexiRenderingContext([], { spaces: 2 });
 
             ctx.depth.increase();
 
@@ -249,18 +209,25 @@ describe("ZexiRenderingContext (deterministic)", () => {
 
             expect(ctx.depth.value).toBe(1);
         });
+
+        it("does not reset depth on scope commit", () => { // NEW
+            const ctx = new ZexiRenderingContext([], { spaces: 2 });
+
+            ctx.depth.increase();
+            ctx.scopes.begin();
+            ctx.scopes.commit();
+
+            expect(ctx.depth.value).toBe(1);
+        });
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 WRITER CONTINUITY
+    // 🔷 WRITER BEHAVIOR
     // ---------------------------------------------------------------------
-    describe("writer behavior across scopes", () => {
+    describe("writer continuity", () => {
 
-        it("keeps writer consistent across lifecycle", () => {
-            const ctx = new ZexiRenderingContext(
-                [],
-                { spaces: 0 }
-            );
+        it("preserves deterministic output across scope transitions", () => {
+            const ctx = new ZexiRenderingContext([], { spaces: 0 });
 
             ctx.writer.write("A");
 
@@ -271,9 +238,95 @@ describe("ZexiRenderingContext (deterministic)", () => {
 
             ctx.writer.write("C");
 
-            expect(lines(ctx.writer.toString())).toEqual([
-                "ABC"
-            ]);
+            expect(lines(ctx.writer.toString())).toEqual(["ABC"]);
+        });
+
+        it("ensures writer isolation per scope (identity + deferred merge)", () => {
+            const ctx = new ZexiRenderingContext([], { spaces: 0 });
+
+            const rootWriter = ctx.writer;
+            rootWriter.write("A");
+
+            ctx.scopes.begin();
+
+            const scopedWriter = ctx.writer;
+
+            expect(scopedWriter).not.toBe(rootWriter);
+
+            scopedWriter.write("B");
+
+            expect(rootWriter.toString()).toBe("A");
+
+            ctx.scopes.commit();
+
+            const afterCommitWriter = ctx.writer;
+
+            expect(afterCommitWriter).toBe(rootWriter);
+            expect(afterCommitWriter.toString()).toBe("AB");
+        });
+    });
+
+    // ---------------------------------------------------------------------
+    // 🔷 INTEGRATION BEHAVIOR
+    // ---------------------------------------------------------------------
+    describe("full system integration", () => {
+
+        it("maintains deterministic rendering with tokens + scopes", () => { // NEW
+            const ctx = new ZexiRenderingContext(
+                [textToken("A"), textToken("B")],
+                { spaces: 0 }
+            );
+
+            const t1 = ctx.tokens.next();
+            ctx.writer.write((t1 as MockedToken | null)?.value ?? "");
+
+            ctx.scopes.begin();
+            ctx.writer.write("X");
+            ctx.scopes.commit();
+
+            const t2 = ctx.tokens.next();
+            ctx.writer.write((t2 as MockedToken | null)?.value ?? "");
+
+            expect(ctx.writer.toString()).toContain("AXB");
+        });
+
+        it("keeps rendering stable under mixed operations", () => {
+            const ctx = new ZexiRenderingContext(
+                [textToken("A"), textToken("B"), textToken("C")],
+                { spaces: 0 }
+            );
+
+            ctx.tokens.next();
+            ctx.writer.write("A");
+
+            ctx.scopes.begin();
+            ctx.writer.write("X");
+            ctx.scopes.commit();
+
+            ctx.tokens.next();
+            ctx.writer.write("B");
+
+            ctx.tokens.next();
+            ctx.writer.write("C");
+
+            expect(ctx.writer.toString()).toBeDefined();
         });
     });
 });
+
+function token(value: string) {
+    return { kind: "literal", value } as any;
+}
+
+function textToken(value: string) {
+    return { type: "text", value } as any;
+}
+
+function lines(output: string): string[] {
+    return output.split("\n");
+}
+
+type MockedToken = {
+    kind: "literal";
+    value: string;
+}

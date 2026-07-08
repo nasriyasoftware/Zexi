@@ -22,11 +22,11 @@ function lines(output: string): string[] {
 describe("RenderingWriter (deterministic)", () => {
 
     // ---------------------------------------------------------------------
-    // 🔷 INITIAL STATE
+    // INITIAL STATE
     // ---------------------------------------------------------------------
     describe("initial state", () => {
 
-        it("starts with empty output", () => {
+        it("starts empty", () => {
             const writer = new RenderingWriter({
                 depth: createDepth(0),
                 spaces: 2
@@ -46,11 +46,11 @@ describe("RenderingWriter (deterministic)", () => {
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 BASIC STREAMING BEHAVIOR
+    // STREAMING BEHAVIOR
     // ---------------------------------------------------------------------
-    describe("basic writing", () => {
+    describe("streaming", () => {
 
-        it("writes a single segment into a line", () => {
+        it("writes a single segment", () => {
             const writer = new RenderingWriter({
                 depth: createDepth(0),
                 spaces: 2
@@ -58,12 +58,10 @@ describe("RenderingWriter (deterministic)", () => {
 
             writer.write("hello");
 
-            expect(lines(writer.toString())).toEqual([
-                "hello"
-            ]);
+            expect(lines(writer.toString())).toEqual(["hello"]);
         });
 
-        it("accumulates multiple writes into the same line", () => {
+        it("accumulates writes into same line", () => {
             const writer = new RenderingWriter({
                 depth: createDepth(0),
                 spaces: 2
@@ -73,9 +71,21 @@ describe("RenderingWriter (deterministic)", () => {
             writer.write("b");
             writer.write("c");
 
-            // Content is streamed into same active line
+            expect(lines(writer.toString())).toEqual(["abc"]);
+        });
+
+        it("splits on embedded newlines", () => {
+            const writer = new RenderingWriter({
+                depth: createDepth(0),
+                spaces: 2
+            });
+
+            writer.write("a\nb\nc");
+
             expect(lines(writer.toString())).toEqual([
-                "abc"
+                "a",
+                "b",
+                "c"
             ]);
         });
 
@@ -93,31 +103,38 @@ describe("RenderingWriter (deterministic)", () => {
                 "ab"
             ]);
         });
+    });
 
-        it("splits input correctly on embedded newlines", () => {
+    // ---------------------------------------------------------------------
+    // LINE CONTROL
+    // ---------------------------------------------------------------------
+    describe("line control", () => {
+
+        it("forces line breaks", () => {
             const writer = new RenderingWriter({
                 depth: createDepth(0),
-                spaces: 2
+                spaces: 0
             });
 
-            writer.write("a\nb\nc");
+            writer.write("a");
+            writer.newLine();
+            writer.write("b");
 
             expect(lines(writer.toString())).toEqual([
                 "a",
-                "b",
-                "c"
+                "b"
             ]);
         });
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 INDENTATION RULES
+    // INDENTATION
     // ---------------------------------------------------------------------
     describe("indentation", () => {
 
-        it("applies indentation only on first write of a line", () => {
+        it("applies indentation on first write only", () => {
             const writer = new RenderingWriter({
-                depth: createDepth(2), // 2 * 2 = 4 spaces
+                depth: createDepth(2),
                 spaces: 2
             });
 
@@ -138,9 +155,8 @@ describe("RenderingWriter (deterministic)", () => {
             writer.write("b");
             writer.write("c");
 
-            // Indentation is applied once per line lifecycle only
             expect(lines(writer.toString())).toEqual([
-                `${' '.repeat(2 * 2)}abc`
+                "    abc"
             ]);
         });
 
@@ -161,94 +177,9 @@ describe("RenderingWriter (deterministic)", () => {
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 WRAPPING BEHAVIOR
+    // BRANCHING + CONSUMPTION
     // ---------------------------------------------------------------------
-    describe("wrapping", () => {
-
-        it("wraps deterministically at maxWidth", () => {
-            const writer = new RenderingWriter({
-                depth: createDepth(0),
-                spaces: 0,
-                maxWidth: 4
-            });
-
-            writer.write("abcdef");
-
-            expect(lines(writer.toString())).toEqual([
-                "abcd",
-                "ef"
-            ]);
-        });
-
-        it("continues correctly after wrap", () => {
-            const writer = new RenderingWriter({
-                depth: createDepth(0),
-                spaces: 0,
-                maxWidth: 3
-            });
-
-            writer.write("abcdef");
-
-            expect(lines(writer.toString())).toEqual([
-                "abc",
-                "def"
-            ]);
-        });
-
-        it("preserves full content after wrapping (no loss invariant)", () => {
-            const writer = new RenderingWriter({
-                depth: createDepth(0),
-                spaces: 0,
-                maxWidth: 10
-            });
-
-            writer.write("hello world test");
-
-            expect(writer.toString().replace(/\n/g, "")).toBe("hello world test");
-        });
-
-        it("forces split when no whitespace exists", () => {
-            const writer = new RenderingWriter({
-                depth: createDepth(0),
-                spaces: 0,
-                maxWidth: 3
-            });
-
-            writer.write("abcdef");
-
-            expect(lines(writer.toString())).toEqual([
-                "abc",
-                "def"
-            ]);
-        });
-    });
-
-    // ---------------------------------------------------------------------
-    // 🔷 EXPLICIT LINE CONTROL
-    // ---------------------------------------------------------------------
-    describe("newLine()", () => {
-
-        it("forces line break between writes", () => {
-            const writer = new RenderingWriter({
-                depth: createDepth(0),
-                spaces: 0
-            });
-
-            writer.write("a");
-            writer.newLine();
-            writer.write("b");
-
-            expect(lines(writer.toString())).toEqual([
-                "a",
-                "b"
-            ]);
-        });
-    });
-
-    // ---------------------------------------------------------------------
-    // 🔷 BRANCHING + CONSUMPTION MODEL
-    // ---------------------------------------------------------------------
-    describe("branches + consume()", () => {
+    describe("branching + consumption", () => {
 
         it("creates independent branch writers", () => {
             const writer = new RenderingWriter({
@@ -259,81 +190,49 @@ describe("RenderingWriter (deterministic)", () => {
             const branch = writer.branches.create();
             branch.write("child");
 
-            expect(lines(branch.toString())).toEqual([
-                "child"
-            ]);
+            expect(lines(branch.toString())).toEqual(["child"]);
         });
 
-        it("branch merge replaces ONLY last parent line", () => {
+        it("merges branch into parent correctly", () => {
             const writer = new RenderingWriter({
                 depth: createDepth(0),
                 spaces: 0
             });
 
-            // ------------------------------------------------------------------
-            // Parent baseline state
-            // ------------------------------------------------------------------
             writer.write("A");
             writer.write("B", { newLine: true });
 
-            // Parent is now:
-            // ["A", "B"]
-
-            // ------------------------------------------------------------------
-            // Branch inherits LAST LINE INCLUDING CONTENT ("B")
-            // ------------------------------------------------------------------
             const branch = writer.branches.create();
-
-            branch.write("C"); // "BC"
-            branch.write("D"); // "BCD"
+            branch.write("C");
+            branch.write("D");
             branch.newLine();
             branch.write("E");
 
-            // ------------------------------------------------------------------
-            // Branch state is:
-            // ["BCD", "E"]
-            // ------------------------------------------------------------------
-            expect(lines(branch.toString())).toEqual([
-                "BCD",
-                "E",
-            ]);
-
-            // ------------------------------------------------------------------
-            // Merge behavior:
-            // - remove parent's last line ("B")
-            // - replace with branch lines
-            // ------------------------------------------------------------------
             writer.consume(branch);
 
             expect(lines(writer.toString())).toEqual([
                 "A",
                 "BCD",
-                "E",
+                "E"
             ]);
         });
 
-        it("preserves parent history after merge", () => {
+        it("prevents writing while branch is active", () => {
             const writer = new RenderingWriter({
                 depth: createDepth(0),
                 spaces: 0
             });
 
-            writer.write("A");
-            writer.newLine();
-            writer.write("C");
-
             const branch = writer.branches.create();
-            branch.write("B");
+
+            expect(() => writer.write("blocked")).toThrow();
 
             writer.consume(branch);
 
-            expect(lines(writer.toString())).toEqual([
-                "A",
-                "CB"
-            ]);
+            expect(() => writer.write("ok")).not.toThrow();
         });
 
-        it("prevents foreign writer consumption", () => {
+        it("prevents consuming foreign writer", () => {
             const w1 = new RenderingWriter({
                 depth: createDepth(0),
                 spaces: 0
@@ -347,7 +246,7 @@ describe("RenderingWriter (deterministic)", () => {
             expect(() => w1.consume(w2)).toThrow();
         });
 
-        it("invalidates branch after consume", () => {
+        it("invalidates branch after consumption", () => {
             const writer = new RenderingWriter({
                 depth: createDepth(0),
                 spaces: 0
@@ -361,22 +260,7 @@ describe("RenderingWriter (deterministic)", () => {
             expect(() => branch.write("Y")).toThrow();
         });
 
-        it("blocks writing while branches exist until consume", () => {
-            const writer = new RenderingWriter({
-                depth: createDepth(0),
-                spaces: 0
-            });
-
-            const branch = writer.branches.create();
-
-            expect(() => writer.write("blocked")).toThrow();
-
-            writer.consume(branch);
-
-            expect(() => writer.write("allowed")).not.toThrow();
-        });
-
-        it("prevents double consumption", () => {
+        it("prevents double consumption of branches", () => {
             const writer = new RenderingWriter({
                 depth: createDepth(0),
                 spaces: 0

@@ -2,9 +2,9 @@ import GRAPH_NODES from "./nodes";
 import CircularReferenceError from "./identity/circular.error";
 import GraphIdentityTracker from "./identity/identity";
 import buildStack from "./helpers/build.stack";
-import type { GraphConfig } from "../4-rendering/types/types";
-import type { ErrorGraphNodeData, GraphNode } from "./types";
 import PropsExtractor from "./helpers/props.extractor";
+import type { ErrorGraphNodeData, GraphNode } from "./types";
+import type { GraphConfig } from "../4-rendering/types/types";
 
 /**
  * Recursive JavaScript → Graph transformation engine.
@@ -745,7 +745,7 @@ class GraphBuilder {
                         }
 
                         case 'mark': {
-                            return GRAPH_NODES.Primitive.create(`[Circular:Array:${trackRes.count}]`);
+                            return GRAPH_NODES.Primitive.create(`[Circular:Array:${trackRes.count - 1}]`);
                         }
 
                         case 'throw': {
@@ -779,7 +779,7 @@ class GraphBuilder {
                         }
 
                         case 'mark': {
-                            return GRAPH_NODES.Primitive.create(`[Circular:Set:${trackRes.count}]`);
+                            return GRAPH_NODES.Primitive.create(`[Circular:Set:${trackRes.count - 1}]`);
                         }
 
                         case 'throw': {
@@ -813,7 +813,7 @@ class GraphBuilder {
                         }
 
                         case 'mark': {
-                            return GRAPH_NODES.Primitive.create(`[Circular:Map:${trackRes.count}]`);
+                            return GRAPH_NODES.Primitive.create(`[Circular:Map:${trackRes.count - 1}]`);
                         }
 
                         case 'throw': {
@@ -941,7 +941,7 @@ class GraphBuilder {
                             this.#_process(prop.value)
                         );
                     }
-                    
+
                     return trackRes.node;
                 } else {
                     return trackRes.node;

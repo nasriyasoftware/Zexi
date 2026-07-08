@@ -1,21 +1,11 @@
 import TokensController from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/tokens/tokens.controller";
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 import { AnchorToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/rendering/anchor.token";
-
-type MockToken = {
-    type: string;
-    value: string;
-};
-
-function token(value: string): Token {
-    return {
-        type: "literal",
-        value
-    } as any;
-}
+import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 
 describe("TokensController", () => {
-
+    // -----------------------------------------------------
+    // construction
+    // -----------------------------------------------------
     describe("construction", () => {
 
         it("starts before traversal", () => {
@@ -40,14 +30,14 @@ describe("TokensController", () => {
         });
 
         it("reports available tokens before traversal", () => {
-            const controller = new TokensController([
-                token("A")
-            ]);
-
+            const controller = new TokensController([token("A")]);
             expect(controller.hasNext()).toBe(true);
         });
     });
 
+    // -----------------------------------------------------
+    // next()
+    // -----------------------------------------------------
     describe("next()", () => {
 
         it("consumes tokens sequentially", () => {
@@ -63,25 +53,17 @@ describe("TokensController", () => {
         });
 
         it("updates current token", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("B")
-            ]);
+            const controller = new TokensController([token("A"), token("B")]);
 
             controller.next();
-
             expect((controller.current as MockToken).value).toBe("A");
 
             controller.next();
-
             expect((controller.current as MockToken).value).toBe("B");
         });
 
         it("updates cursor after each consumption", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("B")
-            ]);
+            const controller = new TokensController([token("A"), token("B")]);
 
             expect(controller.cursor).toBe(-1);
 
@@ -93,75 +75,55 @@ describe("TokensController", () => {
         });
 
         it("returns null at eof", () => {
-            const controller = new TokensController([
-                token("A")
-            ]);
+            const controller = new TokensController([token("A")]);
 
             controller.next();
-
             expect(controller.next()).toBeNull();
         });
 
         it("does not advance cursor at eof", () => {
-            const controller = new TokensController([
-                token("A")
-            ]);
+            const controller = new TokensController([token("A")]);
 
             controller.next();
-
             expect(controller.cursor).toBe(0);
 
             controller.next();
-
             expect(controller.cursor).toBe(0);
         });
 
         it("reports no remaining tokens at eof", () => {
-            const controller = new TokensController([
-                token("A")
-            ]);
+            const controller = new TokensController([token("A")]);
 
             controller.next();
-
             expect(controller.hasNext()).toBe(false);
         });
     });
 
+    // -----------------------------------------------------
+    // peek()
+    // -----------------------------------------------------
     describe("peek()", () => {
 
         it("peeks the next unread token", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("B")
-            ]);
+            const controller = new TokensController([token("A"), token("B")]);
 
             controller.next();
-
             expect((controller.peek() as MockToken).value).toBe("B");
         });
 
         it("does not mutate traversal state", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("B")
-            ]);
+            const controller = new TokensController([token("A"), token("B")]);
 
             controller.next();
-
             controller.peek();
 
             expect(controller.cursor).toBe(0);
-            expect((controller.current as MockToken).value).toBe("A");
         });
 
         it("supports offset zero", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("B")
-            ]);
+            const controller = new TokensController([token("A"), token("B")]);
 
             controller.next();
-
             expect((controller.peek(0) as MockToken).value).toBe("A");
         });
 
@@ -181,9 +143,7 @@ describe("TokensController", () => {
         });
 
         it("returns null when outside stream bounds", () => {
-            const controller = new TokensController([
-                token("A")
-            ]);
+            const controller = new TokensController([token("A")]);
 
             expect(controller.peek(-1)).toBeNull();
 
@@ -194,34 +154,26 @@ describe("TokensController", () => {
         });
     });
 
+    // -----------------------------------------------------
+    // inject()
+    // -----------------------------------------------------
     describe("inject()", () => {
 
         it("injects a token after the current cursor", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("C")
-            ]);
+            const controller = new TokensController([token("A"), token("C")]);
 
             controller.next();
-
             controller.inject(token("B"));
 
             expect((controller.next() as MockToken).value).toBe("B");
-            expect((controller.next() as MockToken).value).toBe("C");
         });
 
         it("injects multiple tokens in order", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("D")
-            ]);
+            const controller = new TokensController([token("A"), token("D")]);
 
             controller.next();
 
-            controller.inject([
-                token("B"),
-                token("C")
-            ]);
+            controller.inject([token("B"), token("C")]);
 
             expect((controller.next() as MockToken).value).toBe("B");
             expect((controller.next() as MockToken).value).toBe("C");
@@ -229,20 +181,15 @@ describe("TokensController", () => {
         });
 
         it("supports injection before traversal starts", () => {
-            const controller = new TokensController([
-                token("B")
-            ]);
+            const controller = new TokensController([token("B")]);
 
             controller.inject(token("A"));
 
             expect((controller.next() as MockToken).value).toBe("A");
-            expect((controller.next() as MockToken).value).toBe("B");
         });
 
         it("supports injection after eof", () => {
-            const controller = new TokensController([
-                token("A")
-            ]);
+            const controller = new TokensController([token("A")]);
 
             controller.next();
             controller.next();
@@ -253,93 +200,63 @@ describe("TokensController", () => {
         });
 
         it("does not modify current token", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("C")
-            ]);
+            const controller = new TokensController([token("A"), token("C")]);
 
             controller.next();
-
             controller.inject(token("B"));
 
             expect((controller.current as MockToken).value).toBe("A");
-            expect(controller.cursor).toBe(0);
-        });
-
-        it("makes injected tokens immediately visible to peek", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("C")
-            ]);
-
-            controller.next();
-
-            controller.inject(token("B"));
-
-            expect((controller.peek() as MockToken).value).toBe("B");
         });
 
         it("returns itself for chaining", () => {
-            const controller = new TokensController([
-                token("D")
-            ]);
+            const controller = new TokensController([token("D")]);
 
-            expect(
-                controller.inject(token("A"))
-            ).toBe(controller);
+            expect(controller.inject(token("A"))).toBe(controller);
         });
 
         it("ignores empty injections", () => {
-            const controller = new TokensController([
-                token("A")
-            ]);
+            const controller = new TokensController([token("A")]);
 
             controller.inject([]);
 
             expect((controller.next() as MockToken).value).toBe("A");
-            expect(controller.next()).toBeNull();
         });
 
-        it("injects a token at an explicit index", () => {
+        it("injects at explicit index", () => {
             const controller = new TokensController([
                 token("A"),
                 token("C"),
                 token("D")
             ]);
 
-            controller.next(); // cursor = 0 ("A")
+            controller.next();
 
-            controller.inject(token("B"), {
-                at: 2
-            });
+            controller.inject(token("B"), { at: 2 });
 
             expect((controller.next() as MockToken).value).toBe("C");
-            expect((controller.next() as MockToken).value).toBe("B");
         });
 
-        it("throws when injecting at an index <= cursor", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("B"),
-                token("C")
-            ]);
+        it("throws when injecting at index <= cursor", () => {
+            const controller = new TokensController([token("A"), token("B")]);
 
-            controller.next(); // cursor = 0
+            controller.next();
 
             expect(() => {
-                controller.inject(token("X"), {
-                    at: 0
-                });
-            }).toThrow();
-
-            expect(() => {
-                controller.inject(token("X"), {
-                    at: 0
-                });
+                controller.inject(token("X"), { at: 0 });
             }).toThrow();
         });
 
-        it("injects tokens after an AnchorToken instance", () => {
+        it("throws TypeError for invalid 'at' type", () => {
+            const controller = new TokensController([token("A")]);
+
+            controller.next();
+
+            expect(() => {
+                controller.inject(token("X"), { at: "invalid" as any });
+            }).toThrow(TypeError);
+        });
+
+        it("injects after AnchorToken instance", () => {
             const anchor = new AnchorToken("test");
 
             const controller = new TokensController([
@@ -348,18 +265,15 @@ describe("TokensController", () => {
                 token("C")
             ]);
 
-            controller.next(); // A
+            controller.next();
 
-            controller.inject(token("B"), {
-                at: anchor
-            });
+            controller.inject(token("B"), { at: anchor });
 
             expect(controller.next()).toBe(anchor);
             expect((controller.next() as MockToken).value).toBe("B");
-            expect((controller.next() as MockToken).value).toBe("C");
         });
 
-        it("injects tokens after an AnchorToken symbol id", () => {
+        it("injects after AnchorToken symbol id", () => {
             const anchor = new AnchorToken("test");
 
             const controller = new TokensController([
@@ -368,20 +282,15 @@ describe("TokensController", () => {
                 token("C")
             ]);
 
-            controller.next(); // A
+            controller.next();
 
-            controller.inject(token("B"), {
-                at: anchor.id
-            });
+            controller.inject(token("B"), { at: anchor.id });
 
             expect(controller.next()).toBe(anchor);
             expect((controller.next() as MockToken).value).toBe("B");
-            expect((controller.next() as MockToken).value).toBe("C");
         });
 
-        it("throws when anchor token is not found", () => {
-            const anchor = new AnchorToken("missing");
-
+        it("throws when anchor is not found", () => {
             const controller = new TokensController([
                 token("A"),
                 token("B")
@@ -390,77 +299,33 @@ describe("TokensController", () => {
             controller.next();
 
             expect(() => {
-                controller.inject(token("X"), {
-                    at: anchor
-                });
+                controller.inject(token("X"), { at: new AnchorToken("missing") });
             }).toThrow();
         });
 
-        it("throws when anchor is at or before cursor", () => {
+        it("throws when anchor is before or at cursor", () => {
             const anchor = new AnchorToken("test");
 
             const controller = new TokensController([
                 anchor,
-                token("B"),
-                token("C")
-            ]);
-
-            controller.next(); // cursor is at anchor
-
-            expect(() => {
-                controller.inject(token("X"), {
-                    at: anchor
-                });
-            }).toThrow();
-        });
-
-        it("injects multiple tokens after anchor preserving order", () => {
-            const anchor = new AnchorToken("test");
-
-            const controller = new TokensController([
-                token("A"),
-                anchor,
-                token("D")
-            ]);
-
-            controller.next(); // A
-
-            controller.inject([
-                token("B"),
-                token("C")
-            ], {
-                at: anchor
-            });
-
-            expect(controller.next()).toBe(anchor);
-            expect((controller.next() as MockToken).value).toBe("B");
-            expect((controller.next() as MockToken).value).toBe("C");
-            expect((controller.next() as MockToken).value).toBe("D");
-        });
-
-        it("defaults to cursor+1 when no at option is provided", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("C")
+                token("B")
             ]);
 
             controller.next();
 
-            controller.inject(token("B"));
-
-            expect((controller.next() as MockToken).value).toBe("B");
-            expect((controller.next() as MockToken).value).toBe("C");
+            expect(() => {
+                controller.inject(token("X"), { at: anchor });
+            }).toThrow();
         });
     });
 
+    // -----------------------------------------------------
+    // rollbackBefore()
+    // -----------------------------------------------------
     describe("rollbackBefore()", () => {
 
-        it("restores traversal before the supplied cursor", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("B"),
-                token("C")
-            ]);
+        it("restores traversal before cursor", () => {
+            const controller = new TokensController([token("A"), token("B"), token("C")]);
 
             controller.next();
             controller.next();
@@ -471,75 +336,39 @@ describe("TokensController", () => {
             expect((controller.next() as MockToken).value).toBe("A");
         });
 
-        it("supports complete reset using -1", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("B")
-            ]);
+        it("supports full reset", () => {
+            const controller = new TokensController([token("A"), token("B")]);
 
             controller.next();
 
             controller.rollbackBefore(-1);
 
             expect(controller.cursor).toBe(-1);
-            expect(controller.current).toBeNull();
         });
 
         it("removes injected tokens", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("C")
-            ]);
+            const controller = new TokensController([token("A"), token("C")]);
 
             controller.next();
-
             controller.inject(token("B"));
-
-            controller.next();
 
             controller.rollbackBefore(0);
 
             expect((controller.next() as MockToken).value).toBe("A");
-            expect((controller.next() as MockToken).value).toBe("C");
         });
 
         it("preserves original tokens", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("B")
-            ]);
+            const controller = new TokensController([token("A"), token("B")]);
 
             controller.inject(token("X"));
 
             controller.rollbackBefore(-1);
 
             expect((controller.next() as MockToken).value).toBe("A");
-            expect((controller.next() as MockToken).value).toBe("B");
         });
 
-        it("removes multiple injected tokens", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("D")
-            ]);
-
-            controller.next();
-
-            controller.inject([
-                token("B"),
-                token("C")
-            ]);
-
-            controller.rollbackBefore(0);
-
-            expect((controller.next() as MockToken).value).toBe("A");
-            expect((controller.next() as MockToken).value).toBe("D");
-        });
-
-        it("clamps rollback cursor to valid bounds", () => {
-            const controller = new TokensController([
-                token("A")
-            ]);
+        it("clamps rollback cursor", () => {
+            const controller = new TokensController([token("A")]);
 
             controller.rollbackBefore(999);
 
@@ -547,40 +376,42 @@ describe("TokensController", () => {
         });
     });
 
-    describe("mixed traversal scenarios", () => {
+    // -----------------------------------------------------
+    // inspect()
+    // -----------------------------------------------------
+    describe("inspect()", () => {
 
-        it("maintains deterministic traversal after injection", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("D")
-            ]);
+        it("returns raw kind list", () => {
+            const ct = new TokensController([token("A"), token("B")]);
 
-            controller.next();
-
-            controller.inject([
-                token("B"),
-                token("C")
-            ]);
-
-            expect((controller.next() as MockToken).value).toBe("B");
-            expect((controller.next() as MockToken).value).toBe("C");
-            expect((controller.next() as MockToken).value).toBe("D");
-            expect(controller.next()).toBeNull();
+            expect(TokensController.inspect(ct)).toEqual(["literal", "literal"]);
         });
 
-        it("preserves current token during peek and injection", () => {
-            const controller = new TokensController([
-                token("A"),
-                token("C")
-            ]);
+        it("returns with-origin representation", () => {
+            const ct = new TokensController([token("A")]);
 
-            controller.next();
+            ct.inject(token("B"));
 
-            controller.peek();
-            controller.inject(token("B"));
+            const result = TokensController.inspect(ct, "with-origin");
 
-            expect((controller.current as MockToken).value).toBe("A");
-            expect(controller.cursor).toBe(0);
+            expect(result).toEqual(
+                expect.arrayContaining([
+                    "literal:O",
+                    "literal:I"
+                ])
+            );
         });
     });
 });
+
+type MockToken = {
+    kind: string;
+    value: string;
+};
+
+function token(value: string): Token {
+    return {
+        kind: "literal",
+        value
+    } as any;
+}

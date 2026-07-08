@@ -1,5 +1,5 @@
 import TOKENS from "../../../../3-tokenization/tokens";
-import type { Token } from "../../../../3-tokenization/types"
+import type { Token } from "../../../../3-tokenization/types";
 
 /**
  * MapEntryFrame

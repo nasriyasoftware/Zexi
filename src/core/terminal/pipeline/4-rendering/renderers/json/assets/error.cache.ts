@@ -1,7 +1,7 @@
 import type { Token } from "../../../../3-tokenization/types";
 import type { StackTraceLine } from "../../../../1-graphing/types";
-import type { EnvelopeDeferredTokens } from "../../../shared/envelope/types";
 import type { ErrorStartToken } from "../../../../3-tokenization/tokens/tokenization/error";
+import type { EnvelopeDeferredTokens } from "../../../shared/envelope/types";
 
 export const ERROR_SECTIONS = ['name', 'message', 'cause', 'stack'] as const;
 

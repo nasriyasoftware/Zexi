@@ -18,19 +18,45 @@ import type { Token } from "../../../3-tokenization/types";
  * - envelope type discrimination (`EnvelopeKind`)
  * - payload typing per envelope category
  * - runtime serialization guarantees
+ * - safe representation of non-JSON-native values
  *
- * It ensures that each envelope kind has a strictly defined structure,
+ * It ensures that every envelope kind has a strictly defined structure,
  * preventing accidental payload drift between renderer and consumers.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 ENVELOPE GROUPS
+ * ---------------------------------------------------------------------
+ *
+ * Envelopes are divided into two conceptual categories:
+ *
+ * ### 1. Structural envelopes
+ *
+ * Represent runtime constructs that do not exist in JSON natively:
+ *
+ * - `map`      → key/value collections
+ * - `set`      → unique value collections
+ * - `regex`    → regular expression metadata
+ * - `function` → function identity metadata
+ * - `error`    → structured error representation
+ *
+ * ### 2. Primitive normalization envelopes
+ *
+ * - `number` → represents non-JSON-safe numeric states
+ *
+ * Used to preserve numeric semantics for values such as:
+ * - NaN
+ * - Infinity
+ * - -Infinity
  *
  * ---------------------------------------------------------------------
  * 🔷 ENVELOPE CATEGORIES
  * ---------------------------------------------------------------------
  *
  * - `error`
- *   Structured error representation (metadata only or extended in future).
+ *   Structured error representation (name, message, stack, cause metadata).
  *
  * - `map`
- *   Map-like structure serialization (key/value pairs).
+ *   Map-like structure serialization (key/value pairs with size metadata).
  *
  * - `set`
  *   Set-like structure serialization (unique value collections).
@@ -40,6 +66,25 @@ import type { Token } from "../../../3-tokenization/types";
  *
  * - `function`
  *   Function identity representation (non-executable metadata only).
+ *
+ * - `number`
+ *   Normalized numeric representation for non-JSON-safe values.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 WHY THIS EXISTS
+ * ---------------------------------------------------------------------
+ *
+ * JSON cannot represent certain JavaScript values directly:
+ *
+ * - NaN
+ * - Infinity / -Infinity
+ * - Maps / Sets
+ * - Functions
+ * - Errors with stack traces
+ * - Regular expressions
+ *
+ * This system provides a deterministic encoding layer that preserves
+ * runtime semantics while remaining JSON-compatible.
  *
  * ---------------------------------------------------------------------
  * @since 1.0.0
@@ -62,6 +107,10 @@ export type EnvelopeMap = {
 
     function: {
         name: string;
+    };
+
+    number: {
+        value: number | string;
     };
 }
 

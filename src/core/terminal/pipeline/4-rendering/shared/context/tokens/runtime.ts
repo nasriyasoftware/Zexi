@@ -4,71 +4,165 @@ import TokensController from "./tokens.controller";
 /**
  * Public renderer-facing token traversal runtime.
  *
- * `TokensRuntime` exposes a safe, restricted interface over the
- * internal `TokensController`.
+ * `TokensRuntime` exposes a safe, restricted façade over the internal
+ * `TokensController`, which owns the actual mutation + traversal engine.
  *
- * It provides renderers with controlled access to:
- *
- * - sequential token traversal
- * - lookahead inspection
- * - runtime token injection
- * - current token inspection
+ * It is the primary interface used by renderers to consume and
+ * opportunistically modify a token stream during rendering.
  *
  * ---------------------------------------------------------------------
  * 🔷 PURPOSE
  * ---------------------------------------------------------------------
  *
- * This runtime exists as a protective abstraction boundary between:
+ * This runtime exists as a strict abstraction boundary between:
  *
  * - low-level traversal mechanics (`TokensController`)
  * - renderer execution logic
  *
- * Renderers should interact only with this runtime rather than the
- * underlying controller directly.
+ * Renderers interact exclusively with this runtime and must never
+ * access the controller directly.
  *
  * ---------------------------------------------------------------------
  * 🔷 DESIGN GOALS
  * ---------------------------------------------------------------------
  *
- * `TokensRuntime` intentionally hides internal traversal mechanics such as:
+ * This runtime enforces a **forward-only traversal model** while still
+ * allowing controlled structural mutation.
  *
- * - cursor management
- * - rollback behavior
- * - token storage structure
- * - injected token bookkeeping
+ * It intentionally hides internal mechanics such as:
  *
- * This prevents renderers from coupling themselves to internal
- * transactional semantics.
+ * - cursor mutation logic
+ * - stream storage structure
+ * - rollback / transactional history
+ * - injection bookkeeping rules
+ *
+ * This ensures renderers remain deterministic and do not couple to
+ * internal execution semantics.
  *
  * ---------------------------------------------------------------------
- * 🔷 MUTATION MODEL
+ * 🔷 TRAVERSAL MODEL
  * ---------------------------------------------------------------------
  *
- * Renderers may:
+ * Tokens are consumed strictly in forward order via `next()`.
  *
- * - consume tokens via `next()`
- * - inspect future tokens via `peek()`
- * - inject tokens dynamically via `inject()`
+ * Each call to `next()`:
  *
- * Renderers may NOT:
+ * - advances the cursor
+ * - updates `current`
+ * - returns the next available token (including injected tokens)
  *
- * - rollback traversal
- * - modify cursor state
+ * The runtime guarantees deterministic ordering of consumption, but
+ * does not guarantee stability of absolute indices due to injection.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 MUTATION MODEL (INJECTION ONLY)
+ * ---------------------------------------------------------------------
+ *
+ * Renderers may inject tokens dynamically into the *future stream*.
+ *
+ * Injection is always:
+ *
+ * - forward-looking (never retroactive)
+ * - non-destructive to already-consumed tokens
+ * - integrated into the same traversal stream
+ *
+ * Injected tokens are treated as first-class stream elements and will
+ * be consumed naturally via `next()`.
+ *
+ * ⚠️ Important:
+ * Injection does NOT modify previously returned tokens and does NOT
+ * retroactively alter traversal history.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 FORBIDDEN OPERATIONS
+ * ---------------------------------------------------------------------
+ *
+ * Renderers cannot:
+ *
+ * - rollback traversal state
+ * - modify cursor position directly
  * - access raw token storage
+ * - remove or rewrite already-consumed tokens
  *
- * Rollback semantics are coordinated exclusively by higher-level
- * runtime orchestration systems.
+ * These capabilities are reserved for higher-level orchestration layers
+ * (e.g. normalization builder runtimes).
  *
  * ---------------------------------------------------------------------
- * 🔷 TRANSACTIONAL SAFETY
+ * 🔷 TRANSACTIONAL SAFETY MODEL
  * ---------------------------------------------------------------------
  *
- * Token rollback and speculative traversal are managed internally by:
+ * This runtime is explicitly **non-transactional**.
  *
- * - `ScopesRuntime`
- * - rendering context orchestration
+ * It provides:
  *
- * This runtime intentionally exposes no rollback primitives.
+ * - forward-only consumption
+ * - forward-only injection
+ *
+ * It does NOT provide:
+ *
+ * - rollback
+ * - speculative execution
+ * - buffered mutation
+ * - structural rewinding
+ *
+ * Any transactional behavior is implemented in higher-level runtimes
+ * such as `TokensRuntimeBuilder`.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 CURSOR SEMANTICS
+ * ---------------------------------------------------------------------
+ *
+ * The cursor represents the index of the most recently consumed token.
+ *
+ * Cursor values:
+ *
+ * - `-1` → traversal has not started
+ * - `0`  → first token consumed
+ * - `n`  → last consumed token index
+ *
+ * Injection defaults to:
+ *
+ * ```ts
+ * inject(tokens)
+ * // equivalent to:
+ * inject(tokens, { at: cursor + 1 })
+ * ```
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 INJECTION MODEL
+ * ---------------------------------------------------------------------
+ *
+ * Injection supports three modes:
+ *
+ * 1. Cursor-relative insertion
+ *    - inserts immediately after current position
+ *
+ * 2. Absolute insertion
+ *    - inserts at a specific stream index
+ *
+ * 3. Anchor-based insertion
+ *    - resolves symbolic positions in the stream
+ *
+ * Injection is guaranteed to affect only **future traversal order**.
+ *
+ * It does NOT:
+ *
+ * - modify `current`
+ * - modify already-consumed tokens
+ * - alter past traversal results
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 OUT-OF-SCOPE CONCERNS
+ * ---------------------------------------------------------------------
+ *
+ * This runtime does NOT define:
+ *
+ * - grouping semantics
+ * - layout decisions
+ * - rendering rules
+ * - token interpretation
+ *
+ * It only provides traversal + controlled mutation primitives.
  *
  * ---------------------------------------------------------------------
  * @since 1.0.0
@@ -91,16 +185,18 @@ class TokensRuntime {
      * Creates a new renderer-facing token runtime.
      *
      * @param controller
-     * Internal token traversal controller to expose safely.
+     * Internal token traversal controller.
+     *
+     * This controller is intentionally hidden from renderers to preserve:
+     *
+     * - abstraction boundaries
+     * - deterministic traversal guarantees
+     * - controlled mutation semantics
      *
      * @since 1.0.0
      */
     constructor(controller: TokensController) {
         this.#_controller = controller;
-    }
-
-    _debug() {
-        this.#_controller._debug();
     }
 
     /**
@@ -109,50 +205,46 @@ class TokensRuntime {
      * The cursor represents the index of the most recently consumed token
      * in the active stream.
      *
-     * It is exposed to allow renderers to make deterministic decisions
-     * about relative stream mutation (such as injection positioning).
-     *
      * ---------------------------------------------------------------------
      * 🔷 CURSOR SEMANTICS
      * ---------------------------------------------------------------------
      *
+     * The cursor is strictly a **consumption pointer**, not a structural index.
+     *
+     * It tracks *what has been read*, not what exists in the underlying stream.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 CURSOR STATES
+     * ---------------------------------------------------------------------
+     *
      * - `-1` → traversal has not started
      * - `0`  → first token has been consumed
-     * - `n`  → token at index `n` was most recently returned by `next()`
-     *
-     * The cursor always refers to a *consumed token position*.
+     * - `n`  → token at index `n` was last returned by `next()`
      *
      * ---------------------------------------------------------------------
-     * 🔷 ROLE IN INJECTION
+     * 🔷 RELATION TO STREAM MUTATION
      * ---------------------------------------------------------------------
      *
-     * The cursor is used as the default reference point for relative injection:
+     * The stream may change due to injection, but:
      *
-     * ```ts
-     * inject(tokens)
-     * ```
+     * - cursor NEVER rewinds automatically
+     * - cursor NEVER reindexes
+     * - cursor ALWAYS refers to consumption history
      *
-     * is equivalent to:
-     *
-     * ```ts
-     * inject(tokens, { at: cursor + 1 })
-     * ```
-     *
-     * This makes cursor a stable anchor for forward-only stream mutation.
+     * This is critical for deterministic traversal in mutable streams.
      *
      * ---------------------------------------------------------------------
-     * 🔷 IMPORTANT INVARIANT
+     * 🔷 INVARIANT
      * ---------------------------------------------------------------------
      *
-     * The cursor defines *position in the consumed stream*, not the insertion
-     * logic itself.
+     * Cursor guarantees:
      *
-     * Injection rules (anchor resolution, bounds checking, etc.) are still
-     * enforced by `TokensController`.
+     * > If token A was consumed before token B, cursor(A) < cursor(B)
      *
-     * @returns Current cursor index in the token stream
+     * regardless of later injections.
      *
-     * @since 1.0.0
+     * ---------------------------------------------------------------------
+     * @returns Index of last consumed token
      */
     get cursor(): number {
         return this.#_controller.cursor;
@@ -239,122 +331,209 @@ class TokensRuntime {
     /**
      * Injects tokens into the active traversal stream.
      *
-     * This is a direct pass-through to the underlying `TokensController`
-     * injection mechanism and preserves all injection semantics.
-     *
      * ---------------------------------------------------------------------
-     * 🔷 INJECTION MODEL
+     * 🔷 CORE SEMANTICS
      * ---------------------------------------------------------------------
      *
-     * Injection mutates the underlying token stream without affecting:
+     * Injection mutates the **future unread portion** of the stream.
      *
-     * - current token
-     * - cursor position
-     * - traversal progress
-     *
-     * Injected tokens become part of the *future unread stream* and will
-     * be consumed naturally during traversal.
+     * Injected tokens become part of traversal order and will be returned
+     * by `next()` in deterministic sequence.
      *
      * ---------------------------------------------------------------------
-     * 🔷 SUPPORTED FORMS
+     * 🔷 IMPORTANT GUARANTEE
      * ---------------------------------------------------------------------
      *
-     * This method supports all controller injection modes:
+     * Injection NEVER affects:
      *
-     * ### 1. Cursor-relative injection (default)
+     * - already consumed tokens
+     * - current cursor state
+     * - previously returned values
+     *
+     * It only affects **future traversal resolution**.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INJECTION MODES
+     * ---------------------------------------------------------------------
+     *
+     * ### 1. Cursor-relative (default)
      *
      * ```ts
-     * inject(tokens)
+     * runtime.inject(tokens);
      * ```
      *
      * Inserts tokens immediately after the current cursor position.
      *
      * ---
      *
-     * ### 2. Position-based injection
+     * ### 2. Absolute index injection
      *
      * ```ts
-     * inject(tokens, { at: number })
+     * runtime.inject(tokens, { at: 10 });
      * ```
      *
-     * Inserts tokens at an absolute stream index greater than the cursor.
+     * Inserts tokens at a fixed stream position (post-resolution).
      *
      * ---
      *
      * ### 3. Anchor-based injection
      *
      * ```ts
-     * inject(tokens, { at: AnchorToken | symbol })
+     * runtime.inject(tokens, { at: anchor });
      * ```
      *
-     * Resolves an anchor in the active (unconsumed) stream and inserts
+     * Resolves a symbolic position inside the active stream and inserts
      * tokens immediately after it.
      *
      * ---------------------------------------------------------------------
-     * 🔷 SAFETY GUARANTEES
+     * 🔷 ORDERING GUARANTEE
      * ---------------------------------------------------------------------
      *
-     * - Cursor is never modified
-     * - Current token is never modified
-     * - Injection affects only future traversal
+     * Injection guarantees:
+     *
+     * - deterministic placement relative to controller rules
+     * - stable ordering among multiple injections at same anchor
+     * - no reordering of already-consumed tokens
+     *
+     * It does NOT guarantee:
+     *
+     * - stable absolute indices across mutations
+     * - persistence of original source indices
      *
      * ---------------------------------------------------------------------
-     * 🔷 EMPTY INPUT
+     * 🔷 EXAMPLE
      * ---------------------------------------------------------------------
      *
-     * Empty arrays are ignored and no mutation occurs.
+     * ```ts
+     * runtime.next(); // "a"
+     * runtime.inject(["X"]);
+     * runtime.next(); // "X"
+     * runtime.next(); // "b"
+     * ```
      *
      * ---------------------------------------------------------------------
      * @param args
-     * Forwarded arguments to `TokensController.inject`.
-     *
-     * @since 1.0.0
+     * Forwarded directly to TokensController.inject
      */
     inject(...args: Parameters<TokensController['inject']>): void {
         this.#_controller.inject(...args);
     }
 
     /**
-     * Peeks ahead in the traversal stream without consuming tokens.
+     * Peeks into the token stream relative to the current cursor position
+     * without consuming tokens.
      *
-     * This method provides non-mutating lookahead relative to the
-     * current traversal position.
+     * ---------------------------------------------------------------------
+     * 🔷 CORE BEHAVIOR
+     * ---------------------------------------------------------------------
+     *
+     * `peek()` provides a **relative window view** over the active stream.
+     *
+     * It does NOT mutate traversal state and does NOT advance the cursor.
+     *
+     * It can access:
+     *
+     * - future tokens (positive offsets)
+     * - current token (0 offset)
+     * - previously consumed tokens (negative offsets)
      *
      * ---------------------------------------------------------------------
      * 🔷 OFFSET SEMANTICS
      * ---------------------------------------------------------------------
      *
-     * Offset values are relative to the current token:
+     * Offsets are relative to the **current cursor position**:
      *
-     * - `1`
-     *   Next unread token
-     *
-     * - `2`
-     *   Token after next
-     *
-     * - `0`
-     *   Current token
+     * - `0`  → current token (last consumed)
+     * - `1`  → next token in stream
+     * - `2`  → token after next
+     * - `-1` → previous token
+     * - `-2` → two tokens before current
      *
      * ---------------------------------------------------------------------
-     * 🔷 OUT-OF-BOUNDS BEHAVIOR
+     * 🔷 EXAMPLES
      * ---------------------------------------------------------------------
      *
-     * Returns `null` if the computed lookup position falls outside the
-     * active traversal stream.
+     * ```ts
+     * runtime.next(); // consumes "A"
+     * runtime.next(); // consumes "B"
      *
-     * This method never throws.
+     * runtime.peek(0);  // "B"
+     * runtime.peek(-1); // "A"
+     * runtime.peek(1);  // next unread token
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INJECTION AWARENESS
+     * ---------------------------------------------------------------------
+     *
+     * Peek operates on the **live stream**, meaning:
+     *
+     * - injected tokens are visible
+     * - removed/ignored tokens may still exist structurally
+     * - ordering reflects controller state, not original array indices
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SAFETY GUARANTEE
+     * ---------------------------------------------------------------------
+     *
+     * - never mutates cursor
+     * - never consumes tokens
+     * - never throws on out-of-bounds (returns `null`)
      *
      * ---------------------------------------------------------------------
      * @param offset
-     * Relative token offset from the current traversal position.
-     * Defaults to `1`.
+     * Relative offset from current cursor position.
      *
-     * @returns Token at the requested relative position or `null`
+     * Defaults to `1` if omitted.
      *
-     * @since 1.0.0
+     * @returns Token at relative position or `null`
      */
     peek(offset = 1): Token | null {
         return this.#_controller.peek(offset);
+    }
+
+    /**
+     * Debug / introspection utility for token stream state.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * Provides a non-runtime representation of the internal controller
+     * state for debugging, testing, and diagnostics.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 STABILITY WARNING
+     * ---------------------------------------------------------------------
+     *
+     * This method is NOT part of the stable runtime contract.
+     *
+     * Output format may change without semantic versioning guarantees.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ORIGIN MARKERS
+     * ---------------------------------------------------------------------
+     *
+     * When `as = 'with-origin'`, tokens include origin metadata:
+     *
+     * - `O` → original stream token
+     * - `I` → injected token
+     *
+     * These markers are intended for debugging only and must not be used
+     * for rendering decisions.
+     *
+     * ---------------------------------------------------------------------
+     * @returns Token kind list or annotated debug representation
+     *
+     * @since 1.0.0
+     */
+    static inspect<
+        T extends 'raw' | 'with-origin'
+    >(
+        ct: TokensRuntime,
+        as?: T
+    ): T extends 'with-origin' ? `${Token['kind']}:${'O' | 'I'}`[] : Token['kind'][] {
+        return TokensController.inspect(ct.#_controller, as);
     }
 }
 

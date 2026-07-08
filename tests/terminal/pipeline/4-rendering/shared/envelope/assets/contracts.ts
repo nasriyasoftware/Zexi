@@ -34,22 +34,22 @@ const generate: GenerateFunctions = {
         }
 
         const stream = [
-            "object-name", "object-open", "soft-line", "indent-start", "group-start", "property", "key-value-separator",
+            "group-start", "object-name", "object-open", "soft-line", "indent-start", "group-start", "property", "key-value-separator",
             "soft-space", "primitive", "separator", "soft-line", "group-end", "group-start", "property", "key-value-separator",
             "soft-space", "primitive", "separator", "soft-line", "group-end", "group-start", "property", "key-value-separator",
             "soft-space", "group-start", "object-name", "object-open", "soft-line", "indent-start", "group-start",
             "property", "key-value-separator", "soft-space", "primitive", "separator", "soft-line", "group-end",
             "group-start", "property", "key-value-separator", "soft-space", "primitive", "group-end", "indent-end",
-            "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close"
+            "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close", "group-end"
         ] as Token['kind'][];
 
         const regularPositions = {
             props: [
-                { name: '$kind', index: 5, value: { index: 8, type: 'string' } },
-                { name: '$codec', index: 13, value: { index: 16, type: 'string' } },
-                { name: '$payload', index: 21 },
-                { name: 'pattern', index: 30, value: { index: 33, type: 'string', value: contract.payload.pattern } },
-                { name: 'flags', index: 38, value: { index: 41, type: 'string', value: contract.payload.flags } }
+                { name: '$kind', index: 6, value: { index: 9, type: 'string' } },
+                { name: '$codec', index: 14, value: { index: 17, type: 'string' } },
+                { name: '$payload', index: 22 },
+                { name: 'pattern', index: 31, value: { index: 34, type: 'string', value: contract.payload.pattern } },
+                { name: 'flags', index: 39, value: { index: 42, type: 'string', value: contract.payload.flags } }
             ] as PropItem[]
         }
 
@@ -59,11 +59,11 @@ const generate: GenerateFunctions = {
                 stream,
                 positions: {
                     props: [
-                        { name: '$kind', index: 13, value: { index: 16, type: 'string' } },
-                        { name: '$codec', index: 5, value: { index: 8, type: 'string' } },
-                        { name: '$payload', index: 21 },
-                        { name: 'pattern', index: 38, value: { index: 41, type: 'string', value: contract.payload.pattern } },
-                        { name: 'flags', index: 30, value: { index: 33, type: 'string', value: contract.payload.flags } }
+                        { name: '$kind', index: 14, value: { index: 17, type: 'string' } },
+                        { name: '$codec', index: 6, value: { index: 9, type: 'string' } },
+                        { name: '$payload', index: 22 },
+                        { name: 'pattern', index: 39, value: { index: 42, type: 'string', value: contract.payload.pattern } },
+                        { name: 'flags', index: 31, value: { index: 34, type: 'string', value: contract.payload.flags } }
                     ]
                 }
             },
@@ -95,7 +95,7 @@ const generate: GenerateFunctions = {
                 return [...this.start, ...this.trailing];
             },
             start: [
-                "object-name", "object-open", "soft-line", "indent-start",
+                "group-start", "object-name", "object-open", "soft-line", "indent-start",
 
                 "group-start", "property", "key-value-separator",
                 "soft-space", "primitive", "separator", "soft-line", "group-end",
@@ -114,19 +114,48 @@ const generate: GenerateFunctions = {
             ],
             trailing: [
                 "anchor", "indent-end", "soft-line", "object-close", "group-end", "group-end", "indent-end",
-                "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close"
+                "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close", "group-end"
             ]
         }
 
+        let x = [
+            'group-start', 'object-name', 'object-open', 'soft-line', 'indent-start',
+
+            'group-start', 'property', 'key-value-separator',
+            'soft-space', 'primitive', 'separator', 'soft-line', 'group-end',
+
+            'group-start', 'property', 'key-value-separator',
+            'soft-space', 'primitive', 'separator', 'soft-line', 'group-end',
+
+            'group-start', 'property', 'key-value-separator',
+            'soft-space',
+
+            'group-start', 'object-name', 'object-open', 'soft-line', 'indent-start',
+
+            'group-start', 'property', 'key-value-separator',
+            'soft-space', 'primitive', 'separator',
+            'soft-line', 'group-end',
+
+            'group-start',
+            'property', 'key-value-separator', 'soft-space',
+            'group-start', 'object-name', 'object-open',
+            'soft-line', 'indent-start', 'anchor',
+            'anchor', 'indent-end', 'soft-line',
+            'object-close', 'group-end', 'group-end',
+            'indent-end', 'soft-line', 'object-close',
+            'group-end', 'group-end', 'indent-end',
+            'soft-line', 'object-close', 'group-end'
+        ]
+
         const regularPositions = {
             props: [
-                { name: '$kind', index: 5, value: { index: 8, type: 'string' } },
-                { name: '$codec', index: 13, value: { index: 16, type: 'string' } },
-                { name: '$payload', index: 21 },
-                { name: 'size', index: 30, value: { index: 33, type: 'number', value: contract.payload.size } },
-                { name: 'values', index: 38 }
+                { name: '$kind', index: 6, value: { index: 9, type: 'string' } },
+                { name: '$codec', index: 14, value: { index: 17, type: 'string' } },
+                { name: '$payload', index: 22 },
+                { name: 'size', index: 31, value: { index: 34, type: 'number', value: contract.payload.size } },
+                { name: 'values', index: 39 }
             ] as PropItem[],
-            anchors: [46, 47]
+            anchors: [47, 48]
         }
 
         contract.tokenizers.push(
@@ -135,13 +164,13 @@ const generate: GenerateFunctions = {
                 stream,
                 positions: {
                     props: [
-                        { name: '$kind', index: 13, value: { index: 16, type: 'string' } },
-                        { name: '$codec', index: 5, value: { index: 8, type: 'string' } },
-                        { name: '$payload', index: 21 },
-                        { name: 'size', index: 30, value: { index: 33, type: 'number', value: contract.payload.size } },
-                        { name: 'values', index: 38 }
+                        { name: '$kind', index: 14, value: { index: 17, type: 'string' } },
+                        { name: '$codec', index: 6, value: { index: 9, type: 'string' } },
+                        { name: '$payload', index: 22 },
+                        { name: 'size', index: 31, value: { index: 34, type: 'number', value: contract.payload.size } },
+                        { name: 'values', index: 39 }
                     ],
-                    anchors: [46, 47]
+                    anchors: [47, 48]
                 }
             },
             {
@@ -172,7 +201,7 @@ const generate: GenerateFunctions = {
                 return [...this.start, ...this.trailing];
             },
             start: [
-                "object-name", "object-open", "soft-line", "indent-start",
+                "group-start", "object-name", "object-open", "soft-line", "indent-start",
 
                 "group-start", "property", "key-value-separator",
                 "soft-space", "primitive", "separator", "soft-line", "group-end",
@@ -193,19 +222,19 @@ const generate: GenerateFunctions = {
             ],
             trailing: [
                 "anchor", "indent-end", "soft-line", "object-close", "group-end", "group-end", "indent-end",
-                "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close"
+                "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close", "group-end"
             ]
         }
 
         const regularPositions = {
             props: [
-                { name: '$kind', index: 5, value: { index: 8, type: 'string' } },
-                { name: '$codec', index: 13, value: { index: 16, type: 'string' } },
-                { name: '$payload', index: 21 },
-                { name: 'size', index: 30, value: { index: 33, type: 'number', value: contract.payload.size } },
-                { name: 'entries', index: 38 }
+                { name: '$kind', index: 6, value: { index: 9, type: 'string' } },
+                { name: '$codec', index: 14, value: { index: 17, type: 'string' } },
+                { name: '$payload', index: 22 },
+                { name: 'size', index: 31, value: { index: 34, type: 'number', value: contract.payload.size } },
+                { name: 'entries', index: 39 }
             ] as PropItem[],
-            anchors: [46, 47]
+            anchors: [47, 48]
         }
 
         contract.tokenizers.push(
@@ -216,7 +245,7 @@ const generate: GenerateFunctions = {
                         return [...this.start, ...this.trailing];
                     },
                     start: [
-                        "object-name", "object-open", "soft-line", "indent-start",
+                        "group-start", "object-name", "object-open", "soft-line", "indent-start",
 
                         "group-start", "property", "key-value-separator",
                         "soft-space", "primitive", "separator", "soft-line", "group-end",
@@ -235,18 +264,18 @@ const generate: GenerateFunctions = {
                     trailing: [
                         "anchor", "indent-end", "soft-line", "object-close", "group-end", "separator", "soft-line", "group-end",
                         "group-start", "property", "key-value-separator", "soft-space", "primitive", "group-end", "indent-end",
-                        "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close"
+                        "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close", "group-end"
                     ]
                 } as DeferredStream,
                 positions: {
                     props: [
-                        { name: '$kind', index: 13, value: { index: 16, type: 'string' } },
-                        { name: '$codec', index: 5, value: { index: 8, type: 'string' } },
-                        { name: '$payload', index: 21 },
-                        { name: 'entries', index: 30 },
-                        { name: 'size', index: 48, value: { index: 51, type: 'number', value: contract.payload.size } }
+                        { name: '$kind', index: 14, value: { index: 17, type: 'string' } },
+                        { name: '$codec', index: 6, value: { index: 9, type: 'string' } },
+                        { name: '$payload', index: 22 },
+                        { name: 'entries', index: 31 },
+                        { name: 'size', index: 49, value: { index: 52, type: 'number', value: contract.payload.size } }
                     ],
-                    anchors: [38, 39]
+                    anchors: [39, 40]
                 }
             },
             {
@@ -273,7 +302,7 @@ const generate: GenerateFunctions = {
         }
 
         const stream = [
-            "object-name", "object-open", "soft-line", "indent-start",
+            "group-start", "object-name", "object-open", "soft-line", "indent-start",
 
             "group-start", "property", "key-value-separator",
             "soft-space", "primitive", "separator", "soft-line", "group-end",
@@ -287,15 +316,15 @@ const generate: GenerateFunctions = {
             "group-start", "property", "key-value-separator",
             "soft-space", "primitive", "group-end",
 
-            "indent-end", "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close"
+            "indent-end", "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close", "group-end"
         ] as Token['kind'][];
 
         const regularPositions = {
             props: [
-                { name: '$kind', index: 5, value: { index: 8, type: 'string' } },
-                { name: '$codec', index: 13, value: { index: 16, type: 'string' } },
-                { name: '$payload', index: 21 },
-                { name: 'name', index: 30, value: { index: 33, type: 'string', value: contract.payload.name } }
+                { name: '$kind', index: 6, value: { index: 9, type: 'string' } },
+                { name: '$codec', index: 14, value: { index: 17, type: 'string' } },
+                { name: '$payload', index: 22 },
+                { name: 'name', index: 31, value: { index: 34, type: 'string', value: contract.payload.name } }
             ] as PropItem[],
         }
 
@@ -305,10 +334,10 @@ const generate: GenerateFunctions = {
                 stream,
                 positions: {
                     props: [
-                        { name: '$kind', index: 13, value: { index: 16, type: 'string' } },
-                        { name: '$codec', index: 5, value: { index: 8, type: 'string' } },
-                        { name: '$payload', index: 21 },
-                        { name: 'name', index: 30, value: { index: 33, type: 'string', value: contract.payload.name } }
+                        { name: '$kind', index: 14, value: { index: 17, type: 'string' } },
+                        { name: '$codec', index: 6, value: { index: 9, type: 'string' } },
+                        { name: '$payload', index: 22 },
+                        { name: 'name', index: 31, value: { index: 34, type: 'string', value: contract.payload.name } }
                     ]
                 }
             },
@@ -340,7 +369,7 @@ const generate: GenerateFunctions = {
                 return [...this.start, ...this.trailing];
             },
             start: [
-                "object-name", "object-open", "soft-line", "indent-start",
+                "group-start", "object-name", "object-open", "soft-line", "indent-start",
 
                 "group-start", "property", "key-value-separator",
                 "soft-space", "primitive", "separator", "soft-line", "group-end",
@@ -353,17 +382,17 @@ const generate: GenerateFunctions = {
             ] as Token['kind'][],
             trailing: [
                 "anchor", "indent-end", "soft-line", "object-close", "group-end", "group-end", "indent-end",
-                "soft-line", "object-close"
+                "soft-line", "object-close", "group-end"
             ]
         }
 
         const regularPositions = {
             props: [
-                { name: '$kind', index: 5, value: { index: 8, type: 'string' } },
-                { name: '$codec', index: 13, value: { index: 16, type: 'string' } },
-                { name: '$payload', index: 21 }
+                { name: '$kind', index: 6, value: { index: 9, type: 'string' } },
+                { name: '$codec', index: 14, value: { index: 17, type: 'string' } },
+                { name: '$payload', index: 22 }
             ] as PropItem[],
-            anchors: [29, 30]
+            anchors: [30, 31]
         }
 
         contract.tokenizers.push(
@@ -372,11 +401,74 @@ const generate: GenerateFunctions = {
                 stream,
                 positions: {
                     props: [
-                        { name: '$kind', index: 13, value: { index: 16, type: 'string' } },
-                        { name: '$codec', index: 5, value: { index: 8, type: 'string' } },
-                        { name: '$payload', index: 21 }
+                        { name: '$kind', index: 14, value: { index: 17, type: 'string' } },
+                        { name: '$codec', index: 6, value: { index: 9, type: 'string' } },
+                        { name: '$payload', index: 22 }
                     ],
-                    anchors: [29, 30]
+                    anchors: [30, 31]
+                }
+            },
+            {
+                name: 'ignoredCycles',
+                stream,
+                positions: regularPositions
+            },
+            {
+                name: 'markedCycles',
+                stream,
+                positions: regularPositions
+            }
+        )
+
+        return contract;
+    },
+
+    number: (): Contract<'number'> => {
+        const contract: Contract<'number'> = {
+            deferred: false,
+            kind: 'number',
+            payload: { value: "NaN" },
+            tokenizers: []
+        }
+
+        const stream = [
+            "group-start", "object-name", "object-open", "soft-line", "indent-start",
+
+            "group-start", "property", "key-value-separator",
+            "soft-space", "primitive", "separator", "soft-line", "group-end",
+
+            "group-start", "property", "key-value-separator",
+            "soft-space", "primitive", "separator", "soft-line", "group-end",
+
+            "group-start", "property", "key-value-separator",
+            "soft-space", "group-start", "object-name", "object-open", "soft-line", "indent-start",
+
+            "group-start", "property", "key-value-separator",
+            "soft-space", "primitive", "group-end",
+
+            "indent-end", "soft-line", "object-close", "group-end", "group-end", "indent-end", "soft-line", "object-close", "group-end"
+        ] as Token['kind'][];
+
+        const regularPositions = {
+            props: [
+                { name: '$kind', index: 6, value: { index: 9, type: 'string' } },
+                { name: '$codec', index: 14, value: { index: 17, type: 'string' } },
+                { name: '$payload', index: 22 },
+                { name: 'value', index: 31, value: { index: 34, type: 'string', value: contract.payload.value } }
+            ] as PropItem[],
+        }
+
+        contract.tokenizers.push(
+            {
+                name: 'json',
+                stream,
+                positions: {
+                    props: [
+                        { name: '$kind', index: 14, value: { index: 17, type: 'string' } },
+                        { name: '$codec', index: 6, value: { index: 9, type: 'string' } },
+                        { name: '$payload', index: 22 },
+                        { name: 'value', index: 31, value: { index: 34, type: 'string', value: contract.payload.value } }
+                    ]
                 }
             },
             {
@@ -400,7 +492,8 @@ const contracts = [
     ['Set', generate.set()],
     ['Map', generate.map()],
     ['Function', generate.function()],
-    ['Error', generate.error()]
+    ['Error', generate.error()],
+    ['Number', generate.number()]
 ] as const;
 
 export default contracts;

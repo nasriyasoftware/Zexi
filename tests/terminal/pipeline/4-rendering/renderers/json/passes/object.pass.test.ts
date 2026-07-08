@@ -1,12 +1,12 @@
-import _rendering from "../../../helpers/helpers";
 import keys from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/keys";
 
+import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
 import ObjectCache from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/assets/object.cache";
 import JSONHelpers from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/helpers";
 import ZexiRenderingContext from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
 
 import type { PropertyToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/property.token";
-import type { JSONRendererFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
+import type { JSONPipelineFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
 import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 
 
@@ -20,14 +20,13 @@ describe("objectPass (integration)", () => {
         const tokens = tokenize({});
         const ctx = makeCtx(tokens);
         const helpers = createHelpers({ ctx });
-
-        const writeSpy = jest.spyOn(ctx.writer, "write");
-        const ignoreSpy = jest.spyOn(helpers, "ignoreCurrentGroup");
+        
+        const peekSpy = jest.spyOn(ctx.tokens, 'peek')
 
         helpers.transforms.object();
 
-        expect(writeSpy).toHaveBeenCalledWith("{}");
-        expect(ignoreSpy).toHaveBeenCalled();
+        expect(peekSpy).toHaveBeenCalledWith(2);
+        expect(peekSpy).toHaveBeenCalledWith(5);
     });
 
 
@@ -44,13 +43,15 @@ describe("objectPass (integration)", () => {
         const ctx = makeCtx(tokens);
         const helpers = createHelpers({ ctx });
 
-        const writeSpy = jest.spyOn(ctx.writer, "write");
-        const ignoreSpy = jest.spyOn(helpers, "ignoreCurrentGroup");
+        const peekSpy = jest.spyOn(ctx.tokens, 'peek')
+
+        ctx.scopes.begin();
+        ctx.data.set(keys.GROUP, Symbol('x'));
 
         helpers.transforms.object();
 
-        expect(writeSpy).toHaveBeenCalledWith("{}");
-        expect(ignoreSpy).toHaveBeenCalled();
+        expect(peekSpy).toHaveBeenCalledWith(2);
+        expect(peekSpy).toHaveBeenCalledWith(5);
     });
 
 
@@ -65,7 +66,7 @@ describe("objectPass (integration)", () => {
 
         helpers.transforms.object();
 
-        const cache = ctx.data.get<ObjectCache>(keys.OBJECT_CACHE_KEY);
+        const cache = ctx.data.get<ObjectCache>(keys.OBJECT_CACHE);
 
         expect(cache).toBeDefined();
         expect(cache).toBeInstanceOf(ObjectCache);
@@ -87,7 +88,7 @@ describe("objectPass (integration)", () => {
 
         helpers.transforms.object();
 
-        const cache = ctx.data.get<ObjectCache>(keys.OBJECT_CACHE_KEY);
+        const cache = ctx.data.get<ObjectCache>(keys.OBJECT_CACHE);
 
         expect(cache).toBeDefined();
         expect(cache).toBeInstanceOf(ObjectCache);
@@ -126,12 +127,12 @@ describe("objectPass (integration)", () => {
 /* Test utilities                                                     */
 /* ------------------------------------------------------------------ */
 function tokenize(value: unknown) {
-    return _rendering.tokenize(value, 'json');
+    return JSONTokenizer(value);
 }
 
 function createHelpers(options?: {
     mode?: 'compact' | 'pretty',
-    flags?: JSONRendererFlags,
+    flags?: JSONPipelineFlags,
     ignoredTokens?: Token[],
     ctx?: ZexiRenderingContext
     tokens?: readonly Token[]
@@ -156,8 +157,9 @@ function makeCtx(tokens: readonly Token[]) {
     });
 }
 
-function createFlags(): JSONRendererFlags {
+function createFlags(): JSONPipelineFlags {
     return {
+        ansiEnabled: false,
         ignoreCurrentGroup: false,
         skipNextSeparator: false,
         skipNextSoftLine: false,

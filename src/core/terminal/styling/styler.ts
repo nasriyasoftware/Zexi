@@ -445,7 +445,7 @@ class ConsoleStyler {
             throw new TypeError(`Expected options (when provided) to be an object, got ${typeof options}`);
         }
 
-        if (hasOwnProp(options, 'color')) {
+        if (hasOwnProp(options, 'color') && options.color !== undefined) {
             if (typeof options.color !== 'string') {
                 throw new TypeError(`Expected options.color to be a string, got ${typeof options.color}`);
             }
@@ -458,7 +458,7 @@ class ConsoleStyler {
             formats.color = color;
         }
 
-        if (hasOwnProp(options, 'bgColor')) {
+        if (hasOwnProp(options, 'bgColor') && options.bgColor !== undefined) {
             if (typeof options.bgColor !== 'string') {
                 throw new TypeError(`Expected options.bgColor to be a string, got ${typeof options.bgColor}`);
             }
@@ -471,7 +471,7 @@ class ConsoleStyler {
             formats.bgColor = color;
         }
 
-        if (hasOwnProp(options, 'style')) {
+        if (hasOwnProp(options, 'style') && options.style !== undefined) {
             const styles = Array.isArray(options.style) ? options.style : [options.style];
 
             for (const style of styles) {

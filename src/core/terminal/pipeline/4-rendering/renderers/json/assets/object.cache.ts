@@ -1,4 +1,4 @@
-import type { PropertyToken } from "../../../../3-tokenization/tokens/tokenization/property.token";
+import { PropertyToken } from "../../../../3-tokenization/tokens/tokenization/property.token";
 
 /**
  * Maintains rendering-time metadata for object serialization

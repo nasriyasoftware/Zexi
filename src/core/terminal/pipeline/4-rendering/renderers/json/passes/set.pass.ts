@@ -1,142 +1,152 @@
+import JSONTokenizer from "../../../../3-tokenization/tokenizers/json.tokenizer";
 import TOKENS from "../../../../3-tokenization/tokens";
 import DataEnvelope from "../../../shared/envelope/data.envelope";
-import JSONTokenizer from "../helpers/tokenizer";
 import keys from "../helpers/keys";
 
 import type { PassedData } from "./types";
 
 /**
- * Set Rendering Pass
- * ------------------
+ * Set Structure Normalization Pass
+ * --------------------------------
  *
- * A structural transformation pass responsible for converting a token stream
- * representing a JavaScript `Set` into a JSON-compatible envelope structure.
+ * This pass transforms a token stream representing a JavaScript `Set`
+ * into a deterministic JSON-compatible envelope structure during the
+ * **normalization phase** of the pipeline.
  *
- * This pass performs **stream mutation + structural analysis**, but does not
- * directly render output in a conventional sense.
- *
- * Instead, it:
- *
- * - Skips structural wrapper tokens
- * - Computes Set size from separator tokens
- * - Injects a structured envelope using anchors
- * - Marks ignored tokens to prevent duplicate emission
- * - Defers payload construction through DataEnvelope
+ * It does NOT perform rendering.
+ * Instead, it rewrites and annotates the token stream so that the
+ * rendering phase can treat Sets as a fully materialized envelope.
  *
  * ---------------------------------------------------------------------
- * 🔷 OUTPUT FORMAT
+ * 🔷 PIPELINE POSITION
  * ---------------------------------------------------------------------
  *
- * Sets are serialized into a deterministic envelope:
+ * Graph → Representation → Tokenization → Normalization → Rendering
  *
- * {
- *   "$codec": "zexi@1.0",
- *   "$kind": "set",
- *   "$payload": {
- *     "size": number,
- *     "values": [...]
- *   }
- * }
+ * This pass runs in the normalization stage and is responsible for:
  *
- * ---------------------------------------------------------------------
- * 🔷 DESIGN GOALS
- * ---------------------------------------------------------------------
- *
- * 1. **Token-Level Structural Reconstruction**
- *    - No runtime Set inspection occurs
- *    - Structure is derived purely from token stream
- *
- * 2. **Deterministic Size Calculation**
- *    - Set size is computed from separator tokens
- *    - Ensures consistent representation regardless of input shape
- *
- * 3. **Anchor-Based Stream Injection**
- *    - Uses `set:envelope-start` and `set:data-end` anchors
- *    - Avoids reliance on fragile index-based mutation
- *
- * 4. **Deferred Envelope Serialization**
- *    - Envelope is generated after structural analysis
- *    - Guarantees correct metadata before emission
- *
- * 5. **Safe Token Suppression**
- *    - Skips structural tokens explicitly
- *    - Registers ignored tokens to prevent duplication in later passes
+ * - structural recognition of Set boundaries
+ * - computing Set size from token stream
+ * - injecting envelope structure
+ * - marking consumed structural tokens
+ * - registering deferred cleanup behavior
  *
  * ---------------------------------------------------------------------
- * 🔷 INTERNAL SCANNING MODEL
+ * 🔷 CORE RESPONSIBILITY
  * ---------------------------------------------------------------------
  *
- * The pass performs a single forward scan with cursor tracking:
+ * The purpose of this pass is to convert a Set token stream into a
+ * canonical envelope representation:
  *
- * - `scopes.opened / closed`
- *   Tracks nested object boundaries
+ *     {
+ *       "$codec": "zexi@1.0",
+ *       "$kind": "set",
+ *       "$payload": {
+ *         "size": number,
+ *         "values": [...]
+ *       }
+ *     }
+ *
+ * This ensures Sets are serialized deterministically regardless of
+ * runtime ordering or structure variability.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 DESIGN PRINCIPLES
+ * ---------------------------------------------------------------------
+ *
+ * 1. Token-driven reconstruction
+ *    - No runtime Set inspection is performed
+ *    - All metadata is derived from token analysis
+ *
+ * 2. Deterministic size derivation
+ *    - Size is computed from separator tokens
+ *    - Ensures stable output across equivalent inputs
+ *
+ * 3. Anchor-based mutation
+ *    - Uses named anchors instead of index coupling
+ *    - Guarantees safe injection under stream mutation
+ *
+ * 4. Deferred envelope serialization
+ *    - Envelope is constructed after full structural scan
+ *    - Prevents partial or inconsistent metadata emission
+ *
+ * 5. Safe structural suppression
+ *    - Consumed tokens are explicitly registered as ignored
+ *    - Prevents duplicate rendering in later phases
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 TOKEN SCANNING MODEL
+ * ---------------------------------------------------------------------
+ *
+ * The pass performs a single linear scan with cursor tracking:
  *
  * - `scanned`
- *   Linear cursor offset from initial position
+ *   Cursor used for sequential token inspection
  *
  * - `item`
  *   Current token under evaluation
  *
+ * - `scopes.opened / scopes.closed`
+ *   Tracks nested object boundaries within the Set structure
+ *
  * - `separators`
- *   Count of Set element delimiters
+ *   Counts element delimiters used for size computation
  *
  * ---------------------------------------------------------------------
  * 🔷 SKIPPED STRUCTURE MODEL
  * ---------------------------------------------------------------------
  *
- * Initial tokens are explicitly skipped:
+ * The following structural tokens are intentionally skipped at start:
  *
  * - `object-open`
  * - `soft-line`
  * - `indent-start`
  *
- * These represent structural wrappers of the Set representation
- * and are not part of payload content.
+ * These represent formatting scaffolding and are not part of the
+ * logical Set payload.
  *
  * ---------------------------------------------------------------------
  * 🔷 SIZE COMPUTATION RULE
  * ---------------------------------------------------------------------
  *
- * Set size is derived using:
+ * Set size is derived as:
  *
- *   size = separators + 1
+ *     size = separators + 1
  *
  * This assumes:
  *
  * - at least one element exists in the Set
- * - separators represent element boundaries
+ * - separators represent boundaries between elements
  *
  * ---------------------------------------------------------------------
  * 🔷 ENVELOPE INJECTION STRATEGY
  * ---------------------------------------------------------------------
  *
- * Two anchor points are used:
+ * Two anchors coordinate deterministic insertion:
  *
  * - `set:envelope-start`
  *   → injection point for envelope header tokens
  *
  * - `set:data-end`
- *   → injection point for trailing metadata and cleanup callbacks
- *
- * These anchors ensure:
- *
- * - stable injection regardless of stream mutation
- * - deterministic ordering of envelope + payload
- *
- * ---------------------------------------------------------------------
- * 🔷 CALLBACK CLEANUP PHASE
- * ---------------------------------------------------------------------
- *
- * After trailing tokens are injected, a callback is registered to:
- *
- * - mark `indent-end` as ignored
- * - mark `soft-line` as ignored
- * - mark `object-close` as ignored
+ *   → injection point for trailing payload and cleanup callbacks
  *
  * This ensures:
  *
- * - structural wrappers do not leak into final output
- * - formatting tokens are properly suppressed
+ * - stable ordering despite stream mutation
+ * - correct placement of metadata vs payload
+ * - safe multi-stage token injection
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 CLEANUP PHASE
+ * ---------------------------------------------------------------------
+ *
+ * After payload injection, a deferred callback is registered which:
+ *
+ * - suppresses `indent-end`
+ * - suppresses `soft-line`
+ * - suppresses `object-close`
+ *
+ * This ensures structural formatting tokens do not leak into output.
  *
  * ---------------------------------------------------------------------
  * 🔷 CONTEXT INTERACTIONS
@@ -144,53 +154,60 @@ import type { PassedData } from "./types";
  *
  * This pass interacts with:
  *
- * - `ctx.tokens`
- *   → token traversal, injection, and cursor tracking
+ * - ctx.tokens
+ *   → stream traversal, injection, cursor tracking
  *
- * - `ctx.data`
- *   → layout state mutation (`RENDERING_LAYOUT_KEY`)
+ * - ctx.data
+ *   → layout state mutation (`RENDERING_LAYOUT`)
  *
- * - `ignoredTokens`
- *   → global suppression registry for consumed tokens
+ * - ignoredTokens
+ *   → global registry of suppressed tokens
  *
  * ---------------------------------------------------------------------
  * 🔷 SIDE EFFECTS
  * ---------------------------------------------------------------------
  *
- * - Mutates rendering layout state (forces `block`)
- * - Injects envelope structure into token stream
- * - Marks structural tokens as ignored
- * - Registers deferred cleanup callback
- * - Performs direct token stream mutation via anchors
+ * This pass may:
+ *
+ * - mutate rendering layout state (forces `block`)
+ * - inject envelope structure into token stream
+ * - register ignored structural tokens
+ * - inject anchors and deferred callbacks
+ * - modify token stream ordering via insertion operations
  *
  * ---------------------------------------------------------------------
- * 🔷 SAFETY NOTES
+ * 🔷 SAFETY MODEL
  * ---------------------------------------------------------------------
  *
- * This pass relies heavily on cursor-relative indexing.
- * Therefore:
+ * This pass relies on stable structural assumptions:
  *
- * - token stream integrity is critical
- * - skipped token assumptions must remain stable
- * - object wrapper structure must not change without updating logic
+ * - object wrapper structure must remain consistent
+ * - skipped tokens must not change ordering
+ * - anchor insertion points must remain valid under mutation
+ *
+ * Any deviation in token structure may lead to incorrect injection
+ * or misaligned envelope construction.
  *
  * ---------------------------------------------------------------------
- * @param passedData
- * Pass context containing:
+ * @param passedData.ctx
+ * Rendering context providing:
  *
- * - `ctx`
- *   Rendering context with token stream and injection APIs
+ * - token stream access
+ * - injection APIs
+ * - scope tracking
+ * - shared normalization state
  *
- * - `ignoredTokens`
- *   Registry of tokens excluded from final rendering output
+ * @param passedData.ignoredTokens
+ * Registry tracking tokens excluded from final output emission
  *
  * ---------------------------------------------------------------------
  * @throws Error
- * This pass may indirectly propagate errors from:
+ * This pass does not explicitly throw in normal execution, but may
+ * propagate errors from:
  *
- * - token stream inconsistencies
- * - invalid object structure
- * - injection index misalignment
+ * - malformed token streams
+ * - invalid object structure assumptions
+ * - invalid injection indices or anchor resolution failures
  *
  * ---------------------------------------------------------------------
  * @since 1.0.0
@@ -200,7 +217,7 @@ export default function setPass(
 ) {
     const { ctx, ignoredTokens } = passedData;
 
-    ctx.data.set(keys.RENDERING_LAYOUT_KEY, 'block', { overwrite: true });
+    ctx.data.set(keys.RENDERING_LAYOUT, 'block', { overwrite: true });
     const initialCursor = ctx.tokens.cursor;
 
     // Skipping set tokens
@@ -214,6 +231,8 @@ export default function setPass(
     ctx.tokens.inject(envelopeStartAnchor, { at: initialCursor + skipped + 1 });
 
     const size = (() => {
+        const isEmptySet = ctx.tokens.peek(skipped + 2)?.kind === 'indent-end';
+
         let separators = 0;
         let scanned = skipped; // The skipped tokens
 
@@ -254,7 +273,7 @@ export default function setPass(
             }
         } while (item);
 
-        return separators + 1;
+        return isEmptySet ? 0 : separators + 1;
     })();
 
     const envelop = new DataEnvelope('set', { size, values: [] });

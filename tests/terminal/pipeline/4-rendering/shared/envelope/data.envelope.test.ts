@@ -5,7 +5,7 @@ import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/
 import DataEnvelope from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
 
 import contracts from "./assets/contracts";
-import _rendering from "../../helpers/helpers";
+import _tokenization from "../../../3-tokenization/helpers/helpers";
 
 describe("DataEnvelope", () => {
 
@@ -22,7 +22,7 @@ describe("DataEnvelope", () => {
 
             for (const entry of data) {
                 const env = new DataEnvelope(entry.kind, entry.payload);
-                expect(env.debug.$kind).toBe(entry.kind);
+                expect(DataEnvelope.inspect(env).$kind).toBe(entry.kind);
             }
         });
 
@@ -32,7 +32,7 @@ describe("DataEnvelope", () => {
                 entries: [{ key: "a", value: 1 }]
             });
 
-            expect(env.debug.$payload.size).toBe(2);
+            expect(DataEnvelope.inspect(env).$payload.size).toBe(2);
         });
 
         it("accepts valid set envelope", () => {
@@ -41,7 +41,7 @@ describe("DataEnvelope", () => {
                 values: [1, 2, 3]
             });
 
-            expect(env.debug.$payload.values).toEqual([]);
+            expect(DataEnvelope.inspect(env).$payload.values).toEqual([]);
         });
 
         it("accepts regex envelope", () => {
@@ -50,7 +50,7 @@ describe("DataEnvelope", () => {
                 flags: "g"
             });
 
-            expect(env.debug.$payload.pattern).toBe("abc");
+            expect(DataEnvelope.inspect(env).$payload.pattern).toBe("abc");
         });
 
         it("accepts function envelope", () => {
@@ -58,7 +58,7 @@ describe("DataEnvelope", () => {
                 name: "testFn"
             });
 
-            expect(env.debug.$payload.name).toBe("testFn");
+            expect(DataEnvelope.inspect(env).$payload.name).toBe("testFn");
         });
 
         it("generates a stable codec string", () => {
@@ -67,7 +67,7 @@ describe("DataEnvelope", () => {
                 flags: "g"
             });
 
-            expect(env.debug.$codec).toMatch(/^zexi@\d+\.\d+$/);
+            expect(DataEnvelope.inspect(env).$codec).toMatch(/^zexi@\d+\.\d+$/);
         });
     });
 
@@ -81,8 +81,8 @@ describe("DataEnvelope", () => {
 
             const env = new DataEnvelope("set", payload);
 
-            expect(env.debug.$payload.size).toBe(2);
-            expect(Array.isArray(env.debug.$payload.values)).toBe(true);
+            expect(DataEnvelope.inspect(env).$payload.size).toBe(2);
+            expect(Array.isArray(DataEnvelope.inspect(env).$payload.values)).toBe(true);
         });
 
         it("freezes payload object", () => {
@@ -92,7 +92,7 @@ describe("DataEnvelope", () => {
 
             const env = new DataEnvelope("function", payload);
 
-            expect(Object.isFrozen(env.debug.$payload)).toBe(true);
+            expect(Object.isFrozen(DataEnvelope.inspect(env).$payload)).toBe(true);
         });
 
         it("rejects null payload", () => {
@@ -123,7 +123,7 @@ describe("DataEnvelope", () => {
         it("accepts empty object payload", () => {
             const env = new DataEnvelope("error", {});
 
-            expect(env.debug.$payload).toEqual({});
+            expect(DataEnvelope.inspect(env).$payload).toEqual({});
         });
     });
 
@@ -131,7 +131,7 @@ describe("DataEnvelope", () => {
         it("freezes the envelope object", () => {
             const env = new DataEnvelope("error", {});
 
-            expect(Object.isFrozen(env.debug)).toBe(true);
+            expect(Object.isFrozen(DataEnvelope.inspect(env))).toBe(true);
         });
 
         it("freezes the payload object", () => {
@@ -139,7 +139,7 @@ describe("DataEnvelope", () => {
                 name: "test"
             });
 
-            expect(Object.isFrozen(env.debug.$payload)).toBe(true);
+            expect(Object.isFrozen(DataEnvelope.inspect(env).$payload)).toBe(true);
         });
 
         it("prevents payload mutation", () => {
@@ -148,7 +148,7 @@ describe("DataEnvelope", () => {
             });
 
             expect(() => {
-                (env.debug.$payload as any).name = "changed";
+                (DataEnvelope.inspect(env).$payload as any).name = "changed";
             }).toThrow();
         });
     });
@@ -161,7 +161,7 @@ describe("DataEnvelope", () => {
             });
 
             const parsed = JSON.parse(
-                JSON.stringify(env.debug)
+                JSON.stringify(DataEnvelope.inspect(env))
             );
 
             expect(parsed.$kind).toBe("regex");
@@ -174,7 +174,7 @@ describe("DataEnvelope", () => {
     describe("tokenization", () => {
 
         describe("deferred envelopes", () => {
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "tokenizes set envelopes as deferred",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
@@ -192,7 +192,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "tokenizes map envelopes as deferred",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("map", {
@@ -210,7 +210,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "returns anchor tokens",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
@@ -228,7 +228,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "places start anchor inside start partition",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
@@ -247,7 +247,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "places end anchor inside trailing partition",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
@@ -266,7 +266,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "uses identical anchor instances in partitions and anchor map",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
@@ -292,7 +292,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "returns frozen token partitions",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
@@ -315,7 +315,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "creates fresh anchor instances for every tokenization",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
@@ -337,7 +337,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "places start and end anchors adjacent for empty body envelopes",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("set", {
@@ -365,7 +365,7 @@ describe("DataEnvelope", () => {
         });
 
         describe("complete envelopes", () => {
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "tokenizes regex envelopes as complete",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("regex", {
@@ -384,7 +384,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "tokenizes function envelopes as complete",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("function", {
@@ -402,7 +402,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "tokenizes error envelopes as incomplete",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("error", {});
@@ -413,7 +413,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "returns frozen token stream",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("regex", {
@@ -433,7 +433,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "does not expose anchors",
                 (_name, tokenizer) => {
                     const env = new DataEnvelope("regex", {
@@ -455,7 +455,7 @@ describe("DataEnvelope", () => {
         });
 
         describe("tokenization mode selection", () => {
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "uses deferred tokenization for all deferred envelope kinds",
                 (_name, tokenizer) => {
                     expect(
@@ -472,7 +472,7 @@ describe("DataEnvelope", () => {
                 }
             );
 
-            it.each(_rendering.tokenizers)(
+            it.each(_tokenization.tokenizers)(
                 "uses complete tokenization for all non-deferred envelope kinds",
                 (_name, tokenizer) => {
                     expect(
@@ -502,11 +502,11 @@ describe("DataEnvelope", () => {
 
                 it(`applies a valid ${_cName} contract`, () => {
                     const env = new DataEnvelope(contract.kind, contract.payload);
-                    expect(env.debug.$kind).toBe(contract.kind);
-                    expect(env.debug.$codec).toMatch(/zexi@[0-9].[0-9]/);
+                    expect(DataEnvelope.inspect(env).$kind).toBe(contract.kind);
+                    expect(DataEnvelope.inspect(env).$codec).toMatch(/zexi@[0-9].[0-9]/);
 
                     for (const tokenization of contract.tokenizers) {
-                        const tokenizer = _rendering.tokenizers.find(e => e[0] === tokenization.name)![1];
+                        const tokenizer = _tokenization.tokenizers.find(e => e[0] === tokenization.name)![1];
                         const result = env.tokenize(tokenizer);
                         const tokens = result.deferred ? [...result.tokens.start, ...result.tokens.trailing] : result.tokens;
 
@@ -517,8 +517,8 @@ describe("DataEnvelope", () => {
                                 trailing: Token[];
                             }
 
-                            expect(stream.start).toEqual(_rendering.extractKinds(result.tokens.start));
-                            expect(stream.trailing).toEqual(_rendering.extractKinds(result.tokens.trailing));
+                            expect(stream.start).toEqual(_tokenization.extractKinds(result.tokens.start));
+                            expect(stream.trailing).toEqual(_tokenization.extractKinds(result.tokens.trailing));
 
                             expect(result.tokens.start[result.tokens.start.length - 1]).toBeInstanceOf(TOKENS.Anchor);
                             expect(result.tokens.trailing[0]).toBeInstanceOf(TOKENS.Anchor);
@@ -530,7 +530,7 @@ describe("DataEnvelope", () => {
                                 }
                             }
                         } else {
-                            expect(tokenization.stream).toEqual(_rendering.extractKinds(result.tokens));
+                            expect(tokenization.stream).toEqual(_tokenization.extractKinds(result.tokens));
 
                         }
 

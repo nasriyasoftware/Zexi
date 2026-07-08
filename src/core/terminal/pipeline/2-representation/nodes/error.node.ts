@@ -1,6 +1,5 @@
 import type ErrorGraphNode from "../../1-graphing/nodes/error.node";
-import { ErrorGraphNodeData } from "../../1-graphing/types";
-import { ErrorRepNodeData } from "../types";
+import type { ErrorRepNodeData } from "../types";
 
 /**
  * Representation-layer node for normalized JavaScript errors.

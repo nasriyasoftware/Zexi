@@ -2,268 +2,6 @@ import { AnchorToken } from "../../../../3-tokenization/tokens/rendering/anchor.
 import { Token } from "../../../../3-tokenization/types";
 import type { TokenEntry } from "./types";
 
-/**
- * Mutable streaming token traversal controller.
- *
- * `TokensController` provides deterministic sequential access
- * over a token stream while supporting controlled runtime mutation
- * through token injection and rollback.
- *
- * It is designed specifically for rendering and transformation
- * pipelines where tokens may need to be:
- *
- * - traversed incrementally
- * - inspected ahead-of-time
- * - dynamically expanded
- * - temporarily injected
- * - reverted during speculative rendering
- *
- * ---------------------------------------------------------------------
- * 🔷 TRAVERSAL MODEL
- * ---------------------------------------------------------------------
- *
- * The controller uses a cursor-based traversal model.
- *
- * The internal cursor always points to the:
- *
- * > most recently consumed token
- *
- * This means:
- *
- * - before traversal starts:
- *   - cursor = -1
- *   - current = null
- *
- * - after calling `next()`:
- *   - cursor advances first
- *   - returned token becomes `current`
- *
- * Example:
- *
- * ```txt
- * cursor = -1
- *
- * next()
- *
- * cursor = 0
- * current = token[0]
- * ```
- *
- * ---------------------------------------------------------------------
- * 🔷 IMPORTANT CURSOR SEMANTICS
- * ---------------------------------------------------------------------
- *
- * The cursor represents:
- *
- * > "the token already consumed"
- *
- * NOT:
- *
- * > "the next unread token"
- *
- * This distinction is critical for rollback behavior.
- *
- * Example:
- *
- * ```txt
- * next() consumed token[0]
- * cursor = 0
- *
- * speculative scope created here
- * ```
- *
- * If the scope aborts and traversal must restart from `token[0]`,
- * rollback must restore:
- *
- * ```txt
- * cursor = -1
- * ```
- *
- * because the traversal loop will call `next()` again.
- *
- * Rollback therefore restores the cursor to:
- *
- * > the position BEFORE the desired restart token
- *
- * ---------------------------------------------------------------------
- * 🔷 STREAM BEHAVIOR
- * ---------------------------------------------------------------------
- *
- * Tokens are consumed sequentially using `next()`.
- *
- * Example:
- *
- * ```ts
- * controller.next(); // token[0]
- * controller.next(); // token[1]
- * controller.current // token[1]
- * ```
- *
- * The controller behaves similarly to a streaming iterator,
- * but additionally supports:
- *
- * - lookahead (`peek`)
- * - runtime token insertion (`inject`)
- * - speculative rollback (`rollbackBefore`)
- *
- * ---------------------------------------------------------------------
- * 🔷 TOKEN INJECTION
- * ---------------------------------------------------------------------
- *
- * Tokens may be inserted dynamically into the stream during traversal.
- *
- * Injection does NOT mutate traversal state:
- *
- * - the cursor is never modified
- * - the current token is never modified
- *
- * Instead, injection mutates the *future unread portion* of the stream.
- *
- * ---------------------------------------------------------------------
- * 🔷 INJECTION POSITIONING
- * ---------------------------------------------------------------------
- *
- * Injection supports deterministic placement via `inject(tokens, { at })`.
- *
- * ### Default behavior
- *
- * If no `at` option is provided:
- *
- * - tokens are inserted immediately after the current cursor
- * - they become the next tokens to be consumed
- *
- * ```txt
- * [A, B, C]
- *  ^ cursor = A
- *
- * inject(X)
- *
- * [A, X, B, C]
- * ```
- *
- * ---------------------------------------------------------------------
- * ### Explicit numeric index
- *
- * ```ts
- * inject(tokens, { at: number })
- * ```
- *
- * - inserts tokens at the given absolute index
- * - index must be strictly greater than the current cursor
- *
- * This allows deterministic insertion into the *unconsumed region*
- * of the stream.
- *
- * ---------------------------------------------------------------------
- * ### Anchor-based injection
- *
- * ```ts
- * inject(tokens, { at: AnchorToken | symbol })
- * ```
- *
- * - resolves the first matching anchor in the *unconsumed stream*
- * - inserts tokens immediately after the anchor
- *
- * Example:
- *
- * ```txt
- * [A, anchor, C]
- *      ^
- *
- * inject(B, { at: anchor })
- *
- * [A, anchor, B, C]
- * ```
- *
- * Anchors act as stable structural references for injection points
- * in otherwise index-unstable streams.
- *
- * ---------------------------------------------------------------------
- * 🔷 SEMANTIC GUARANTEE
- * ---------------------------------------------------------------------
- *
- * Injection is purely structural:
- *
- * - it does NOT consume tokens
- * - it does NOT advance traversal
- * - it does NOT remove or replace anchors
- *
- * Injected tokens are simply placed into the future stream.
- *
- * ---------------------------------------------------------------------
- * 🔷 USE CASES
- * ---------------------------------------------------------------------
- *
- * This model enables:
- *
- * - speculative rendering expansion
- * - envelope boundary injection (start/end wrapping)
- * - deferred structural synthesis
- * - dynamic token expansion (sets, maps, objects)
- * - anchor-driven stream composition
- *
- * ---------------------------------------------------------------------
- * 🔷 ROLLBACK MODEL
- * ---------------------------------------------------------------------
- *
- * The controller supports transactional rollback through
- * `rollbackBefore(cursor)`.
- *
- * Rollback removes:
- *
- * - injected tokens added after a checkpoint
- *
- * while preserving:
- *
- * - original immutable source tokens
- *
- * This enables speculative rendering scopes where temporary
- * injected tokens can be discarded safely.
- *
- * ---------------------------------------------------------------------
- * 🔷 LOOKAHEAD MODEL
- * ---------------------------------------------------------------------
- *
- * The controller supports non-mutating lookahead using `peek()`.
- *
- * Unlike `next()`, peeking:
- *
- * - does not advance the cursor
- * - does not modify traversal state
- * - allows future-token inspection
- *
- * ---------------------------------------------------------------------
- * 🔷 MUTABILITY MODEL
- * ---------------------------------------------------------------------
- *
- * The internal token array is mutable internally but isolated
- * from external mutation.
- *
- * The constructor wraps all provided tokens into immutable-origin
- * `TokenEntry` structures.
- *
- * This guarantees:
- *
- * - traversal stability
- * - predictable rollback semantics
- * - immutable external ownership
- * - origin-aware mutation tracking
- *
- * ---------------------------------------------------------------------
- * 🔷 EOF SEMANTICS
- * ---------------------------------------------------------------------
- *
- * End-of-stream is represented using `null`.
- *
- * The following methods may return `null`:
- *
- * - `current`
- * - `next`
- * - `peek`
- *
- * ---------------------------------------------------------------------
- * @since 1.0.0
- */
 class TokensController {
     /**
      * Internal mutable traversal stream.
@@ -393,11 +131,6 @@ class TokensController {
                 reference: t,
             } as TokenEntry;
         });
-    }
-
-    _debug() {
-        const kinds = this.#_tokens.map(t => `${t.reference.kind}:${t.origin === 'original' ? 'O' : 'I'}`);
-        console.debug(kinds);
     }
 
     /**
@@ -538,6 +271,25 @@ class TokensController {
      * deterministic position relative to the current traversal state.
      *
      * ---------------------------------------------------------------------
+     * 🔷 CORE PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * Injection allows the normalization/runtime layer to *safely extend*
+     * the token stream during traversal without mutating original tokens.
+     *
+     * Injected tokens are:
+     *
+     * - tracked explicitly via `TokenEntry.origin = 'injected'`
+     * - bound to a snapshot cursor position
+     * - eligible for deterministic rollback
+     *
+     * This enables:
+     *
+     * - speculative structure expansion
+     * - group-based transformations
+     * - rollback-safe stream rewriting
+     *
+     * ---------------------------------------------------------------------
      * 🔷 DEFAULT BEHAVIOR
      * ---------------------------------------------------------------------
      *
@@ -548,7 +300,7 @@ class TokensController {
      * cursor → insert point → next tokens
      * ```
      *
-     * The injected tokens become the next tokens to be consumed by traversal.
+     * The injected tokens become part of the *future traversal stream*.
      *
      * ---------------------------------------------------------------------
      * 🔷 INJECTION MODES
@@ -562,8 +314,8 @@ class TokensController {
      * inject(tokens, { at: number })
      * ```
      *
-     * - Inserts tokens at the specified index in the token stream
-     * - Must be strictly greater than the current cursor position
+     * - Inserts tokens at the specified index in the stream
+     * - Must be strictly greater than the current cursor
      *
      * ### 2. AnchorToken instance
      *
@@ -571,8 +323,8 @@ class TokensController {
      * inject(tokens, { at: AnchorToken })
      * ```
      *
-     * - Locates the first matching anchor token in the stream
-     * - Inserts tokens immediately after the anchor
+     * - Finds the first matching anchor in the unconsumed stream
+     * - Inserts tokens immediately after it
      *
      * ### 3. Anchor symbol id
      *
@@ -580,8 +332,8 @@ class TokensController {
      * inject(tokens, { at: symbol })
      * ```
      *
-     * - Resolves an anchor by its internal symbol identifier
-     * - Inserts tokens immediately after the resolved anchor
+     * - Resolves anchor by internal symbol identifier
+     * - Inserts tokens immediately after resolved anchor
      *
      * ---------------------------------------------------------------------
      * 🔷 SAFETY GUARANTEES
@@ -590,15 +342,47 @@ class TokensController {
      * - The current cursor is never modified
      * - The current token is never modified
      * - Injection only affects *future traversal*
+     * - Injected tokens are always explicitly tagged with:
+     *
+     *   ```ts
+     *   {
+     *     origin: 'injected',
+     *     reference: Token,
+     *     cursor: number
+     *   }
+     *   ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 CURSOR SEMANTICS (CRITICAL)
+     * ---------------------------------------------------------------------
+     *
+     * Each injected token captures the cursor position at injection time.
+     *
+     * This cursor snapshot is used for rollback logic:
+     *
+     * - If a group is aborted, the runtime rewinds the cursor to the
+     *   group's start boundary
+     * - Any injected tokens with:
+     *
+     *   ```txt
+     *   token.cursor >= rollbackCursor
+     *   ```
+     *
+     *   are removed from the stream
+     *
+     * This guarantees:
+     *
+     * - deterministic rollback behavior
+     * - no leakage of speculative tokens
+     * - clean re-execution of group logic
      *
      * ---------------------------------------------------------------------
      * 🔷 ANCHOR RESOLUTION RULES
      * ---------------------------------------------------------------------
      *
      * - Anchor lookup always starts after the current cursor
-     * - Only anchors appearing in the *unconsumed portion* of the stream
-     *   are eligible for resolution
-     * - The first match is used
+     * - Only tokens in the unconsumed portion are eligible
+     * - First match wins
      *
      * ---------------------------------------------------------------------
      * 🔷 ORIGIN TRACKING
@@ -609,14 +393,16 @@ class TokensController {
      * ```ts
      * {
      *   origin: 'injected',
-     *   reference: Token
+     *   reference: Token,
+     *   cursor: number
      * }
      * ```
      *
-     * This allows:
+     * This enables:
      *
      * - rollback filtering
-     * - debugging injected vs native tokens
+     * - debugging injected vs original stream content
+     * - deterministic reconstruction of traversal state
      *
      * ---------------------------------------------------------------------
      * @param token
@@ -632,6 +418,7 @@ class TokensController {
      * - `AnchorToken` → insert after matching anchor instance
      * - `symbol` → insert after anchor id
      *
+     * ---------------------------------------------------------------------
      * @returns
      * The same controller instance (for chaining).
      *
@@ -722,51 +509,90 @@ class TokensController {
             return this.#_cursor + 1;
         })();
 
-        // Inject after the current cursor
-        this.#_tokens.splice(insertIndex, 0, ...input.map(t => {
-            return {
+        const toInject = input.map(t => {
+            const item: TokenEntry = {
                 origin: 'injected',
-                reference: t,
-            } as TokenEntry;
-        }));
+                cursor: this.#_cursor,
+                reference: t
+            };
+
+            return item;
+        });
+
+        // Inject after the current cursor
+        this.#_tokens.splice(insertIndex, 0, ...toInject);
 
         return this;
     }
 
     /**
-     * Peeks into the token stream without mutating traversal state.
-     *
-     * Offsets are relative to the current cursor.
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 OFFSET RULES
-     * ---------------------------------------------------------------------
-     *
-     * `peek(1)`
-     *   Next unread token.
-     *
-     * `peek(0)`
-     *   Current token.
-     *
-     * `peek(2)`
-     *   Token after next.
+     * Peeks into the token stream relative to the current cursor position
+     * without consuming tokens.
      *
      * ---------------------------------------------------------------------
-     * 🔷 OUT OF BOUNDS
+     * 🔷 CORE BEHAVIOR
      * ---------------------------------------------------------------------
      *
-     * Returns `null` if:
+     * `peek()` provides a **relative window view** over the active stream.
      *
-     * - index < 0
-     * - index >= token count
+     * It does NOT mutate traversal state and does NOT advance the cursor.
+     *
+     * It can access:
+     *
+     * - future tokens (positive offsets)
+     * - current token (0 offset)
+     * - previously consumed tokens (negative offsets)
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 OFFSET SEMANTICS
+     * ---------------------------------------------------------------------
+     *
+     * Offsets are relative to the **current cursor position**:
+     *
+     * - `0`  → current token (last consumed)
+     * - `1`  → next token in stream
+     * - `2`  → token after next
+     * - `-1` → previous token
+     * - `-2` → two tokens before current
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 EXAMPLES
+     * ---------------------------------------------------------------------
+     *
+     * ```ts
+     * runtime.next(); // consumes "A"
+     * runtime.next(); // consumes "B"
+     *
+     * runtime.peek(0);  // "B"
+     * runtime.peek(-1); // "A"
+     * runtime.peek(1);  // next unread token
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INJECTION AWARENESS
+     * ---------------------------------------------------------------------
+     *
+     * Peek operates on the **live stream**, meaning:
+     *
+     * - injected tokens are visible
+     * - removed/ignored tokens may still exist structurally
+     * - ordering reflects controller state, not original array indices
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SAFETY GUARANTEE
+     * ---------------------------------------------------------------------
+     *
+     * - never mutates cursor
+     * - never consumes tokens
+     * - never throws on out-of-bounds (returns `null`)
      *
      * ---------------------------------------------------------------------
      * @param offset
-     * Relative offset from current cursor.
+     * Relative offset from current cursor position.
      *
-     * @returns Peeked token or `null`
+     * Defaults to `1` if omitted.
      *
-     * @since 1.0.0
+     * @returns Token at relative position or `null`
      */
     peek(offset = 1): Token | null {
         const cursor = this.#_cursor + offset;
@@ -779,45 +605,120 @@ class TokensController {
     /**
      * Rolls traversal state back to a previous cursor position.
      *
-     * This operation:
-     *
-     * - removes injected tokens after the rollback boundary
-     * - preserves original tokens
-     * - restores traversal cursor state
+     * This operation restores the token stream and traversal cursor to a
+     * previous deterministic state, while also cleaning up invalid injected
+     * mutations introduced after that point.
      *
      * ---------------------------------------------------------------------
-     * 🔷 IMPORTANT CURSOR SEMANTICS
+     * 🔷 CORE SEMANTIC MODEL
      * ---------------------------------------------------------------------
      *
-     * The provided cursor value represents:
+     * The rollback system is NOT purely positional.
      *
-     * > the cursor state BEFORE traversal should resume
+     * It operates on two coupled dimensions:
+     *
+     * 1. Position in the stream (token index)
+     * 2. Causality of mutation (injection cursor timestamp)
+     *
+     * This ensures that rollback behaves deterministically even in the
+     * presence of speculative or nested injections.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 CURSOR MEANING
+     * ---------------------------------------------------------------------
+     *
+     * The provided `cursor` represents the state BEFORE traversal resumes.
      *
      * Example:
      *
-     * To re-read token at index `0`,
-     * rollback MUST target:
-     *
      * ```txt
-     * cursor = -1
+     * To re-read token at index 0:
+     * rollbackBefore(-1)
      * ```
      *
-     * because `next()` increments before reading.
+     * This is required because traversal is implemented as:
+     *
+     * ```txt
+     * next() → increments cursor → reads token
+     * ```
      *
      * ---------------------------------------------------------------------
-     * 🔷 REMOVAL RULES
+     * 🔷 TOKEN CATEGORIES
      * ---------------------------------------------------------------------
      *
-     * During rollback:
+     * The stream contains two token origins:
      *
-     * - injected tokens are removed
-     * - original tokens remain intact
+     * ### 1. original tokens
+     * - come from the immutable input stream
+     * - never removed by rollback
      *
-     * This guarantees deterministic restoration of the source stream.
+     * ### 2. injected tokens
+     * - created during traversal via `inject()`
+     * - carry metadata:
+     *   - origin: 'injected'
+     *   - cursor: injection-time cursor snapshot
+     *
+     * This cursor snapshot represents the *logical moment* at which the
+     * token was introduced into the stream.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ROLLBACK DELETION RULE
+     * ---------------------------------------------------------------------
+     *
+     * During rollback, injected tokens are removed only if:
+     *
+     * ```txt
+     * token.origin === 'injected'
+     * AND
+     * token.cursor >= rollbackCursor
+     * ```
+     *
+     * This means:
+     *
+     * - injected tokens created *after or at* the rollback boundary are removed
+     * - injected tokens created *before* the rollback boundary are preserved
+     *
+     * even if they appear after the rollback index in the physical array.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 WHY CURSOR-BASED FILTERING EXISTS
+     * ---------------------------------------------------------------------
+     *
+     * Without cursor-based filtering, rollback would incorrectly remove:
+     *
+     * - valid injected tokens from earlier speculative branches
+     *
+     * This would break:
+     *
+     * - nested group rewrites
+     * - multi-pass injection flows
+     * - speculative normalization stages
+     *
+     * The cursor acts as a *causal anchor*, ensuring rollback only affects
+     * mutations that were introduced in the invalidated execution window.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 EFFECT ON STREAM
+     * ---------------------------------------------------------------------
+     *
+     * After rollback:
+     *
+     * - all invalid injected tokens are removed
+     * - original token stream remains unchanged
+     * - traversal cursor is reset to the provided boundary
+     *
+     * The resulting stream is guaranteed to be:
+     *
+     * - structurally consistent
+     * - deterministic
+     * - free of orphaned injected mutations
      *
      * ---------------------------------------------------------------------
      * @param cursor
      * Cursor state to restore.
+     *
+     * This value represents the last consumed position before traversal
+     * resumes.
      *
      * @since 1.0.0
      */
@@ -831,12 +732,65 @@ class TokensController {
             const token = this.#_tokens[i];
             if (token === undefined) { continue }
 
-            if (token.origin === 'injected') {
+            if (token.origin === 'injected' && token.cursor >= normalized) {
                 this.#_tokens.splice(i, 1);
             }
         }
 
         this.#_cursor = Math.max(-1, normalized - 1);
+    }
+
+    /**
+     * Debug / introspection utility for token stream state.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PURPOSE
+     * ---------------------------------------------------------------------
+     *
+     * Provides a non-runtime representation of the internal controller
+     * state for debugging, testing, and diagnostics.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 STABILITY WARNING
+     * ---------------------------------------------------------------------
+     *
+     * This method is NOT part of the stable runtime contract.
+     *
+     * Output format may change without semantic versioning guarantees.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ORIGIN MARKERS
+     * ---------------------------------------------------------------------
+     *
+     * When `as = 'with-origin'`, tokens include origin metadata:
+     *
+     * - `O` → original stream token
+     * - `I` → injected token
+     *
+     * These markers are intended for debugging only and must not be used
+     * for rendering decisions.
+     *
+     * ---------------------------------------------------------------------
+     * @returns Token kind list or annotated debug representation
+     *
+     * @since 1.0.0
+     */
+    static inspect<
+        T extends 'raw' | 'with-origin'
+    >(
+        ct: TokensController,
+        as?: T
+    ): T extends 'with-origin' ? `${Token['kind']}:${'O' | 'I'}`[] : Token['kind'][] {
+        const kinds = ct.#_tokens.map(t => {
+            return as === 'with-origin'
+                ? `${t.reference.kind}:${t.origin === 'original' ? 'O' : 'I'}`
+                : t.reference.kind;
+        });
+
+        return kinds as (T extends 'with-origin'
+            ? `${Token['kind']}:${'O' | 'I'}`[]
+            : Token['kind'][]
+        );
     }
 }
 

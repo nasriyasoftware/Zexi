@@ -8,242 +8,197 @@ import type { Token } from "../../../3-tokenization/types";
 import type { ScopeDataController } from "./scopes/types";
 
 /**
- * Central orchestration context for the Zexi rendering pipeline.
+ * Central execution context for the Zexi rendering pipeline.
  *
- * `ZexiRenderingContext` coordinates all runtime systems involved in
- * token-driven rendering, including:
- *
- * - token traversal and mutation
- * - nested scope lifecycle management
- * - structured writer composition
- * - traversal depth tracking
- * - scoped runtime state
+ * `ZexiRenderingContext` is the runtime kernel responsible for coordinating
+ * deterministic rendering of a tokenized representation into its final
+ * textual output.
  *
  * ---------------------------------------------------------------------
- * 🔷 ARCHITECTURE OVERVIEW
+ * 🔷 PIPELINE POSITION
  * ---------------------------------------------------------------------
  *
- * The rendering pipeline is built around three core internal controllers:
+ * This context forms the execution environment of the final pipeline stage:
+ *
+ * ```txt
+ * Graphing
+ *   ↓
+ * Representation
+ *   ↓
+ * Tokenization
+ *   ↓
+ * ZexiRenderingContext
+ *   ↓
+ * Final Output
+ * ```
+ *
+ * It bridges:
+ *
+ * - token traversal (`TokensController`)
+ * - rendering scopes (`ScopesController`)
+ * - output composition (`RenderingWriter`)
+ * - shared traversal depth tracking
+ * - scoped runtime metadata
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 ARCHITECTURAL ROLE
+ * ---------------------------------------------------------------------
+ *
+ * This context is an active runtime, not merely a container of shared
+ * objects.
+ *
+ * It owns and coordinates:
+ *
+ * - sequential token traversal
+ * - scoped rendering execution
+ * - writer lifecycle and composition
+ * - indentation state
+ * - runtime metadata
+ *
+ * All renderers execute exclusively through this context.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 OWNERSHIP MODEL
+ * ---------------------------------------------------------------------
+ *
+ * The context establishes strict ownership boundaries.
+ *
+ * ### Internal components (not exposed directly)
  *
  * - `TokensController`
- *   Manages mutable token traversal and injection.
+ *   → traversal state and cursor management
  *
  * - `ScopesController`
- *   Manages hierarchical rendering scopes and writer composition.
+ *   → scope stack, writer orchestration and lifecycle
  *
- * - `TraversalDepth`
- *   Tracks recursive structural depth shared across all scopes.
+ * - `RenderingWriter`
+ *   → output generation
  *
- * These controllers are NOT exposed directly to renderers.
+ * ### Public runtime APIs
  *
- * Instead, renderers interact through restricted runtime APIs:
+ * - `tokens`
+ *   → controlled traversal API
  *
- * - `TokensRuntime`
- * - `ScopesRuntime`
+ * - `scopes`
+ *   → controlled scope lifecycle API
  *
- * This preserves strict internal invariants while exposing only the
- * operations required during rendering.
+ * - `writer`
+ *   → current active rendering writer
+ *
+ * - `data`
+ *   → scoped runtime metadata
+ *
+ * - `depth`
+ *   → shared structural depth tracker
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 EXECUTION MODEL
+ * ---------------------------------------------------------------------
+ *
+ * Rendering proceeds as a deterministic forward traversal over the
+ * token stream.
+ *
+ * During execution, renderers may:
+ *
+ * - consume tokens
+ * - inspect upcoming tokens
+ * - open nested rendering scopes
+ * - write formatted output
+ * - maintain scoped metadata
+ *
+ * The traversal order is strictly linear and deterministic.
  *
  * ---------------------------------------------------------------------
  * 🔷 SCOPE MODEL
  * ---------------------------------------------------------------------
  *
- * Rendering is performed using a strict stack-based scope system.
- *
- * Example:
- *
- * ```text
- * [ root scope ]
- * [ scope A ]
- * [ scope B ] ← current scope
- * ```
+ * Rendering scopes provide isolated execution environments.
  *
  * Each scope owns:
  *
- * - an isolated writer
- * - local scoped data
- * - a traversal cursor snapshot
+ * - its own writer
+ * - its own scoped metadata
+ * - a traversal checkpoint
  *
- * Scopes are always entered and exited in LIFO order.
+ * Nested scopes inherit structural state while remaining isolated until
+ * committed.
  *
- * ---------------------------------------------------------------------
- * 🔷 SCOPE LIFECYCLE
- * ---------------------------------------------------------------------
- *
- * New scopes are created through:
- *
- * ```ts
- * context.scopes.begin(...)
- * ```
- *
- * The runtime automatically captures the current token cursor
- * at scope creation time.
- *
- * Scopes may later be:
- *
- * - committed
- * - aborted
- *
- * ---------------------------------------------------------------------
- * 🔷 COMMIT MODEL
- * ---------------------------------------------------------------------
- *
- * Committing a scope:
- *
- * - removes the scope from the stack
- * - preserves traversal progress
- * - merges child writer output into parent writer
- *
- * Example:
- *
- * ```text
- * child writer → parent writer
- * ```
- *
- * This enables deterministic bottom-up rendering composition.
- *
- * ---------------------------------------------------------------------
- * 🔷 ABORT MODEL
- * ---------------------------------------------------------------------
- *
- * Aborting a scope:
- *
- * - destroys the scope
- * - discards all scope-local data
- * - discards scope writer output
- * - rolls token traversal back to the scope entry point
- * - removes injected tokens created after scope creation
- *
- * This enables speculative rendering and reversible parsing behavior.
- *
- * ---------------------------------------------------------------------
- * 🔷 TOKEN TRAVERSAL MODEL
- * ---------------------------------------------------------------------
- *
- * Token traversal is globally shared across all scopes through a single
- * `TokensController` instance.
- *
- * Traversal behavior is cursor-based:
- *
- * - cursor points to most recently consumed token
- * - `next()` advances traversal
- * - `peek()` performs non-mutating lookahead
- * - `inject()` inserts runtime tokens into the stream
- *
- * Injected tokens become immediately visible to traversal.
- *
- * ---------------------------------------------------------------------
- * 🔷 TOKEN ROLLBACK MODEL
- * ---------------------------------------------------------------------
- *
- * Internal rollback behavior is intentionally hidden from renderers.
- *
- * Only `ScopesRuntime.abort()` may trigger rollback semantics.
- *
- * During rollback:
- *
- * - injected tokens created after the captured cursor are removed
- * - original source tokens remain intact
- * - traversal resumes from the scope entry boundary
- *
- * This guarantees deterministic recovery behavior.
+ * Committing a scope merges its writer into the parent scope.
  *
  * ---------------------------------------------------------------------
  * 🔷 WRITER MODEL
  * ---------------------------------------------------------------------
  *
- * Each scope owns an isolated `RenderingWriter`.
+ * The active writer is always the writer associated with the current
+ * rendering scope.
  *
- * Writers are created using:
+ * Writers:
  *
- * ```ts
- * RenderingWriter.from(parentWriter)
- * ```
+ * - accumulate formatted output
+ * - share the global traversal depth
+ * - remain isolated until committed
  *
- * This ensures:
- *
- * - inherited formatting configuration
- * - shared traversal depth tracking
- * - isolated output buffering
- *
- * Writers are merged ONLY during valid scope commits.
+ * The context exposes only the current active writer.
  *
  * ---------------------------------------------------------------------
  * 🔷 DEPTH MODEL
  * ---------------------------------------------------------------------
  *
- * A single shared `TraversalDepth` instance is used across the entire
- * rendering pipeline.
+ * A single shared `TraversalDepth` instance is used throughout the entire
+ * rendering execution.
  *
- * This guarantees:
- *
- * - consistent indentation
- * - synchronized nesting depth
- * - deterministic recursive rendering behavior
- *
- * All writers reference the same depth tracker.
+ * It represents logical nesting depth and is shared by every writer
+ * created within the context.
  *
  * ---------------------------------------------------------------------
  * 🔷 DATA MODEL
  * ---------------------------------------------------------------------
  *
- * Scope-local runtime state is exposed through `data`.
+ * `data` provides hierarchical runtime metadata bound to rendering scopes.
  *
- * Data resolution follows lexical-style shadowing:
+ * Resolution follows lexical scope rules:
  *
- * - current scope checked first
- * - parent scopes checked recursively
- * - root scope checked last
+ * - current scope
+ * - parent scopes
+ * - root scope
  *
- * Scope data is isolated and automatically discarded when a scope exits.
- *
- * ---------------------------------------------------------------------
- * 🔷 RUNTIME API ISOLATION
- * ---------------------------------------------------------------------
- *
- * Renderers never receive direct access to:
- *
- * - internal controllers
- * - rollback operations
- * - cursor mutation
- * - internal scope stack
- *
- * Instead, restricted runtime APIs enforce safe interaction boundaries.
- *
- * This prevents renderer implementations from violating rendering
- * invariants accidentally.
+ * Data is automatically discarded when its owning scope exits.
  *
  * ---------------------------------------------------------------------
- * 🔷 ROOT SCOPE
+ * 🔷 ROOT SCOPE GUARANTEE
  * ---------------------------------------------------------------------
  *
- * The root scope is automatically created during construction.
+ * Construction automatically creates a permanent root rendering scope.
  *
  * The root scope:
  *
- * - always exists
- * - owns the root writer
- * - cannot be committed
- * - cannot be aborted
- *
- * It acts as the permanent base rendering frame.
+ * - owns the initial writer
+ * - cannot be removed
+ * - remains active for the lifetime of the context
  *
  * ---------------------------------------------------------------------
- * 🔷 INVARIANTS
+ * 🔷 DETERMINISM GUARANTEE
  * ---------------------------------------------------------------------
  *
- * The following invariants are strictly enforced:
+ * Identical token streams always produce identical output.
  *
- * - scopes are strictly LIFO
- * - root scope cannot be removed
- * - writer composition occurs only during commit
- * - rollback occurs only during abort
- * - traversal cursor ownership is internal
- * - renderers cannot mutate controller internals directly
+ * This guarantee is achieved through:
  *
- * Violating these invariants indicates rendering pipeline corruption.
+ * - deterministic token traversal
+ * - deterministic scope behavior
+ * - isolated writers
+ * - shared traversal depth
+ * - explicit scope commits
  *
  * ---------------------------------------------------------------------
+ * 🔷 DESIGN INTENT
+ * ---------------------------------------------------------------------
+ *
+ * This class provides a single, unified execution surface for rendering.
+ *
+ * It centralizes all runtime state required during rendering while hiding
+ * internal controllers behind safe runtime APIs.
+ *
  * @since 1.0.0
  */
 class ZexiRenderingContext {

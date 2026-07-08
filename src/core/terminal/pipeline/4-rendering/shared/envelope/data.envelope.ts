@@ -32,12 +32,11 @@ const stableVersion = (() => {
  * DataEnvelope
  * ------------
  *
- * A strongly-typed immutable wrapper around token-derived data
- * used for structured serialization.
+ * A strongly-typed immutable wrapper around token-derived data used for
+ * structured serialization inside the Zexi rendering pipeline.
  *
- * This class transforms internal token data into a standardized
- * JSON-safe envelope format suitable for internal debugging,
- * inspection, and renderer-side structural transformations.
+ * This class transforms raw token data into a canonical, JSON-safe envelope
+ * representation for internal rendering, debugging, and structural analysis.
  *
  * ---------------------------------------------------------------------
  * 🔷 DESIGN GOALS
@@ -45,32 +44,50 @@ const stableVersion = (() => {
  *
  * 1. **Immutability (Internal Safety)**
  *    - The envelope is frozen at construction time
- *    - This primarily prevents accidental mutation inside the renderer
- *    - It does NOT imply external transport or persistence guarantees
+ *    - Prevents accidental mutation during rendering
  *
  * 2. **Versioned Serialization**
- *    - Every envelope carries a codec version (`$codec`)
- *    - This ensures structural compatibility between internal systems
+ *    - Each envelope carries a `$codec` version
+ *    - Ensures structural compatibility across pipeline versions
  *
  * 3. **Token Awareness**
- *    - `$kind` identifies the semantic origin of the envelope
- *    - Used for routing during tokenization, not external consumption
+ *    - `$kind` defines the semantic category of the envelope
+ *    - Used for routing inside tokenization/render phases
  *
- * 4. **Canonical Envelope Representation**
- *    - Internal payloads are normalized into a deterministic shape
- *    - Deferred body data is excluded from stored envelope state
- *    - The envelope can expose its normalized representation for
- *      debugging and inspection purposes
+ * 4. **Canonical Representation**
+ *    - All payloads are normalized into deterministic structures
+ *    - Special values (NaN, Infinity) are encoded safely
+ *    - Deferred body content is excluded from envelope state
  *
  * ---------------------------------------------------------------------
- * 🔷 PAYLOAD NORMALIZATION
+ * 🔷 PAYLOAD NORMALIZATION RULES
  * ---------------------------------------------------------------------
  *
- * - If payload is not a plain object (`isRecord` check), it is replaced
- *   with `{}`.
- * - The payload is shallow-frozen to prevent accidental mutation during
- *   renderer-side processing.
- * - Nested structures are not deeply frozen.
+ * - Non-object payloads are rejected at construction time
+ * - Payloads are normalized per envelope kind via a strict schema
+ * - Resulting payload is shallow-frozen
+ * - Nested structures remain mutable unless explicitly wrapped
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 ENVELOPE CATEGORIES
+ * ---------------------------------------------------------------------
+ *
+ * ### Deferred-body envelopes
+ * These are partially constructed and completed during rendering:
+ *
+ * - `set`
+ * - `map`
+ *
+ * ### Fully-materialized envelopes
+ * These are completely resolved at construction time:
+ *
+ * - `error`
+ * - `regex`
+ * - `function`
+ * - `number`
+ *
+ * The `number` envelope encodes non-JSON numeric states such as
+ * `NaN`, `Infinity`, and `-Infinity` using a safe string-backed format.
  *
  * ---------------------------------------------------------------------
  * @template K
@@ -82,9 +99,44 @@ class DataEnvelope<K extends EnvelopeKind> {
     /**
      * Internal immutable envelope representation.
      *
-     * This is frozen at construction time and returned directly
-     * by `toObject()` to guarantee stable serialization output.
-     * 
+     * This is the canonical normalized form produced during construction
+     * and used as the single source of truth for all downstream operations.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ROLE IN PIPELINE
+     * ---------------------------------------------------------------------
+     *
+     * This value is used internally by:
+     *
+     * - tokenization (`tokenize`)
+     * - envelope inspection (`inspect`)
+     * - renderer-side structural analysis
+     *
+     * It is never mutated after construction.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 IMMUTABILITY GUARANTEE
+     * ---------------------------------------------------------------------
+     *
+     * The envelope is deeply frozen at the top level:
+     *
+     * - `$kind` is immutable
+     * - `$codec` is immutable
+     * - `$payload` is shallow-frozen (not deep-frozen)
+     *
+     * This ensures structural stability while allowing controlled mutation
+     * of nested payload objects when explicitly designed.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PUBLIC ACCESS POLICY
+     * ---------------------------------------------------------------------
+     *
+     * This field is private and must not be accessed outside this class.
+     *
+     * External access is only permitted via:
+     *
+     * - `DataEnvelope.inspect()`
+     *
      * @readonly
      * @since 1.0.0
      */
@@ -125,32 +177,57 @@ class DataEnvelope<K extends EnvelopeKind> {
      * Before envelope-specific normalization occurs:
      *
      * - `undefined` payloads are rejected
-     * - non-record values are rejected
-     * - arrays are rejected
      * - `null` values are rejected
+     * - arrays are rejected
+     * - non-record values are rejected
      *
      * Once basic validation succeeds, the payload is normalized into the
      * canonical schema associated with the selected envelope kind.
      *
-     * Deferred-body envelopes (`set` and `map`) retain only structural
-     * metadata while body content is intentionally omitted and injected
-     * later by the renderer.
+     * ---------------------------------------------------------------------
+     * 🔷 ENVELOPE KINDS
+     * ---------------------------------------------------------------------
+     *
+     * Supported envelope categories include:
+     *
+     * - `error`     → structured error representation
+     * - `map`       → key/value map structure
+     * - `set`       → unique collection structure
+     * - `regex`     → regular expression representation
+     * - `function`  → function identity metadata
+     * - `number`    → numeric special-value envelope (Infinity, NaN, etc.)
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 DEFERRED-BODY ENVELOPES
+     * ---------------------------------------------------------------------
+     *
+     * Some envelope kinds separate metadata from body content:
+     *
+     * - `set`
+     * - `map`
+     *
+     * These retain only structural metadata at construction time.
+     * Their contents are injected later by the renderer pipeline.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 IMMUTABILITY
+     * ---------------------------------------------------------------------
      *
      * The resulting normalized payload is shallow-frozen before being
-     * stored in the envelope.
+     * stored in the envelope to guarantee runtime consistency.
      *
      * ---------------------------------------------------------------------
      *
      * @param kind
      * The envelope discriminator. Must be one of `EnvelopeKind`
-     * (e.g. `"error" | "set" | "map" | "regex" | "function"`).
+     * (e.g. `"error" | "set" | "map" | "regex" | "function" | "number"`).
      *
      * @param payload
      * Structured payload associated with the envelope kind.
      *
      * The payload must be a plain object matching the schema defined by
      * `EnvelopeMap[K]`.
-     * 
+     *
      * Passing `undefined`, `null`, arrays, or other non-record values is
      * considered a programming error and will cause construction to fail.
      *
@@ -181,84 +258,84 @@ class DataEnvelope<K extends EnvelopeKind> {
      * 🔷 PURPOSE
      * ---------------------------------------------------------------------
      *
-     * This method is responsible for converting user-provided envelope data
-     * into the canonical payload shape stored inside the envelope.
+     * This method is the canonical normalization boundary for all envelope
+     * payload construction in the rendering pipeline.
      *
-     * It acts as the single normalization boundary for all envelope kinds.
-     *
-     * Every payload produced by this method is guaranteed to:
-     *
-     * - conform to the schema defined by `EnvelopeMap[K]`
-     * - contain all required metadata fields
-     * - exclude renderer-managed body data when applicable
-     * - satisfy runtime validation requirements
+     * It transforms raw user-provided input into a validated, deterministic
+     * payload shape defined by `EnvelopeMap[K]`.
      *
      * ---------------------------------------------------------------------
-     * 🔷 DEFERRED PAYLOAD NORMALIZATION
+     * 🔷 NORMALIZATION MODEL
      * ---------------------------------------------------------------------
      *
-     * Certain envelope kinds contain body content that is injected later by
-     * the renderer rather than serialized directly inside the envelope.
+     * Each envelope kind is normalized according to its structural role:
      *
-     * These include:
+     * ### Deferred-body envelopes
+     * (structure finalized later during rendering)
      *
      * - `set`
      * - `map`
      *
-     * For these envelope kinds:
+     * These retain metadata only (e.g. `size`) and initialize empty containers
+     * for later population by the renderer.
      *
-     * - metadata is preserved (`size`)
-     * - body containers are initialized as empty collections
-     * - provided entries/values are intentionally discarded
+     * ### Fully-materialized envelopes
+     * (fully resolved at construction time)
      *
-     * This allows tokenization to identify a deterministic payload boundary
-     * that can later be populated by renderer-generated content.
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 COMPLETE PAYLOAD NORMALIZATION
-     * ---------------------------------------------------------------------
-     *
-     * Envelope kinds whose payload is fully known at construction time are
-     * normalized into a complete serializable representation.
-     *
-     * Examples:
-     *
+     * - `error`
      * - `regex`
      * - `function`
-     * - `error`
+     * - `number`
      *
-     * These payloads do not participate in deferred body injection and are
-     * tokenized exactly as stored.
+     * These are completely normalized during construction and do not
+     * participate in later body injection phases.
      *
      * ---------------------------------------------------------------------
-     * 🔷 VALIDATION
+     * 🔷 NUMBER ENVELOPE RULES
      * ---------------------------------------------------------------------
      *
-     * Runtime validation is performed for all envelope-specific fields.
+     * The `number` envelope encodes numeric values that may not be valid JSON:
      *
-     * Invalid values result in:
+     * Supported values:
      *
-     * - `TypeError` for type mismatches
-     * - `RangeError` for invalid numeric ranges
+     * - finite numbers
+     * - `Infinity`
+     * - `-Infinity`
+     * - `NaN`
+     * - string equivalents of the above
      *
-     * Missing required properties also result in a thrown error.
+     * Normalization:
+     *
+     * - all values are validated against allowed numeric states
+     * - all stored values are serialized as strings
+     *   to ensure JSON compatibility
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 VALIDATION RULES
+     * ---------------------------------------------------------------------
+     *
+     * Per-envelope validation rules:
+     *
+     * - missing required fields → `TypeError`
+     * - incorrect field types → `TypeError`
+     * - invalid numeric constraints → `RangeError`
      *
      * ---------------------------------------------------------------------
      *
      * @param kind
-     * The envelope kind being normalized.
+     * Envelope discriminator (`EnvelopeKind`).
      *
      * @param input
-     * Raw payload supplied to the envelope constructor.
+     * Raw payload matching `EnvelopeMap[K]`.
      *
      * @returns
-     * A normalized payload matching the schema of `EnvelopeMap[K]`.
+     * Normalized payload matching `EnvelopeMap[K]`.
      *
      * @throws {TypeError}
-     * Thrown when required properties are missing or have invalid types.
+     * Invalid or missing required fields.
      *
      * @throws {RangeError}
-     * Thrown when numeric metadata violates envelope constraints.
+     * Numeric constraint violations (e.g. invalid special numeric values).
      *
      * @since 1.0.0
      */
@@ -357,6 +434,38 @@ class DataEnvelope<K extends EnvelopeKind> {
                     payload.name = input.name;
                 } else {
                     throw new TypeError(`Expected "name" to be provided in the "${kind}" envelope payload.`);
+                }
+
+                return payload as EnvelopeMap[K];
+            }
+
+            case 'number': {
+                const payload: EnvelopeMap['number'] = {
+                    value: ''
+                }
+
+                if ('value' in input) {
+                    if (typeof input.value === 'string') {
+                        const allowed = ['Infinity', '-Infinity', 'NaN'];
+                        if (!allowed.includes(input.value)) {
+                            throw new RangeError(`Expected "value" to be one of ${allowed.join(', ')}, but got ${input.value}`);
+                        }
+
+                        payload.value = input.value;
+                    } else if (typeof input.value === 'number') {
+                        const v = input.value;
+                        const allowed = [Infinity, -Infinity, NaN];
+
+                        if (!allowed.includes(v)) {
+                            throw new RangeError(`Expected "value" to be one of ${allowed.join(', ')}, but got ${v}`);
+                        }
+
+                        payload.value = String(v);
+                    } else {
+                        throw new TypeError(`Expected "value" to be a number, but got ${typeof input.value}`);
+                    }
+                } else {
+                    throw new TypeError(`Expected "value" to be provided in the "${kind}" envelope payload.`);
                 }
 
                 return payload as EnvelopeMap[K];
@@ -679,20 +788,6 @@ class DataEnvelope<K extends EnvelopeKind> {
      * the finalized token stream without anchor generation.
      *
      * ---------------------------------------------------------------------
-     * 🔷 GROUP TOKEN REMOVAL
-     * ---------------------------------------------------------------------
-     *
-     * The tokenizer is expected to produce an outer group wrapper.
-     *
-     * Before any envelope-specific processing occurs, the envelope removes:
-     *
-     * - leading `group-start`
-     * - trailing `group-end`
-     *
-     * Only the inner envelope token stream participates in subsequent
-     * processing.
-     *
-     * ---------------------------------------------------------------------
      * 🔷 RETURN TYPE
      * ---------------------------------------------------------------------
      *
@@ -720,18 +815,15 @@ class DataEnvelope<K extends EnvelopeKind> {
     ): EnvelopeTokenizationResult<K> {
         const tokenized = tokenizer(this.#_envelope);
 
-        // Remove the `group-start` and `group-end` tokens
-        const finalTokens = tokenized.slice(1, tokenized.length - 1);
-
         const requiresBodyInjection = DEFERRED_BODY_ENVELOPES.has(this.#_envelope.$kind);
 
         if (requiresBodyInjection) {
-            return this.#_buildDeferredTokenization(finalTokens) as EnvelopeTokenizationResult<K>;
+            return this.#_buildDeferredTokenization(tokenized) as EnvelopeTokenizationResult<K>;
         }
 
         const result: EnvelopeCompleteTokens = {
             deferred: false,
-            tokens: Object.freeze(finalTokens),
+            tokens: Object.freeze(tokenized),
         }
 
         return result as EnvelopeTokenizationResult<K>;
@@ -768,8 +860,8 @@ class DataEnvelope<K extends EnvelopeKind> {
      * @returns Frozen internal envelope object
      * @since 1.0.0
      */
-    get debug(): Readonly<Envelope<K>> {
-        return this.#_envelope;
+    static inspect<K extends EnvelopeKind>(env: DataEnvelope<K>): Readonly<Envelope<K>> {
+        return env.#_envelope;
     }
 }
 

@@ -1,6 +1,5 @@
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
-import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/tokenizer";
-import _rendering from "../../../helpers/helpers";
+import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
+import _tokenization from "../../../../3-tokenization/helpers/helpers";
 
 describe("JSONTokenizer - canonical object serialization", () => {
 
@@ -11,7 +10,7 @@ describe("JSONTokenizer - canonical object serialization", () => {
     it("tokenizes object literals in canonical key order", () => {
         const tokens = JSONTokenizer({ b: 2, a: 1 });
 
-        const kinds = _rendering.extractKinds(tokens);
+        const kinds = _tokenization.extractKinds(tokens);
 
         expect(kinds).toEqual([
             "group-start",

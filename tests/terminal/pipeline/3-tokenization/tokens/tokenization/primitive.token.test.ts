@@ -1,6 +1,8 @@
 import { PrimitiveToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/primitive.token";
+import { ANSI } from "../../../../../../src/core/terminal/styling/ansi";
 
-describe("PrimitiveToken", () => {
+describe("PrimitiveToken (semantic)", () => {
+
     it("stores primitive type correctly", () => {
         const token = new PrimitiveToken("string", "hello");
 
@@ -67,5 +69,44 @@ describe("PrimitiveToken", () => {
 
         expect(typeof token.value).toBe("number");
         expect(token.value).not.toBe("100");
+    });
+});
+
+describe("PrimitiveToken (ansi integration)", () => {
+
+    it("exposes an AnsiMeta instance", () => {
+        const token = new PrimitiveToken("string", "hello");
+
+        expect(token.ansi).toBeDefined();
+    });
+
+    it("allows assigning ANSI color via meta", () => {
+        const token = new PrimitiveToken("string", "hello");
+
+        token.ansi.assign("color", ANSI.color.fg.normal.red);
+
+        expect(token.ansi.color).toBe(ANSI.color.fg.normal.red);
+    });
+
+    it("allows assigning ANSI background color", () => {
+        const token = new PrimitiveToken("string", "hello");
+
+        token.ansi.assign("bgColor", ANSI.color.bg.normal.blue);
+
+        expect(token.ansi.bgColor).toBe(ANSI.color.bg.normal.blue);
+    });
+
+    it("allows assigning ANSI styles using ANSI constants", () => {
+        const token = new PrimitiveToken("string", "hello");
+
+        token.ansi.assign("styles", [
+            ANSI.style.bold,
+            ANSI.style.italic
+        ]);
+
+        expect(token.ansi.styles).toEqual([
+            ANSI.style.bold,
+            ANSI.style.italic
+        ]);
     });
 });

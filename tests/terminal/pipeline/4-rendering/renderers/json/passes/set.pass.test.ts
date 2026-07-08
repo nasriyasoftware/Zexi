@@ -1,10 +1,10 @@
-import _rendering from "../../../helpers/helpers";
 import keys from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/keys";
 
+import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
 import JSONHelpers from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/helpers";
 import ZexiRenderingContext from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
 
-import type { JSONRendererFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
+import type { JSONPipelineFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
 import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 
 describe("setPass (integration)", () => {
@@ -23,7 +23,7 @@ describe("setPass (integration)", () => {
         helpers.transforms.set();
 
         expect(
-            ctx.data.get(keys.RENDERING_LAYOUT_KEY)
+            ctx.data.get(keys.RENDERING_LAYOUT)
         ).toBe("block");
     });
 
@@ -201,12 +201,12 @@ function collectPrimitives(ctx: ZexiRenderingContext): unknown[] {
 }
 
 function tokenize(value: unknown) {
-    return _rendering.tokenize(value, 'json');
+    return JSONTokenizer(value);
 }
 
 function createHelpers(options?: {
     mode?: 'compact' | 'pretty',
-    flags?: JSONRendererFlags,
+    flags?: JSONPipelineFlags,
     ignoredTokens?: Token[] | Set<Token>,
     ctx?: ZexiRenderingContext
     tokens?: readonly Token[]
@@ -238,8 +238,9 @@ function makeCtx(tokens: readonly Token[]) {
     });
 }
 
-function createFlags(): JSONRendererFlags {
+function createFlags(): JSONPipelineFlags {
     return {
+        ansiEnabled: false,
         ignoreCurrentGroup: false,
         skipNextSeparator: false,
         skipNextSoftLine: false,
