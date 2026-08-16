@@ -1,4 +1,4 @@
-import keys from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/keys";
+import keys from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/keys";
 
 import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
 import JSONHelpers from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/helpers";

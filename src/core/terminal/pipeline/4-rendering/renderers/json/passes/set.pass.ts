@@ -1,7 +1,7 @@
 import JSONTokenizer from "../../../../3-tokenization/tokenizers/json.tokenizer";
 import TOKENS from "../../../../3-tokenization/tokens";
 import DataEnvelope from "../../../shared/envelope/data.envelope";
-import keys from "../helpers/keys";
+import keys from "../../../shared/keys";
 
 import type { PassedData } from "./types";
 

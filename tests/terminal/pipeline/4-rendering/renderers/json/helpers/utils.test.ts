@@ -7,10 +7,10 @@ import {
     ignoreCurrentGroup,
     resolvePrimitiveOverflow,
     restoreDepth
-} from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/utils";
+} from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/utils";
 
 import ZexiRenderingContext from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
-import keys from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/keys";
+import keys from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/keys";
 import LayoutResolver from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/layout/resolver";
 import DataEnvelope from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
 import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";

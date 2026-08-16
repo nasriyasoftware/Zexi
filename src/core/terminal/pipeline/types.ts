@@ -194,7 +194,6 @@ export type TerminalOptions = {
     maxWidth?: number;
 }
 
-
 /**
  * Configuration options for debug output rendering.
  *

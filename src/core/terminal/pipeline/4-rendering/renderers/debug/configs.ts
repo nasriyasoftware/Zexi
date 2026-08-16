@@ -1,3 +1,4 @@
+import type { Token } from "../../../3-tokenization/types";
 import type { DebugConfig } from "./types";
 
 const SPACES = 4 as const;
@@ -26,3 +27,8 @@ export function DEFAULT_DEBUG_CONFIG(): Record<'compact' | 'pretty', DebugConfig
         }
     }
 }
+
+export const INLINE_SAFE_TOKENS = Object.freeze([
+    'primitive',
+    'date'
+] as Token['kind'][]);

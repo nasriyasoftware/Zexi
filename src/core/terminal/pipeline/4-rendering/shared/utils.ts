@@ -1,10 +1,13 @@
 import keys from "./keys";
-import TOKENS from "../../../../3-tokenization/tokens";
-import ZexiRenderingContext from "../../../shared/context/context";
-import LayoutResolver from "../../../shared/layout/resolver";
-import { ANSI } from "../../../../../styling/ansi";
-import type { Token } from "../../../../3-tokenization/types";
-import type { JSONPipelineFlags } from "../types";
+import TOKENS from "../../3-tokenization/tokens";
+import ZexiRenderingContext from "./context/context";
+import LayoutResolver from "./layout/resolver";
+import { ANSI } from "../../../styling/ansi";
+import type { Token } from "../../3-tokenization/types";
+import type { JSONPipelineFlags } from "../renderers/json/types";
+import type { DebugPipelineFlags } from "../renderers/debug/types";
+
+type PipelineFlags = JSONPipelineFlags | DebugPipelineFlags;
 
 /**
  * Creates a layout resolver for the current pipeline execution.
@@ -309,7 +312,7 @@ export function abortWriting(ctx: ZexiRenderingContext) {
 export function forceBlock(
     resources: {
         ctx: ZexiRenderingContext,
-        flags: JSONPipelineFlags
+        flags: PipelineFlags
     }
 ) {
     abortWriting(resources.ctx);
@@ -459,7 +462,7 @@ export function restoreDepth(ctx: ZexiRenderingContext) {
 export function ignoreCurrentGroup(
     resources: {
         ctx: ZexiRenderingContext,
-        flags: JSONPipelineFlags,
+        flags: PipelineFlags,
     },
 ) {
     const { ctx, flags } = resources;
@@ -616,7 +619,7 @@ export function getLayout(
  * @since 1.0.0
  */
 export function highlightEnvelope(
-    flags: JSONPipelineFlags,
+    flags: PipelineFlags,
     tokens: readonly Token[]
 ) {
     if (!flags.ansiEnabled) { return }
@@ -768,7 +771,7 @@ export function resolvePrimitiveOverflow(
     resources: {
         mode: 'pretty' | 'compact',
         ctx: ZexiRenderingContext,
-        flags: JSONPipelineFlags
+        flags: PipelineFlags
     }
 ) {
     const { mode, ctx, flags } = resources;

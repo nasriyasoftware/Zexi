@@ -2,7 +2,7 @@ import ZexiRenderingContext from "../../../shared/context/context";
 import objectPass from "../passes/object.pass";
 import setPass from "../passes/set.pass";
 import mapPass from "../passes/map.pass";
-import * as utils from './utils';
+import * as utils from '../../../shared/utils';
 
 import { INLINE_SAFE_TOKENS } from "../configs";
 import { isVisibleToken } from "../../../shared/helpers";

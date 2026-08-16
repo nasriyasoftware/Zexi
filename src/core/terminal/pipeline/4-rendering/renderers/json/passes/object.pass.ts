@@ -1,4 +1,4 @@
-import keys from "../helpers/keys";
+import keys from "../../../shared/keys";
 import ObjectCache from "../assets/object.cache";
 import type JSONHelpers from "../helpers/helpers";
 import type { PassedData } from "./types";

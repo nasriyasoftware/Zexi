@@ -7,7 +7,7 @@ import objectPass from "../../../../../../../src/core/terminal/pipeline/4-render
 import mapPass from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/map.pass";
 import setPass from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/set.pass";
 
-import * as utils from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/utils";
+import * as utils from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/utils";
 
 // -----------------------------------------------------
 // mocks
@@ -27,7 +27,7 @@ jest.mock("../../../../../../../src/core/terminal/pipeline/4-rendering/renderers
     default: jest.fn()
 }));
 
-jest.mock("../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/utils",
+jest.mock("../../../../../../../src/core/terminal/pipeline/4-rendering/shared/utils",
     () => ({
         createResolver: jest.fn(),
         abortWriting: jest.fn(),

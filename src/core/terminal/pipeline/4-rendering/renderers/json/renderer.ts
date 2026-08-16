@@ -1,4 +1,4 @@
-import keys from "./helpers/keys";
+import keys from "../../shared/keys";
 import consoleStyler from "../../../../styling/styler";
 import TOKENS from "../../../3-tokenization/tokens";
 import JSONTokenizer from "../../../3-tokenization/tokenizers/json.tokenizer";
@@ -286,6 +286,7 @@ class JSONRenderer {
             mode: this.#_mode
         });
 
+        Object.seal(this.#_flags);
         deepFreeze(this.#_config);
     }
 
