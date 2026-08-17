@@ -6,9 +6,9 @@ export type OutputTarget = 'json' | 'debug';
 export type OutputMode = 'compact' | 'pretty';
 
 export type TerminalLogOptions = {
-    as?: OutputTarget;
-    mode?: OutputMode;
-    trace?: boolean
+    target?: OutputTarget;
+    trace?: boolean;
+    print?: boolean;
 }
 
 export type ZexiTerminalOptions = {
