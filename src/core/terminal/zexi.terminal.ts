@@ -118,7 +118,7 @@ class ZexiTerminal {
                 const event = this.#_helpers.logging.freezeEvent(draft);
 
                 // Emit the specific log-level event
-                ZexiTerminal.#_ct.events.emit(`log.${level}`, event);
+                ZexiTerminal.#_ct.events.emit<TerminalEventName>(`log.${level}`, event);
 
                 // Emit the general log event
                 ZexiTerminal.#_ct.events.emit('log', event);
@@ -213,7 +213,13 @@ class ZexiTerminal {
     }
 
     clear(): void {
+        ZexiTerminal.#_ct.screenEngine.clear
         ZexiTerminal.#_ct.screenEngine.clear();
+        ZexiTerminal.#_ct.events.emit('clear', atomix.dataTypes.object.deepFreeze({
+            id: crypto.randomUUID(),
+            time: new Date().toISOString(),
+            name: 'clear'
+        }));
     }
 
     fatal(value: unknown, options?: TerminalLogOptions): void {
