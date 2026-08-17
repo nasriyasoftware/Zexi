@@ -713,7 +713,7 @@ class DebugRenderer {
                                 '='.repeat(50),
                                 consoleStyler.ansi.color.fg.normal.red
                             ),
-                            { newLine: this.#_ctx.depth.value > 0 }
+                            { newLine: true }
                         );
                     }
                     continue rendering;
