@@ -211,7 +211,11 @@ class ScreenEngine {
             }
 
             // Restore cursor to the end of the rendered output
-            process.stdout.cursorTo(0, snapshot.height);
+            const lastEntry = snapshot.get(snapshot.size() - 1);
+            const x = lastEntry?.value.length ?? 0;
+            const y = x === 0 ? Math.max(0, snapshot.height - 2) : snapshot.height - 1;
+
+            process.stdout.cursorTo(x, y);
         }
     }
 
