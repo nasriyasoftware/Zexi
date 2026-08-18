@@ -719,54 +719,113 @@ export class ScreenCell {
     }
 
     /**
-     * Updates the cell state.
+     * Updates the rendered value of the cell directly.
+     *
+     * The supplied string completely replaces the current rendered output.
+     * Direct updates do not modify the cell's active template or stored template
+     * parameters.
      *
      * ---------------------------------------------------------------------
-     * 🔷 OVERLOADS
+     * 🔷 DIRECT UPDATE
      * ---------------------------------------------------------------------
-     *
-     * ## Direct update
      *
      * ```ts
-     * cell.update('Done');
+     * cell.update('Downloading...');
      * ```
      *
-     * Directly replaces visible output.
-     *
-     * ## Template update
-     *
-     * ```ts
-     * cell.update({ progress: 50 });
-     * ```
-     *
-     * Re-renders the template using updated parameters.
-     *
-     * ---------------------------------------------------------------------
-     * 🔷 TEMPLATE PATCHING
-     * ---------------------------------------------------------------------
-     *
-     * Template updates support two parameter behaviors:
-     *
-     * - merge (`patch: true`)
-     * - replace (`patch: false`)
+     * The supplied value becomes the cell's new visible output immediately.
      *
      * ---------------------------------------------------------------------
      * 🔷 FINALIZATION
      * ---------------------------------------------------------------------
      *
-     * Updates may optionally finalize the cell after applying changes.
+     * The update may optionally finalize the cell after the new value has been
+     * applied.
      *
-     * @param value - Direct string value or template parameter object
+     * When `final` is `true`:
+     *
+     * - the value is updated
+     * - the cell becomes immutable
+     * - subsequent updates are rejected
+     *
+     * @param value - New rendered output value
      * @param options - Update configuration
      *
-     * @throws Error if the cell is finalized
-     * @throws Error if template updates occur without a template
+     * @throws Error if the cell has already been finalized
      *
      * @since 1.0.0
      */
-    update(value: string, options?: { final?: boolean }): void;
-    update(value: Record<string, any>, options?: { final?: boolean; patch?: boolean }): void;
-    update(value: string | Record<string, any>, options?: { final?: boolean; patch?: boolean }): void {
+    update(value: string, options?: { final?: boolean }): void {
+        this.#_update(value, options);
+    }
+
+    /**
+     * Updates the template parameters used to render the cell.
+     *
+     * The cell must have an active template before template parameters can be
+     * updated. The supplied parameters are applied to the existing template and
+     * the cell is re-rendered.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PARAMETER UPDATE
+     * ---------------------------------------------------------------------
+     *
+     * ```ts
+     * cell.template = 'Progress: ${progress}%';
+     * cell.updateParams({ progress: 50 });
+     * ```
+     *
+     * The supplied parameters are converted to their string representations
+     * during template rendering.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 TEMPLATE PATCHING
+     * ---------------------------------------------------------------------
+     *
+     * By default, supplied parameters are merged with the parameters already
+     * stored by the cell:
+     *
+     * ```ts
+     * cell.updateParams({ progress: 50 });
+     * cell.updateParams({ status: 'Downloading' });
+     * ```
+     *
+     * Setting `patch` to `false` replaces all previously stored parameters before
+     * applying the supplied values.
+     *
+     * ```ts
+     * cell.updateParams(
+     *     { progress: 100 },
+     *     { patch: false }
+     * );
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 FINALIZATION
+     * ---------------------------------------------------------------------
+     *
+     * The update may optionally finalize the cell after the new parameters have
+     * been applied and the template has been rendered.
+     *
+     * When `final` is `true`:
+     *
+     * - the parameters are updated
+     * - the cell is re-rendered
+     * - the cell becomes immutable
+     * - subsequent updates are rejected
+     *
+     * @param value - Template parameters to apply
+     * @param options - Parameter update configuration
+     *
+     * @throws Error if the cell has already been finalized
+     * @throws Error if no template is assigned to the cell
+     *
+     * @since 1.0.0
+     */
+    updateParams(
+        value: Record<string, unknown>,
+        options?: { final?: boolean; patch?: boolean }
+    ): void {
         this.#_update(value, options);
     }
 
