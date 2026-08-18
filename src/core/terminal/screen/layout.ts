@@ -1,4 +1,4 @@
-import initialCursorPosition from "./cursor-position";
+import cursorPosition from "./cursor-position";
 import type { SnapshotEntry, SnapshotEntryData } from "./types";
 
 /**
@@ -247,7 +247,22 @@ class ScreenLayout {
      * Appends a new entry to the layout snapshot.
      *
      * The new entry is positioned directly after the terminal space already
-     * occupied by the snapshot, relative to the terminal's current cursor row.
+     * occupied by the snapshot, relative to the terminal's captured cursor row.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INITIALIZATION REQUIREMENT
+     * ---------------------------------------------------------------------
+     *
+     * The terminal cursor position must be initialized before an entry can be
+     * added to the layout.
+     *
+     * The cursor position provides the absolute starting row from which the
+     * layout snapshot is positioned. Without an initialized cursor position,
+     * the layout cannot determine the correct terminal coordinates for the new
+     * entry.
+     *
+     * Attempting to add an entry before cursor initialization is therefore
+     * treated as an internal invariant violation.
      *
      * ---------------------------------------------------------------------
      * 🔷 POSITIONING RULE
@@ -256,19 +271,24 @@ class ScreenLayout {
      * The new entry receives:
      *
      * ```txt
-     * startsAt = current total height + current cursor row - 1
+     * startsAt = current total height + initial cursor row - 1
      * ```
      *
      * Where:
      *
      * - `current total height` is the total number of rows occupied by entries
      *   already present in the snapshot.
-     * - `current cursor row` is the terminal cursor's current row position.
+     * - `initial cursor row` is the terminal cursor row captured when Zexi's
+     *   cursor-position subsystem was initialized.
      * - `-1` converts the cursor's one-based row position into the zero-based
      *   row coordinate used by the layout.
      *
      * This allows the snapshot to be positioned correctly when Zexi begins
      * rendering below content that already exists in the terminal.
+     *
+     * The captured cursor position establishes the layout's absolute origin,
+     * while the snapshot's accumulated height determines the relative position
+     * of each subsequent entry.
      *
      * After insertion:
      *
@@ -287,13 +307,19 @@ class ScreenLayout {
      *
      * @param entry - Rendered entry snapshot data
      *
+     * @throws Error if the cursor position has not been initialized
+     *
      * @since 1.0.0
      */
     add(entry: SnapshotEntryData) {
+        if (!cursorPosition.initialized) {
+            throw new Error("Invariant violation: Attempted to add layout entry before cursor position has been initialized.");
+        }
+
         this.#_data.push({
             value: entry.value,
             height: entry.height,
-            startsAt: this.#_height + initialCursorPosition.row - 1,
+            startsAt: this.#_height + cursorPosition.row - 1,
         });
 
         this.#_height += entry.height;

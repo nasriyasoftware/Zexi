@@ -1,6 +1,6 @@
 import ScreenLayout from "./layout";
 import ScreenCell from "./cell";
-import initialCursorPosition from "./cursor-position";
+import cursorPosition from "./cursor-position";
 import type { SnapshotEntryData, TerminalCellOptions } from "./types";
 
 /**
@@ -63,7 +63,7 @@ import type { SnapshotEntryData, TerminalCellOptions } from "./types";
  * The logical end position of the rendered snapshot is calculated from:
  *
  * ```txt
- * targetRow = initialCursorPosition.row + snapshot.height - 1
+ * targetRow = cursorPosition.row + snapshot.height - 1
  * ```
  *
  * This allows the engine to restore the cursor to the end of its managed
@@ -118,7 +118,7 @@ import type { SnapshotEntryData, TerminalCellOptions } from "./types";
  * starting position:
  *
  * ```txt
- * initialCursorPosition.row - 1
+ * cursorPosition.row - 1
  * ```
  *
  * The current line is then cleared, followed by everything below it.
@@ -286,7 +286,7 @@ class ScreenEngine {
          * and the current snapshot height:
          *
          * ```txt
-         * targetRow = initialCursorPosition.row + snapshot.height - 1
+         * targetRow = cursorPosition.row + snapshot.height - 1
          * ```
          *
          * The horizontal cursor position is reset to column `0`.
@@ -329,7 +329,7 @@ class ScreenEngine {
             }
 
             // Restore cursor to the end of the rendered output
-            const targetRow = initialCursorPosition.row + snapshot.height - 1;
+            const targetRow = cursorPosition.row + snapshot.height - 1;
             process.stdout.cursorTo(0, targetRow);
         }
     }
@@ -338,25 +338,76 @@ class ScreenEngine {
      * Creates and registers a new {@link ScreenCell}.
      *
      * The created cell becomes part of the rendering pipeline immediately.
-     * Any future updates to the cell automatically propagate into the
-     * terminal renderer.
-     *
-     * Internally:
-     *
-     * - a snapshot entry is reserved
-     * - update bindings are attached
-     * - initial rendering is performed
+     * Any future updates to the cell automatically propagate into the terminal
+     * renderer.
      *
      * The cell is rendered relative to the terminal position captured by the
      * screen subsystem. Creating a cell does not initialize or clear the
      * terminal.
      *
+     * ---------------------------------------------------------------------
+     * 🔷 INITIALIZATION REQUIREMENT
+     * ---------------------------------------------------------------------
+     *
+     * The terminal cursor position must be initialized before a screen cell can
+     * be created.
+     *
+     * The captured cursor position establishes the absolute origin from which
+     * the screen engine positions its managed output. Without an initialized
+     * cursor position, the screen engine cannot determine the correct terminal
+     * coordinates for the cell.
+     *
+     * Attempting to create a cell before cursor initialization is therefore
+     * treated as an internal invariant violation.
+     *
+     * Cursor initialization is normally guaranteed by the terminal task queue
+     * before this method is invoked.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 REGISTRATION
+     * ---------------------------------------------------------------------
+     *
+     * Creating a cell performs the following operations:
+     *
+     * - reserves a snapshot entry
+     * - assigns the cell its snapshot index
+     * - attaches the cell's update callback
+     * - creates the {@link ScreenCell} instance
+     * - performs the initial render
+     *
+     * The snapshot entry initially contains an empty value so that the cell's
+     * first update produces a visible rendering change.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 UPDATE PROPAGATION
+     * ---------------------------------------------------------------------
+     *
+     * Once registered, changes to the cell are propagated through the internal
+     * update callback.
+     *
+     * The callback forwards the cell's current rendered value and visual height
+     * to the screen layout and rendering pipeline.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SCREEN OWNERSHIP
+     * ---------------------------------------------------------------------
+     *
+     * The created cell becomes part of the screen engine's managed output.
+     * Subsequent updates therefore participate in the engine's positional
+     * snapshot and incremental rendering system.
+     *
      * @param config - Initial screen cell configuration
      * @returns Newly created screen cell
+     *
+     * @throws Error if the cursor position has not been initialized
      *
      * @since 1.0.0
      */
     create(config: TerminalCellOptions) {
+        if (!cursorPosition.initialized) {
+            throw new Error('Invariant violation: Attempting to create a cell before cursor position is initialized.');
+        }
+
         /** Snapshot index assigned to the new cell. */
         const index = this.#_snapshot.size();
 
@@ -416,9 +467,27 @@ class ScreenEngine {
      * cursor is moved to the row immediately preceding the position captured
      * when the screen subsystem began tracking terminal output.
      *
-     * The clearing process then:
+     * ---------------------------------------------------------------------
+     * 🔷 INITIALIZATION REQUIREMENT
+     * ---------------------------------------------------------------------
      *
-     * - moves the cursor to `initialCursorPosition.row - 1`
+     * The terminal cursor position must be initialized before the screen can
+     * be cleared.
+     *
+     * The captured cursor position establishes the absolute origin of the
+     * screen engine's managed output. Without it, the engine cannot determine
+     * which portion of the terminal belongs to its rendered state.
+     *
+     * Attempting to clear the screen before cursor initialization is therefore
+     * treated as an internal invariant violation.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 CLEARING PROCESS
+     * ---------------------------------------------------------------------
+     *
+     * The clearing process:
+     *
+     * - moves the cursor to `cursorPosition.row - 1`
      * - clears the current line
      * - clears everything below the current position
      * - resets the internal layout snapshot
@@ -426,13 +495,33 @@ class ScreenEngine {
      * This removes the output managed by the engine while preserving terminal
      * content that exists outside its managed region.
      *
-     * After clearing, the next created cell starts a new managed output
-     * sequence from the captured terminal position.
+     * ---------------------------------------------------------------------
+     * 🔷 SUBSEQUENT RENDERING
+     * ---------------------------------------------------------------------
+     *
+     * After clearing, the internal layout snapshot is empty. The next created
+     * cell therefore starts a new managed output sequence from the captured
+     * terminal position.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INVARIANT
+     * ---------------------------------------------------------------------
+     *
+     * Cursor-position initialization is normally guaranteed by the terminal
+     * task queue before screen operations are executed. The explicit check here
+     * protects the screen engine's internal contract if it is invoked outside
+     * that execution path.
+     *
+     * @throws Error if the cursor position has not been initialized
      *
      * @since 1.0.0
      */
     clear() {
-        process.stdout.cursorTo(0, initialCursorPosition.row - 1);
+        if (!cursorPosition.initialized) {
+            throw new Error('Invariant violation: Attempting to clear the screen before the cursor position has been initialized.');
+        }
+
+        process.stdout.cursorTo(0, cursorPosition.row - 1);
         process.stdout.clearLine(1);
         process.stdout.clearScreenDown();
         this.#_snapshot.clear();
@@ -440,3 +529,4 @@ class ScreenEngine {
 }
 
 export default ScreenEngine;
+
