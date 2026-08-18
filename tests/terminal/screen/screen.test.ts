@@ -1,6 +1,15 @@
 import { StdoutMock } from '../../mocks/stdout.mock';
 import ScreenEngine from '../../../src/core/terminal/screen/engine';
 
+jest.mock("../../../src/core/terminal/screen/cursor-position", () => ({
+    __esModule: true,
+    default: {
+        initialized: true,
+        row: 1,
+        column: 0
+    }
+}));
+
 describe('ScreenEngine', () => {
     let mock: StdoutMock;
 

@@ -1,4 +1,14 @@
+import cursorPosition from "../../../src/core/terminal/screen/cursor-position";
 import ScreenLayout from "../../../src/core/terminal/screen/layout";
+
+jest.mock("../../../src/core/terminal/screen/cursor-position", () => ({
+    __esModule: true,
+    default: {
+        initialized: true,
+        row: 1,
+        column: 0
+    }
+}));
 
 describe("ScreenLayout", () => {
     let snapshot: ScreenLayout;
@@ -13,9 +23,9 @@ describe("ScreenLayout", () => {
             snapshot.add({ value: "B", height: 2 });
             snapshot.add({ value: "C", height: 3 });
 
-            expect(snapshot.get(0)).toEqual({ value: "A", height: 1, startsAt: 0 });
-            expect(snapshot.get(1)).toEqual({ value: "B", height: 2, startsAt: 1 });
-            expect(snapshot.get(2)).toEqual({ value: "C", height: 3, startsAt: 3 });
+            expect(snapshot.get(0)).toEqual({ value: "A", height: 1, startsAt: 0 + cursorPosition.row - 1 });
+            expect(snapshot.get(1)).toEqual({ value: "B", height: 2, startsAt: 1 + cursorPosition.row - 1 });
+            expect(snapshot.get(2)).toEqual({ value: "C", height: 3, startsAt: 3 + cursorPosition.row - 1 });
 
             // indirect validation via internal layout logic
             expect(snapshot.height).toBe(6);
@@ -36,7 +46,7 @@ describe("ScreenLayout", () => {
 
             snapshot.update(0, { value: "A1", height: 2 });
 
-            expect(snapshot.get(0)).toEqual({ value: "A1", height: 2, startsAt: 0 });
+            expect(snapshot.get(0)).toEqual({ value: "A1", height: 2, startsAt: 0 + cursorPosition.row - 1 });
             expect(snapshot.height).toBe(4);
         });
 
@@ -86,7 +96,7 @@ describe("ScreenLayout", () => {
             snapshot.add({ value: "A", height: 2 });
 
             expect(snapshot.get(0)).toEqual({
-                startsAt: 0,
+                startsAt: 0 + cursorPosition.row - 1,
                 value: "A",
                 height: 2
             });
