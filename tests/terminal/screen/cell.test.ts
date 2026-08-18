@@ -89,7 +89,7 @@ describe("ScreenCell", () => {
                 template: "${x}-${y}"
             });
 
-            cell.update({ x: 10 }, { patch: true });
+            cell.updateParams({ x: 10 }, { patch: true });
 
             expect(cell.value).toBe("10-2");
         });
@@ -102,7 +102,7 @@ describe("ScreenCell", () => {
 
             expect(cell.value).toBe("1-2");
             
-            cell.update({ x: 9 }, { patch: false });
+            cell.updateParams({ x: 9 }, { patch: false });
 
             expect(cell.value).toBe("9-${y}");
         });
