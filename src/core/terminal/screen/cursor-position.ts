@@ -1,63 +1,65 @@
 /**
  * Queries the terminal for the current cursor position.
  *
- * The terminal responds to the Device Status Report (DSR) cursor-position
- * query with an ANSI escape sequence in the following format:
- *
- * ```txt
- * ESC [ row ; column R
- * ```
- *
- * The response is read from `stdin` while the stream is temporarily placed
- * into raw mode. Once a valid cursor-position response is received, the
- * temporary input handler is removed and the stream is restored to its
- * normal paused state.
+ * The terminal is queried using the ANSI Device Status Report sequence
+ * (`CSI 6 n`). The terminal responds through `stdin` with a cursor-position
+ * report containing the current row and column.
  *
  * ---------------------------------------------------------------------
- * 🔷 TERMINAL REQUIREMENTS
+ * 🔷 INITIALIZATION REQUIREMENTS
  * ---------------------------------------------------------------------
  *
  * The process must be attached to a TTY through `stdin`.
  *
- * If `stdin` is not a TTY, the returned promise is rejected because the
- * terminal cannot be queried reliably.
+ * The function temporarily:
+ *
+ * - enables raw input mode
+ * - resumes `stdin`
+ * - listens for the terminal response
+ *
+ * Once the response is received, `stdin` is restored to its previous state.
  *
  * ---------------------------------------------------------------------
- * 🔷 CURSOR POSITION
+ * 🔷 RESPONSE HANDLING
  * ---------------------------------------------------------------------
  *
- * The returned coordinates are one-based terminal coordinates:
- *
- * - `row` - Current terminal row
- * - `column` - Current terminal column
- *
- * These coordinates correspond directly to the row and column reported by
- * the terminal's ANSI cursor-position response.
+ * Only ANSI cursor-position responses are processed. Unrelated input
+ * received while waiting for the response is ignored.
  *
  * ---------------------------------------------------------------------
- * 🔷 INPUT STATE
+ * 🔷 TIMEOUT
  * ---------------------------------------------------------------------
  *
- * While waiting for the terminal response:
+ * The query is aborted after one second if no valid cursor-position response
+ * is received.
  *
- * - `stdin` is placed into raw mode
- * - `stdin` is resumed
- * - a temporary `data` listener is registered
+ * In that case:
  *
- * Once the response is received, the temporary listener is removed, raw mode
- * is disabled, and `stdin` is paused again.
+ * - the temporary input listener is removed
+ * - raw mode is disabled
+ * - `stdin` is paused
+ * - the returned promise is rejected
  *
  * ---------------------------------------------------------------------
- * 🔷 ASYNCHRONOUS BEHAVIOR
+ * 🔷 RETURN VALUE
  * ---------------------------------------------------------------------
  *
- * Terminal cursor-position queries are asynchronous because the response is
- * provided by the terminal through `stdin`.
+ * Resolves with the cursor position reported by the terminal:
  *
- * @returns Promise resolving to the current one-based terminal cursor
- * position.
+ * ```ts
+ * {
+ *     row: number;
+ *     column: number;
+ * }
+ * ```
  *
- * @throws Error if `stdin` is not attached to a TTY.
+ * Both coordinates are one-based, matching the ANSI cursor-position
+ * convention.
+ *
+ * @returns Promise resolving to the current terminal cursor position
+ *
+ * @throws Error if `stdin` is not attached to a TTY
+ * @throws Error if the terminal does not respond within one second
  *
  * @since 1.0.0
  */
@@ -70,48 +72,71 @@ const getCursorPosition = (): Promise<{ row: number; column: number }> => {
             return;
         }
 
-        /**
-         * Restores `stdin` to its state before the cursor-position query.
-         *
-         * Removes the temporary response listener, disables raw mode, and
-         * pauses the input stream.
-         */
-        const cleanup = () => {
-            stdin.off('data', onData);
-            stdin.setRawMode?.(false);
-            stdin.pause();
-        };
+        const refs = {
+            /**
+             * Timeout used to abort the cursor-position query if the terminal
+             * does not respond within the allowed period.
+             *
+             * @since 1.0.0
+             */
+            timeout: null as NodeJS.Timeout | null,
 
-        /**
-         * Handles terminal responses received through `stdin`.
-         *
-         * The handler waits for an ANSI cursor-position response and ignores
-         * unrelated input until a matching response is received.
-         *
-         * @param data - Data received from the terminal input stream.
-         */
-        const onData = (data: Buffer) => {
-            const response = data.toString();
+            /**
+             * Restores `stdin` to its state before the cursor-position query.
+             *
+             * Removes the temporary response listener, disables raw mode, and
+             * pauses the input stream.
+             *
+             * @since 1.0.0
+             */
+            cleanup: () => {
+                if (refs.timeout) {
+                    clearTimeout(refs.timeout);
+                    refs.timeout = null;
+                }
 
-            const match = response.match(/\x1b\[(\d+);(\d+)R/);
+                stdin.off('data', refs.onData);
+                stdin.setRawMode?.(false);
+                stdin.pause();
+            },
 
-            if (!match) {
-                return;
+            /**
+             * Handles terminal responses received through `stdin`.
+             *
+             * The handler waits for an ANSI cursor-position response and ignores
+             * unrelated input until a matching response is received.
+             *
+             * @param data - Data received from the terminal input stream.
+             *
+             * @since 1.0.0
+             */
+            onData: (data: Buffer) => {
+                const response = data.toString();
+                const match = response.match(/\x1b\[(\d+);(\d+)R/);
+
+                if (!match) {
+                    return;
+                }
+
+                refs.cleanup();
+
+                resolve({
+                    row: Number(match[1]),
+                    column: Number(match[2])
+                });
             }
-
-            cleanup();
-
-            resolve({
-                row: Number(match[1]),
-                column: Number(match[2])
-            });
         };
+
+        refs.timeout = setTimeout(() => {
+            refs.cleanup();
+            reject(new Error('Timeout: No cursor-position response received'));
+        }, 1000);
 
         // Temporarily configure stdin to receive the terminal response
         // without waiting for line-buffered input.
         stdin.setRawMode(true);
         stdin.resume();
-        stdin.on('data', onData);
+        stdin.on('data', refs.onData);
 
         // Request the terminal's current cursor position.
         process.stdout.write('\x1b[6n');
