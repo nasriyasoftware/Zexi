@@ -1,6 +1,7 @@
 import atomix from "@nasriya/atomix";
 import buildStack from "./pipeline/1-graphing/helpers/build.stack";
 import consoleStyler from "./styling/styler";
+import cursorPosition from "./screen/cursor-position";
 
 import TOKENS from "./pipeline/3-tokenization/tokens";
 import ZexiTerminalControllerInstance from "./controller/controller";
@@ -15,6 +16,7 @@ import type { DebugOptions } from "./pipeline/4-rendering/renderers/debug/types"
 import type { TerminalLogOptions, ZexiLogLevel, ZexiTerminalOptions } from "./types";
 import type { TerminalEventName, TerminalEvents, TerminalLogEvent, UnsubscribeHandler } from "./events/types";
 
+const CURSOR_INITIALIZATION_ID = 'cursor-position-initialization-id';
 const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
 
 /**
@@ -347,13 +349,63 @@ class ZexiTerminal {
             },
 
             /**
-             * Prints a log event to the shared screen engine when the event's severity
-             * meets this terminal instance's configured log level.
+             * Schedules a log event for rendering through the shared screen engine when
+             * the event's severity meets this terminal instance's configured log level.
              *
-             * This operation does not emit events. Event emission is performed when
-             * the log event is created.
+             * The printable message is constructed synchronously, but the screen mutation
+             * is deferred to the terminal task queue. This ensures that screen operations
+             * are serialized with cursor-position initialization and other terminal
+             * mutations.
              *
-             * @param event Log event to print.
+             * This operation does not emit events. Log events are emitted when the log
+             * event is created, before this method is invoked.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 LOG LEVEL FILTERING
+             * ---------------------------------------------------------------------
+             *
+             * Events whose severity is below this terminal instance's configured
+             * {@link ZexiTerminal.logLevel} are ignored and are not added to the queue.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 MESSAGE CONSTRUCTION
+             * ---------------------------------------------------------------------
+             *
+             * The printable message is assembled synchronously from the already-rendered
+             * event value.
+             *
+             * The message may include:
+             *
+             * - timestamp and log-level metadata
+             * - ANSI-colored primitive values
+             * - rendered structured values
+             * - a formatted stack trace
+             *
+             * No serialization or rendering is performed by the queued task.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 QUEUED EXECUTION
+             * ---------------------------------------------------------------------
+             *
+             * Before scheduling the screen operation, cursor-position initialization is
+             * ensured.
+             *
+             * The resulting screen mutation is then added to the shared terminal queue
+             * with priority `1`.
+             *
+             * The queued task creates the corresponding screen cell using the message
+             * that was constructed synchronously.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 SYNCHRONOUS API
+             * ---------------------------------------------------------------------
+             *
+             * This method does not wait for the screen operation to complete.
+             *
+             * From the caller's perspective, the method remains synchronous. Only the
+             * final mutation of the shared screen is deferred to the queue.
+             *
+             * @param event - Log event to print.
              *
              * @internal
              * @since 1.0.0
@@ -393,7 +445,81 @@ class ZexiTerminal {
                 }
 
                 const message = parts.join(' ');
-                ZexiTerminal.#_ct.screenEngine.create({ value: message, final: true });
+
+                this.#_helpers.logging.ensureCursorPosition();
+                ZexiTerminal.#_ct.queue.addTask({
+                    priority: 1,
+                    type: 'logging',
+                    action: async () => ZexiTerminal.#_ct.screenEngine.create({ value: message, final: true })
+                });
+            },
+
+            /**
+             * Ensures that the terminal's initial cursor position is scheduled for
+             * initialization before any screen operation is executed.
+             *
+             * Cursor-position initialization requires asynchronous communication with the
+             * terminal. Since the public terminal API remains synchronous, initialization
+             * is delegated to the shared task queue rather than awaited directly by the
+             * caller.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 INITIALIZATION
+             * ---------------------------------------------------------------------
+             *
+             * If the cursor position has not yet been initialized, an initialization task
+             * is added to the terminal queue with the highest priority.
+             *
+             * The initialization task waits for {@link cursorPosition} to query the
+             * terminal and establish its initial cursor position.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 DUPLICATE PREVENTION
+             * ---------------------------------------------------------------------
+             *
+             * Multiple terminal operations may request cursor initialization before the
+             * queue has had an opportunity to execute the initialization task.
+             *
+             * The queue task is therefore assigned a stable identifier and checked using
+             * {@link TasksQueue.hasTask} before being added.
+             *
+             * This guarantees that concurrent synchronous terminal operations do not
+             * enqueue duplicate cursor-position initialization tasks.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 EXECUTION ORDER
+             * ---------------------------------------------------------------------
+             *
+             * Cursor initialization is scheduled with priority `0`, ensuring it executes
+             * before queued screen operations that depend on the initialized cursor
+             * position.
+             *
+             * ---------------------------------------------------------------------
+             * 🔷 SYNCHRONOUS API
+             * ---------------------------------------------------------------------
+             *
+             * This method does not wait for initialization to complete.
+             *
+             * It only ensures that the required initialization task exists in the queue.
+             * The queue is responsible for executing the asynchronous initialization
+             * before subsequent screen operations.
+             *
+             * @since 1.0.0
+             */
+            ensureCursorPosition: () => {
+                if (
+                    !cursorPosition.initialized &&
+                    !ZexiTerminal.#_ct.queue.hasTask(CURSOR_INITIALIZATION_ID)
+                ) {
+                    ZexiTerminal.#_ct.queue.addTask({
+                        id: CURSOR_INITIALIZATION_ID,
+                        priority: 0,
+                        type: 'initialization',
+                        action: async () => {
+                            await cursorPosition.initialize();
+                        }
+                    });
+                }
             }
         }
     }
@@ -560,18 +686,68 @@ class ZexiTerminal {
     /**
      * Clears all entries from the shared terminal screen.
      *
-     * Clearing the screen also emits a `clear` event containing the identifier
-     * and timestamp of the operation.
+     * The clear operation is scheduled through the terminal task queue so that it
+     * is serialized with other screen-engine operations.
+     *
+     * Before scheduling the clear operation, cursor-position initialization is
+     * ensured. This allows the screen engine to restore and clear the terminal
+     * relative to the position captured before Zexi began managing terminal
+     * output.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 QUEUED EXECUTION
+     * ---------------------------------------------------------------------
+     *
+     * The screen is not cleared immediately when this method is called.
+     *
+     * Instead:
+     *
+     * - cursor-position initialization is ensured
+     * - a clear task is added to the shared terminal queue
+     * - the screen engine clears the rendered screen state
+     * - a `clear` event is emitted after the screen has been cleared
+     *
+     * The clear task is executed with priority `3`.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 EVENT
+     * ---------------------------------------------------------------------
+     *
+     * Once the screen has been cleared, a `clear` event is emitted containing:
+     *
+     * - a unique operation identifier
+     * - the timestamp at which the clear operation was executed
+     * - the `clear` event name
+     *
+     * The emitted event is deeply frozen before being dispatched.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 SYNCHRONOUS API
+     * ---------------------------------------------------------------------
+     *
+     * This method does not wait for the queued operation to complete.
+     *
+     * Calling `clear()` therefore remains synchronous from the caller's
+     * perspective, while the underlying terminal operation is serialized through
+     * the internal task queue.
      *
      * @since 1.0.0
      */
     clear(): void {
-        ZexiTerminal.#_ct.screenEngine.clear();
-        ZexiTerminal.#_ct.events.emit('clear', atomix.dataTypes.object.deepFreeze({
-            id: crypto.randomUUID(),
-            time: new Date().toISOString(),
-            name: 'clear'
-        }));
+        this.#_helpers.logging.ensureCursorPosition();
+
+        ZexiTerminal.#_ct.queue.addTask({
+            priority: 3,
+            type: 'clear',
+            action: async () => {
+                ZexiTerminal.#_ct.screenEngine.clear();
+                ZexiTerminal.#_ct.events.emit('clear', atomix.dataTypes.object.deepFreeze({
+                    id: crypto.randomUUID(),
+                    time: new Date().toISOString(),
+                    name: 'clear'
+                }));
+            }
+        });
     }
 
     /**
