@@ -456,22 +456,35 @@ export class ScreenCell {
      * 🔷 INITIALIZATION MODES
      * ---------------------------------------------------------------------
      *
+     * A cell can be initialized using either a direct string value or a set
+     * of template parameters.
+     *
      * ## Direct initialization
+     *
+     * A cell can be initialized with a string value:
      *
      * ```ts
      * new ScreenCell(onUpdate, {
-     *   value: 'Loading...'
+     *     value: 'Loading...'
      * });
      * ```
+     *
+     * The value is rendered directly. A template may optionally be provided
+     * alongside the value for subsequent parameter-based updates.
      *
      * ## Template initialization
      *
+     * A cell can be initialized with template parameters:
+     *
      * ```ts
      * new ScreenCell(onUpdate, {
-     *   template: 'Progress: ${value}%',
-     *   value: { value: 10 }
+     *     template: 'Progress: ${value}%',
+     *     params: { value: 10 }
      * });
      * ```
+     *
+     * Template initialization requires both `params` and `template`. The
+     * parameters are rendered using the supplied template.
      *
      * ---------------------------------------------------------------------
      * 🔷 CONSTRUCTION BEHAVIOR
@@ -480,7 +493,7 @@ export class ScreenCell {
      * During construction:
      *
      * - update notifications are temporarily suppressed
-     * - initial value rendering is performed internally
+     * - the initial value is rendered internally
      * - the cell becomes reactive only after initialization completes
      *
      * ---------------------------------------------------------------------
@@ -488,9 +501,13 @@ export class ScreenCell {
      * ---------------------------------------------------------------------
      *
      * - `onUpdate` MUST be a function
-     * - `options.value` is required
-     * - object values require a template
-     * - templates must be non-empty strings
+     * - `options`, when provided, MUST be an object
+     * - either `value` or `params` MUST be provided
+     * - `value` MUST be a string
+     * - `params` MUST be an object
+     * - `params` MUST be accompanied by a `template`
+     * - `template`, when provided, MUST be a string
+     * - `final`, when provided, MUST be a boolean
      *
      * @param onUpdate - Callback triggered after visible state changes
      * @param options - Initial cell configuration
@@ -500,7 +517,10 @@ export class ScreenCell {
      *
      * @since 1.0.0
      */
-    constructor(onUpdate: (cell: ScreenCell) => void, options?: TerminalCellOptions) {
+    constructor(
+        onUpdate: (cell: ScreenCell) => void,
+        options?: TerminalCellOptions
+    ) {
         try {
             if (typeof onUpdate !== 'function') {
                 throw new Error(`Terminal entry onUpdate must be a function, instead got ${typeof onUpdate}`);
@@ -511,7 +531,7 @@ export class ScreenCell {
             if (options === undefined) { return }
             const config = {
                 isFinal: false,
-                isTemplate: false
+                hasTemplate: false
             }
 
             if (!isRecord(options)) {
@@ -526,29 +546,38 @@ export class ScreenCell {
                 config.isFinal = options.final;
             }
 
-            if (hasOwnProp(options, 'value')) {
-                if (typeof options.value !== 'string' && !isRecord(options.value)) {
-                    throw new Error(`Terminal entry options.value must be a string or an object, instead got ${typeof options.value}`);
-                }
-
-                config.isTemplate = typeof options.value !== 'string';
-            } else {
-                throw new Error(`Terminal entry options.value is required`);
-            }
-
             if (hasOwnProp(options, 'template')) {
                 if (typeof options.template !== 'string') {
                     throw new Error(`Terminal entry options.template must be a string, instead got ${typeof options.template}`);
                 }
 
-                this.template = options.template;
-            } else {
-                if (config.isTemplate) {
-                    throw new Error(`Terminal entry template is required when creating with an object`);
-                }
+                this.#_template = options.template;
+                config.hasTemplate = true;
             }
 
-            this.#_update(options.value, { final: config.isFinal });
+            if (hasOwnProp(options, 'value')) {
+                const value = (options as Record<string, unknown>).value as string;
+                if (typeof value !== 'string') {
+                    throw new Error(`Terminal entry options.value must be a string, instead got ${typeof value}`);
+                }
+
+                this.#_update(value, { final: config.isFinal })
+            } else {
+                if (hasOwnProp(options, 'params')) {
+                    const params = (options as Record<string, unknown>).params as Record<string, unknown>;
+                    if (!isRecord(params)) {
+                        throw new Error(`Terminal entry options.params must be an object, instead got ${typeof params}`);
+                    }
+
+                    if (!config.hasTemplate) {
+                        throw new Error(`Terminal entry template is required when creating with parameters object`);
+                    }
+
+                    this.#_update(params, { final: config.isFinal });
+                } else {
+                    throw new Error('Terminal entry requires either a string `value` or a `params` object to be provided but neither was found');
+                }
+            }
         } finally {
             this.#_flags.constructed = true;
         }

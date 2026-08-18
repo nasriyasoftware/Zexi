@@ -2,6 +2,7 @@ import ScreenLayout from "./layout";
 import ScreenCell from "./cell";
 import cursorPosition from "./cursor-position";
 import type { SnapshotEntryData, TerminalCellOptions } from "./types";
+import TerminalEntry from "./terminal-cell";
 
 /**
  * State-driven terminal rendering engine.
@@ -335,75 +336,82 @@ class ScreenEngine {
     }
 
     /**
-     * Creates and registers a new {@link ScreenCell}.
+     * Creates and registers a new screen output entry.
      *
-     * The created cell becomes part of the rendering pipeline immediately.
-     * Any future updates to the cell automatically propagate into the terminal
+     * The created entry becomes part of the rendering pipeline immediately.
+     * Any future updates to the entry automatically propagate into the terminal
      * renderer.
      *
-     * The cell is rendered relative to the terminal position captured by the
-     * screen subsystem. Creating a cell does not initialize or clear the
-     * terminal.
+     * By default, the method creates an internal {@link ScreenCell}. When the
+     * `target` is set to `'external'`, the method creates a {@link TerminalEntry}
+     * intended to be returned through the terminal's public API.
      *
      * ---------------------------------------------------------------------
      * 🔷 INITIALIZATION REQUIREMENT
      * ---------------------------------------------------------------------
      *
-     * The terminal cursor position must be initialized before a screen cell can
-     * be created.
+     * The terminal cursor position must be initialized before an entry can be
+     * created.
      *
      * The captured cursor position establishes the absolute origin from which
      * the screen engine positions its managed output. Without an initialized
      * cursor position, the screen engine cannot determine the correct terminal
-     * coordinates for the cell.
+     * coordinates for the entry.
      *
-     * Attempting to create a cell before cursor initialization is therefore
+     * Attempting to create an entry before cursor initialization is therefore
      * treated as an internal invariant violation.
-     *
-     * Cursor initialization is normally guaranteed by the terminal task queue
-     * before this method is invoked.
      *
      * ---------------------------------------------------------------------
      * 🔷 REGISTRATION
      * ---------------------------------------------------------------------
      *
-     * Creating a cell performs the following operations:
+     * Creating an entry performs the following operations:
      *
      * - reserves a snapshot entry
-     * - assigns the cell its snapshot index
-     * - attaches the cell's update callback
-     * - creates the {@link ScreenCell} instance
+     * - assigns the entry its snapshot index
+     * - attaches the entry's update callback
+     * - creates the requested entry type
      * - performs the initial render
      *
-     * The snapshot entry initially contains an empty value so that the cell's
+     * The snapshot entry initially contains an empty value so that the entry's
      * first update produces a visible rendering change.
      *
      * ---------------------------------------------------------------------
      * 🔷 UPDATE PROPAGATION
      * ---------------------------------------------------------------------
      *
-     * Once registered, changes to the cell are propagated through the internal
+     * Once registered, changes to the entry are propagated through the internal
      * update callback.
      *
-     * The callback forwards the cell's current rendered value and visual height
+     * The callback forwards the entry's current rendered value and visual height
      * to the screen layout and rendering pipeline.
      *
      * ---------------------------------------------------------------------
-     * 🔷 SCREEN OWNERSHIP
+     * 🔷 TARGET
      * ---------------------------------------------------------------------
      *
-     * The created cell becomes part of the screen engine's managed output.
-     * Subsequent updates therefore participate in the engine's positional
-     * snapshot and incremental rendering system.
+     * The optional `target` parameter determines the type of entry created:
      *
-     * @param config - Initial screen cell configuration
-     * @returns Newly created screen cell
+     * - `'internal'` or omitted → creates a {@link ScreenCell}
+     * - `'external'` → creates a {@link TerminalEntry}
      *
-     * @throws Error if the cursor position has not been initialized
+     * The external target is intended for entries exposed through the terminal's
+     * public API, while the default target is used internally by the screen
+     * engine.
+     *
+     * @param config - Initial configuration for the entry.
+     * @param target - Determines whether an internal or externally exposed entry
+     * is created.
+     * @returns The created screen cell or terminal entry, depending on `target`.
+     *
+     * @throws Error if the cursor position has not been initialized.
      *
      * @since 1.0.0
      */
-    create(config: TerminalCellOptions) {
+    create<T extends 'internal' | 'external' = 'internal'>(
+        config: TerminalCellOptions,
+        target?: T
+    ): T extends 'external' ? TerminalEntry : ScreenCell {
         if (!cursorPosition.initialized) {
             throw new Error('Invariant violation: Attempting to create a cell before cursor position is initialized.');
         }
@@ -434,12 +442,14 @@ class ScreenEngine {
         this.#_snapshot.add({ value: '', height: 1 });
 
         /** Create screen cell instance. */
-        const cell = new ScreenCell(onUpdate, config);
+        const entry = target === 'external'
+            ? new TerminalEntry(onUpdate, config)
+            : new ScreenCell(onUpdate, config);
 
         // Perform initial render.
-        onUpdate(cell);
+        onUpdate(entry);
 
-        return cell;
+        return entry;
     }
 
     /**

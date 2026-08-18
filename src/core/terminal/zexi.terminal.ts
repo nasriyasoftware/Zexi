@@ -11,8 +11,10 @@ import DefaultTokenizer from "./pipeline/3-tokenization/tokenizers/default.token
 import DefaultRenderer from './pipeline/4-rendering/renderers/debug/renderer';
 
 import { ZEXI_LOG_LEVELS } from "./types";
+import type TerminalEntry from "./screen/terminal-cell";
 import type { JsonOptions } from "./pipeline/4-rendering/renderers/json/types";
 import type { DebugOptions } from "./pipeline/4-rendering/renderers/debug/types";
+import type { TerminalCellOptions, TerminalEntryCellTask } from "./screen/types";
 import type { TerminalLogOptions, ZexiLogLevel, ZexiTerminalOptions } from "./types";
 import type { TerminalEventName, TerminalEvents, TerminalLogEvent, UnsubscribeHandler } from "./events/types";
 
@@ -820,6 +822,83 @@ class ZexiTerminal {
      */
     debug(value: unknown, options?: TerminalLogOptions): void {
         this.#_helpers.logging.logLevel('debug', value, options);
+    }
+
+    /**
+      * Creates a dynamic terminal entry.
+      *
+      * A dynamic entry provides a persistent, independently updatable region of
+      * terminal output. The returned entry can be used to modify its output after
+      * it has been created.
+      *
+      * Unlike standard logging methods, dynamic entries are intended for output
+      * whose content changes over time, such as progress indicators, status
+      * displays, and other live terminal information.
+      *
+      * Creating or updating an entry does not emit log events.
+      *
+      * ---------------------------------------------------------------------
+      * 🔷 INITIAL VALUE
+      * ---------------------------------------------------------------------
+      *
+      * An entry may be initialized with either:
+      *
+      * - a direct string value
+      * - template parameters and a template
+      *
+      * ```ts
+      * const entry = await terminal.createEntry({
+      *     value: 'Loading...'
+      * });
+      * ```
+      *
+      * Or:
+      *
+      * ```ts
+      * const entry = await terminal.createEntry({
+      *     template: 'Progress: ${value}%',
+      *     params: { value: 0 }
+      * });
+      * ```
+      *
+      * ---------------------------------------------------------------------
+      * 🔷 LIFECYCLE
+      * ---------------------------------------------------------------------
+      *
+      * The returned entry remains associated with its terminal output and can be
+      * updated using its public API:
+      *
+      * ```ts
+      * entry.update('Complete');
+      * ```
+      *
+      * Template-based entries can update their parameters independently:
+      *
+      * ```ts
+      * entry.updateParams({ value: 50 });
+      * ```
+      *
+      * An entry may be permanently finalized when its output is complete.
+      *
+      * @param options - Initial configuration for the terminal entry.
+      * @returns Promise resolving to the created terminal entry.
+      *
+      * @since 1.0.0
+      */
+    createEntry(options: TerminalCellOptions): Promise<TerminalEntry> {
+        this.#_helpers.logging.ensureCursorPosition();
+
+        return new Promise((resolve, reject) => {
+            const task: TerminalEntryCellTask = {
+                priority: 1,
+                type: 'logging',
+                action: () => ZexiTerminal.#_ct.screenEngine.create(options, 'external'),
+                onResolve: (entry) => resolve(entry),
+                onReject: (error) => reject(error)
+            }
+
+            ZexiTerminal.#_ct.queue.addTask(task);
+        });
     }
 }
 

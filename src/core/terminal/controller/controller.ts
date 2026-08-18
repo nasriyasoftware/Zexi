@@ -143,7 +143,7 @@ class ZexiTerminalController {
      */
     get queue(): TasksQueue {
         if (!this.#_queue) {
-            this.#_queue = new TasksQueue();
+            this.#_queue = new TasksQueue({ autoRun: true });
         }
 
         return this.#_queue;
