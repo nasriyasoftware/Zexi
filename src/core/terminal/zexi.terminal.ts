@@ -1049,9 +1049,34 @@ class ZexiTerminal {
      *
      * An entry may be permanently finalized when its output is complete.
      *
+     * ---------------------------------------------------------------------
+     * 🔷 ERROR HANDLING
+     * ---------------------------------------------------------------------
+     *
+     * The returned promise may be rejected if the entry cannot be created.
+     *
+     * If the terminal's cursor position could not be initialized, the promise
+     * is rejected with a message describing the failure.
+     *
+     * Other errors encountered while creating the entry are propagated through
+     * the returned promise.
+     *
+     * Callers should therefore handle the returned promise accordingly:
+     *
+     * ```ts
+     * try {
+     *     const entry = await terminal.createEntry({
+     *         value: 'Starting...'
+     *     });
+     * } catch (error) {
+     *     console.error('Unable to create terminal entry:', error);
+     * }
+     * ```
+     *
      * @param entryOptions - Initial configuration for the terminal entry.
      * @param logOptions - Optional configuration for logging the initial value.
-     * @returns Promise resolving to the created terminal entry.
+     * @returns Promise resolving to the created terminal entry, or rejecting if
+     *     the entry cannot be created.
      *
      * @since 1.0.0
      */
@@ -1087,7 +1112,7 @@ class ZexiTerminal {
                         return reject(err.message);
                     }
 
-                    (err);
+                    reject(err);
                 }
             }
 
