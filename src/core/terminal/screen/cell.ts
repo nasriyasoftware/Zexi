@@ -843,7 +843,7 @@ export class ScreenCell {
      * - the cell becomes immutable
      * - subsequent updates are rejected
      *
-     * @param value - Template parameters to apply
+     * @param params - Template parameters to apply
      * @param options - Parameter update configuration
      *
      * @throws Error if the cell has already been finalized
@@ -852,10 +852,10 @@ export class ScreenCell {
      * @since 1.0.0
      */
     updateParams(
-        value: Record<string, unknown>,
+        params: Record<string, unknown>,
         options?: { final?: boolean; patch?: boolean }
     ): void {
-        this.#_update(value, options);
+        this.#_update(params, options);
     }
 
     /**
