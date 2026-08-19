@@ -553,7 +553,14 @@ class ZexiTerminal {
             ZexiTerminal.#_ct.queue.addTask({
                 priority: 1,
                 type: 'logging',
-                action: () => ZexiTerminal.#_ct.screenEngine.create({ value: message, final: true })
+                action: () => {
+                    if (cursorPosition.state === 'failed') {
+                        console.error('Unable to print log event because terminal cursor position initialization failed.');
+                        return
+                    }
+
+                    ZexiTerminal.#_ct.screenEngine.create({ value: message, final: true });
+                }
             });
         },
 
@@ -645,7 +652,6 @@ class ZexiTerminal {
                         await cursorPosition.initialize();
                     },
                     onReject: (err: Error) => {
-                        ZexiTerminal.#_ct.queue.autoRun = false;
                         const errMsg = [
                             '#'.repeat(80),
                             'Unable to determine terminal cursor position.',
@@ -1059,7 +1065,14 @@ class ZexiTerminal {
             const task: TerminalEntryCellTask = {
                 priority: 1,
                 type: 'logging',
-                action: () => ZexiTerminal.#_ct.screenEngine.create(entryOptions, 'external'),
+                action: () => {
+                    if (cursorPosition.state === 'failed') {
+                        throw new Error('Unable to create entry due to failed cursor position', {
+                            cause: 'cursor-position-failed'
+                        })
+                    }
+                    return ZexiTerminal.#_ct.screenEngine.create(entryOptions, 'external')
+                },
                 onResolve: (entry) => {
                     if (logOptions?.log === true) {
                         const level = logOptions.level ?? 'info';
@@ -1069,7 +1082,13 @@ class ZexiTerminal {
                     TerminalEntry.attachLogger(entry, this.#_entriesLogger);
                     resolve(entry)
                 },
-                onReject: (error) => reject(error)
+                onReject: (err) => {
+                    if (err.cause === 'cursor-position-failed') {
+                        return reject(err.message);
+                    }
+
+                    (err);
+                }
             }
 
             ZexiTerminal.#_ct.queue.addTask(task);
