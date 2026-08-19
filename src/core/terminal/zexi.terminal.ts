@@ -330,7 +330,7 @@ class ZexiTerminal {
                     level: level,
                     value: {
                         original: value,
-                        serialized: value,
+                        serialized: consoleStyler.strip(value),
                         printable: value
                     }
                 }
@@ -603,14 +603,15 @@ class ZexiTerminal {
          *
          * If cursor-position initialization fails, the rejection handler:
          *
-         * - reports the initialization error to the console
-         * - emits the error through the terminal's fatal logging pipeline
-         * - cancels all pending terminal tasks
+         * - disables automatic task-queue execution
+         * - emits the initialization failure through the terminal's fatal logging
+         *   pipeline
+         * - reports a diagnostic message to the console
          *
-         * Pending tasks are cancelled because screen operations depend on a valid
-         * initial cursor position. Allowing them to execute after initialization has
-         * failed could result in invalid terminal state or incorrect screen
-         * positioning.
+         * Automatic queue execution is disabled because subsequent terminal operations
+         * depend on a valid initial cursor position. Allowing queued screen operations
+         * to continue executing after initialization has failed could result in an
+         * invalid terminal state or incorrect screen positioning.
          *
          * The initialization error is handled asynchronously by the queue and is not
          * thrown synchronously from this method.
@@ -626,8 +627,8 @@ class ZexiTerminal {
          * The queue is responsible for executing the asynchronous initialization
          * before subsequent screen operations.
          *
-         * If initialization fails, pending terminal tasks are cancelled and the
-         * failure is handled by the initialization task's rejection handler.
+         * If initialization fails, automatic task execution is disabled and the
+         * failure is reported through the terminal's fatal logging pipeline.
          *
          * @since 1.0.0
          */
@@ -644,9 +645,17 @@ class ZexiTerminal {
                         await cursorPosition.initialize();
                     },
                     onReject: (err: Error) => {
-                        console.error(err);
-                        this.#_helpers.logging.logLevel('fatal', err, { print: false });
-                        ZexiTerminal.#_ct.queue.cancelPending();
+                        ZexiTerminal.#_ct.queue.autoRun = false;
+                        const errMsg = [
+                            '#'.repeat(80),
+                            'Unable to determine terminal cursor position.',
+                            'The terminal returned an unexpected response to the cursor-position query.',
+                            'Please report this error to the Zexi team.',
+                            '#'.repeat(80)
+                        ].join('\n');
+
+                        this.#_helpers.logging.logLevel('fatal', { message: errMsg, error: err }, { print: false });
+                        console.error(errMsg);
                     }
                 });
             }
