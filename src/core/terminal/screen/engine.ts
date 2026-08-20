@@ -1,8 +1,8 @@
 import ScreenLayout from "./layout";
 import ScreenCell from "./cell";
+import TerminalEntry from "./terminal-cell";
 import cursorPosition from "./cursor-position";
 import type { SnapshotEntryData, TerminalCellOptions } from "./types";
-import TerminalEntry from "./terminal-cell";
 
 /**
  * State-driven terminal rendering engine.
@@ -539,4 +539,3 @@ class ScreenEngine {
 }
 
 export default ScreenEngine;
-
