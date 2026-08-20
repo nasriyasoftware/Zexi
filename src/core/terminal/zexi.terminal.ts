@@ -5,6 +5,7 @@ import cursorPosition from "./screen/cursor-position";
 
 import TerminalEntry from "./screen/terminal-cell";
 import TOKENS from "./pipeline/3-tokenization/tokens";
+import StdinCapture from "./input/stdin/stdin.capture";
 import ZexiTerminalControllerInstance from "./controller/controller";
 import JSONRenderer from "./pipeline/4-rendering/renderers/json/renderer";
 import DefaultRenderer from './pipeline/4-rendering/renderers/debug/renderer';
@@ -14,9 +15,9 @@ import DefaultTokenizer from "./pipeline/3-tokenization/tokenizers/default.token
 import { ZEXI_LOG_LEVELS } from "./types";
 import type { JsonOptions } from "./pipeline/4-rendering/renderers/json/types";
 import type { DebugOptions } from "./pipeline/4-rendering/renderers/debug/types";
-import type { TerminalLogOptions, ZexiLogLevel, ZexiTerminalOptions } from "./types";
 import type { TerminalEventName, TerminalEvents, TerminalLogEvent, UnsubscribeHandler } from "./events/types";
 import type { TerminalCellOptions, TerminalEntryCellTask, TerminalEntryLogOptions, TerminalEntryUpdateLogger } from "./screen/types";
+import type { TerminalConfirmOptions, TerminalLogOptions, TerminalPromptOptions, ZexiLogLevel, ZexiTerminalOptions } from "./types";
 
 /**
  * Stable queue task identifier used for terminal cursor-position
@@ -360,10 +361,10 @@ class ZexiTerminal {
                 const e = atomix.dataTypes.object.deepFreeze(event);
 
                 // Emit the specific log-level event
-                ZexiTerminal.#_ct.events.emit<TerminalEventName>(`log.${e.level}`, e);
+                void ZexiTerminal.#_ct.events.emit<TerminalEventName>(`log.${e.level}`, e);
 
                 // Emit the general log event
-                ZexiTerminal.#_ct.events.emit('log', e);
+                void ZexiTerminal.#_ct.events.emit('log', e);
             },
 
             /**
@@ -885,7 +886,8 @@ class ZexiTerminal {
             type: 'clear',
             action: async () => {
                 ZexiTerminal.#_ct.screenEngine.clear();
-                ZexiTerminal.#_ct.events.emit('clear', atomix.dataTypes.object.deepFreeze({
+
+                void ZexiTerminal.#_ct.events.emit('clear', atomix.dataTypes.object.deepFreeze({
                     id: crypto.randomUUID(),
                     time: new Date().toISOString(),
                     name: 'clear'
@@ -1118,6 +1120,696 @@ class ZexiTerminal {
 
             ZexiTerminal.#_ct.queue.addTask(task);
         });
+    }
+
+    /**
+     * Prompts the user for interactive terminal input and resolves with the
+     * captured value.
+     *
+     * The prompt creates or reuses a {@link TerminalEntry} to display the
+     * interaction and internally uses the STDIN capture system to collect the
+     * user's input.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 TERMINAL ENTRY
+     * ---------------------------------------------------------------------
+     *
+     * When no `entry` is provided, `prompt()` creates a new terminal entry using
+     * the following template:
+     *
+     * ```text
+     * {message}{input}
+     * ```
+     *
+     * The `${input}` parameter is updated as the user types. Once the prompt
+     * completes, the entry created by this method is automatically finalized.
+     *
+     * When an existing {@link TerminalEntry} is supplied through `entry`, that
+     * entry is reused instead. The supplied entry is **not** finalized by
+     * `prompt()`, allowing the caller to update or finalize it after the prompt
+     * completes.
+     *
+     * A reused entry **must define an `input` parameter**. The capture system uses
+     * this parameter to display the value currently being entered.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 RETURN VALUE
+     * ---------------------------------------------------------------------
+     *
+     * The returned promise resolves to the exact string entered by the user, or
+     * `null` when the prompt is cancelled or times out.
+     *
+     * An empty string is a valid result and is distinct from cancellation:
+     *
+     * - A string, including `''`, means the user submitted the input.
+     * - `null` means the prompt was cancelled or timed out.
+     *
+     * ```ts
+     * const value = await terminal.prompt({
+     *     message: 'Enter something: '
+     * });
+     *
+     * if (value === null) {
+     *     terminal.info('Prompt cancelled.');
+     * } else if (value === '') {
+     *     terminal.info('The user submitted an empty value.');
+     * } else {
+     *     terminal.info(`You entered: ${value}`);
+     * }
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INPUT PRIVACY
+     * ---------------------------------------------------------------------
+     *
+     * The `privacy` option controls how the captured value is displayed while
+     * the user is typing. It does not alter the value returned by the prompt.
+     *
+     * The supported privacy modes are:
+     *
+     * - `visible` — display the entered value normally.
+     * - `password` — display one `*` character for each entered character.
+     * - `hidden` — do not display the entered value.
+     *
+     * The default privacy mode is `visible`.
+     *
+     * ```ts
+     * const password = await terminal.prompt({
+     *     message: 'Password: ',
+     *     privacy: 'password'
+     * });
+     * ```
+     *
+     * With `password` privacy, the terminal displays `*` characters while the
+     * actual password remains available through the returned value.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ESCAPE BEHAVIOR
+     * ---------------------------------------------------------------------
+     *
+     * The `escapeBehavior` option determines what happens when the user presses
+     * the Escape key.
+     *
+     * The supported behaviors are:
+     *
+     * - `cancel` — cancel the prompt and resolve with `null`.
+     * - `reset` — clear the current input and continue prompting.
+     * - `ignore` — ignore the Escape key.
+     *
+     * The default behavior is `cancel`.
+     *
+     * ```ts
+     * const value = await terminal.prompt({
+     *     message: 'Enter a value: ',
+     *     escapeBehavior: 'reset'
+     * });
+     * ```
+     *
+     * Pressing `Ctrl+C` is independent of `escapeBehavior`. `Ctrl+C` always
+     * cancels the prompt because it represents termination of the current
+     * terminal operation.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INPUT VALIDATION
+     * ---------------------------------------------------------------------
+     *
+     * Custom validation can be performed through `onCustomValidation`.
+     *
+     * The callback is invoked when the user presses Enter and receives the
+     * complete input value along with a `reject` callback. Calling `reject()`
+     * marks the value as invalid and displays the supplied message to the user.
+     *
+     * ```ts
+     * const port = await terminal.prompt({
+     *     message: 'Enter a port number: ',
+     *     onCustomValidation: (value, reject) => {
+     *         if (value.length === 0) {
+     *             return reject('Port number cannot be empty.');
+     *         }
+     *
+     *         const number = Number(value);
+     *
+     *         if (!Number.isInteger(number) || number < 0 || number > 65535) {
+     *             return reject(
+     *                 'Please enter a valid port number between 0 and 65535.'
+     *             );
+     *         }
+     *     }
+     * });
+     * ```
+     *
+     * When validation fails, the input is cleared and the validation message is
+     * displayed before the user is allowed to enter another value.
+     *
+     * The validation callback may be asynchronous. This is useful when validation
+     * requires an external operation such as checking whether a username exists,
+     * querying a service, or performing another asynchronous operation.
+     *
+     * ```ts
+     * const username = await terminal.prompt({
+     *     message: 'Username: ',
+     *     onCustomValidation: async (value, reject) => {
+     *         if (value.length < 3) {
+     *             return reject(
+     *                 'Username must contain at least 3 characters.'
+     *             );
+     *         }
+     *
+     *         const available = await checkUsernameAvailability(value);
+     *
+     *         if (!available) {
+     *             reject('That username is already taken.');
+     *         }
+     *     }
+     * });
+     * ```
+     *
+     * While asynchronous validation is running, further input is temporarily
+     * disabled and the prompt displays `Please wait...`.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 TIMEOUT
+     * ---------------------------------------------------------------------
+     *
+     * The `timeoutAfter` option can be used to automatically cancel the prompt
+     * after a period of user inactivity.
+     *
+     * ```ts
+     * const value = await terminal.prompt({
+     *     message: 'Enter your name: ',
+     *     timeoutAfter: 30_000
+     * });
+     *
+     * if (value === null) {
+     *     terminal.info('The prompt timed out.');
+     * }
+     * ```
+     *
+     * The timeout is reset whenever the user modifies the input. Therefore,
+     * `timeoutAfter` represents the maximum period of inactivity rather than a
+     * fixed maximum duration for the entire prompt.
+     *
+     * The timeout must be at least `1000` milliseconds.
+     *
+     * If `timeoutAfter` is not specified, the prompt has **no timeout** and waits
+     * indefinitely until the user submits or cancels it.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 REUSING AN EXISTING ENTRY
+     * ---------------------------------------------------------------------
+     *
+     * An existing terminal entry can be supplied when the caller needs complete
+     * control over the entry after the prompt completes.
+     *
+     * The entry must define an `input` parameter because `prompt()` updates that
+     * parameter as the user types.
+     *
+     * ```ts
+     * const entry = await terminal.createEntry({
+     *     template: 'Enter a port number: ${input}',
+     *     params: {
+     *         input: ''
+     *     }
+     * });
+     *
+     * const value = await terminal.prompt({
+     *     entry,
+     *     escapeBehavior: 'cancel'
+     * });
+     *
+     * if (value === null) {
+     *     entry.update('[Skipped] Port number');
+     * } else {
+     *     entry.update(
+     *         `Your application will listen on port ${value}.`
+     *     );
+     * }
+     * ```
+     *
+     * When an existing entry is supplied, `prompt()` does not finalize it. The
+     * caller remains responsible for updating and/or finalizing the entry.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 MULTI-STEP PROMPTS
+     * ---------------------------------------------------------------------
+     *
+     * Multiple prompts can be composed naturally by checking for `null` after
+     * each prompt.
+     *
+     * ```ts
+     * const email = await terminal.prompt({
+     *     message: 'Email address: ',
+     *     onCustomValidation: (value, reject) => {
+     *         if (value.length === 0) {
+     *             return reject('Email address cannot be empty.');
+     *         }
+     *
+     *         if (!/^[^@]+@[^@]+\.[^@]+$/.test(value)) {
+     *             return reject('Please enter a valid email address.');
+     *         }
+     *     }
+     * });
+     *
+     * if (email === null) {
+     *     return;
+     * }
+     *
+     * const password = await terminal.prompt({
+     *     message: 'Password: ',
+     *     privacy: 'password',
+     *     onCustomValidation: (value, reject) => {
+     *         if (value.length < 8) {
+     *             return reject(
+     *                 'Password must contain at least 8 characters.'
+     *             );
+     *         }
+     *     }
+     * });
+     *
+     * if (password === null) {
+     *     return;
+     * }
+     *
+     * // Both values were successfully collected.
+     * ```
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PARAMETERS
+     * ---------------------------------------------------------------------
+     *
+     * @param prompt
+     * Optional configuration controlling how the prompt is displayed and how
+     * input is captured.
+     *
+     * @param prompt.entry
+     * An existing {@link TerminalEntry} to use for displaying the prompt.
+     *
+     * The entry must contain an `input` parameter. That parameter is updated as
+     * the user types.
+     *
+     * The supplied entry is not finalized automatically.
+     *
+     * If omitted, a new entry is created automatically using `message` and an
+     * `${input}` parameter.
+     *
+     * @param prompt.message
+     * The message displayed before the captured input.
+     *
+     * This option is ignored when `entry` is supplied because the existing entry
+     * controls its own presentation.
+     *
+     * @param prompt.privacy
+     * Controls how the user's input is displayed while it is being captured.
+     *
+     * Defaults to `visible`.
+     *
+     * @param prompt.escapeBehavior
+     * Determines how the Escape key is handled.
+     *
+     * Defaults to `cancel`.
+     *
+     * @param prompt.timeoutAfter
+     * The maximum period of inactivity, in milliseconds, before the prompt is
+     * automatically cancelled.
+     *
+     * The value must be at least `1000` milliseconds.
+     *
+     * When specified, the timeout is reset whenever the user modifies the input.
+     * If omitted, the prompt has no timeout and waits indefinitely.
+     *
+     * When the timeout expires, the prompt resolves with `null`.
+     *
+     * @param prompt.onCustomValidation
+     * Optional synchronous or asynchronous callback used to validate the complete
+     * input when the user presses Enter.
+     *
+     * The callback receives the current input value and a `reject` callback.
+     * Calling `reject()` marks the input as invalid and displays the supplied
+     * message to the user.
+     *
+     * If the callback returns a promise, the prompt waits for the asynchronous
+     * validation to complete before deciding whether the input is valid.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ERRORS
+     * ---------------------------------------------------------------------
+     *
+     * @throws {TypeError}
+     * Thrown when an invalid prompt configuration is supplied.
+     *
+     * @returns
+     * A promise that resolves to the captured input string, or `null` when the
+     * prompt is cancelled or times out.
+     *
+     * @example
+     * const value = await terminal.prompt({
+     *     message: 'Enter a value: '
+     * });
+     *
+     * if (value !== null) {
+     *     terminal.info(`You entered: ${value}`);
+     * }
+     */
+    async prompt(
+        prompt?: TerminalPromptOptions
+    ): Promise<string | null> {
+        const extEntry = prompt?.entry instanceof TerminalEntry;
+
+        const entry = extEntry
+            ? prompt.entry!
+            : await this.createEntry({
+                template: `${prompt?.message ?? ''}` + '${input}',
+                params: { input: '' }
+            });
+
+        const value = await new StdinCapture(entry, {
+            privacy: prompt?.privacy,
+            escapeBehavior: prompt?.escapeBehavior,
+            timeoutAfter: prompt?.timeoutAfter,
+            onCustomValidation: prompt?.onCustomValidation
+        }).capture();
+
+        if (!extEntry) {
+            entry.finalize();
+        }
+
+        return value;
+    }
+
+    /**
+     * Prompts the user to confirm or reject an action through standard input.
+     *
+     * The confirmation uses a conventional `[Y/n]` or `[y/N]` prompt depending
+     * on the configured default action. The capitalized choice represents the
+     * default action and is intentionally case-sensitive to require a deliberate
+     * key press.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 BEHAVIOR
+     * ---------------------------------------------------------------------
+     *
+     * When `default` is `true`, the prompt uses `[Y/n]`:
+     *
+     * - Pressing `Enter` accepts the confirmation.
+     * - Typing `Y` explicitly accepts the confirmation.
+     * - Typing `y` asks the user to explicitly type `Y`.
+     * - Typing `Yes` in any letter case accepts the confirmation.
+     * - Typing `n` rejects the confirmation.
+     * - Typing `N` explicitly rejects the confirmation.
+     * - Typing `No` in any letter case rejects the confirmation.
+     * - Any other value is rejected and the user is asked to enter `Y` or `N`.
+     *
+     * When `default` is `false` or omitted, the prompt uses `[y/N]`:
+     *
+     * - Pressing `Enter` rejects the confirmation.
+     * - Typing `N` explicitly rejects the confirmation.
+     * - Typing `n` asks the user to explicitly type `N`.
+     * - Typing `No` in any letter case rejects the confirmation.
+     * - Typing `y` accepts the confirmation.
+     * - Typing `Y` explicitly accepts the confirmation.
+     * - Typing `Yes` in any letter case accepts the confirmation.
+     * - Any other value is rejected and the user is asked to enter `Y` or `N`.
+     *
+     * The capitalized single-letter choice is intentional. Because it normally
+     * requires the user to hold `Shift`, it provides an explicit and deliberate
+     * confirmation of the default action rather than an accidental key press.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 CANCELLATION
+     * ---------------------------------------------------------------------
+     *
+     * The user can cancel the confirmation at any time by pressing `Ctrl+C`.
+     *
+     * Cancellation is distinct from rejection:
+     *
+     * - `true` means the user explicitly accepted the action.
+     * - `false` means the user explicitly rejected the action or selected the
+     *   non-default action.
+     * - `null` means the confirmation was cancelled or timed out.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 TIMEOUT
+     * ---------------------------------------------------------------------
+     *
+     * When `options.timeoutAfter` is specified, the confirmation is automatically
+     * cancelled if the user does not provide a valid response within the
+     * specified duration.
+     *
+     * When no timeout is specified, the confirmation remains active indefinitely
+     * until the user accepts, rejects, or cancels it.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 TERMINAL ENTRY
+     * ---------------------------------------------------------------------
+     *
+     * When `options.entry` is provided with a {@link TerminalEntry}, the existing
+     * entry is used to display and update the confirmation. The caller remains
+     * responsible for managing the lifecycle of that entry.
+     *
+     * When no entry is provided, a new terminal entry is created automatically.
+     * The automatically created entry is finalized after the confirmation
+     * completes.
+     *
+     * If an existing entry is supplied, it must provide an `input` parameter.
+     * The `input` parameter is used by the confirmation to display the user's
+     * current input and final answer.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 RETURN VALUE
+     * ---------------------------------------------------------------------
+     *
+     * @returns
+     * A promise resolving to:
+     *
+     * - `true` when the user accepts the confirmation.
+     * - `false` when the user rejects the confirmation.
+     * - `null` when the user cancels the confirmation with `Ctrl+C` or when the
+     *   confirmation times out.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 PARAMETERS
+     * ---------------------------------------------------------------------
+     *
+     * @param message
+     * The message describing the action that requires confirmation.
+     *
+     * The message must be a non-empty string. Whitespace surrounding the message
+     * is ignored when determining whether it contains any content.
+     *
+     * @param options
+     * Optional confirmation configuration.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 EXAMPLES
+     * ---------------------------------------------------------------------
+     *
+     * @example
+     * // Ask the user to confirm an operation.
+     * const confirmed = await terminal.confirm(
+     *     'Continue with the operation?'
+     * );
+     *
+     * if (confirmed === null) {
+     *     return;
+     * }
+     *
+     * if (confirmed) {
+     *     await performOperation();
+     * }
+     *
+     * @example
+     * // Make acceptance the default action.
+     * //
+     * // Displays:
+     * // Continue with the installation? [Y/n]:
+     * //
+     * // Pressing Enter accepts the operation.
+     * const confirmed = await terminal.confirm(
+     *     'Continue with the installation?',
+     *     { default: true }
+     * );
+     *
+     * if (confirmed === null) {
+     *     return;
+     * }
+     *
+     * if (confirmed) {
+     *     await install();
+     * }
+     *
+     * @example
+     * // Make rejection the default action.
+     * //
+     * // Displays:
+     * // Delete all generated files? [y/N]:
+     * //
+     * // Pressing Enter rejects the operation.
+     * const confirmed = await terminal.confirm(
+     *     'Delete all generated files?',
+     *     { default: false }
+     * );
+     *
+     * if (confirmed === true) {
+     *     await deleteGeneratedFiles();
+     * }
+     *
+     * @example
+     * // Automatically cancel the confirmation after 30 seconds.
+     * const confirmed = await terminal.confirm(
+     *     'Continue with the operation?',
+     *     {
+     *         default: true,
+     *         timeoutAfter: 30_000
+     *     }
+     * );
+     *
+     * if (confirmed === null) {
+     *     return;
+     * }
+     *
+     * @example
+     * // Reuse an existing terminal entry.
+     * //
+     * // The entry must provide an `input` parameter because `confirm()` updates
+     * // it while capturing the user's response.
+     * const entry = await terminal.createEntry({
+     *     template: 'Enable automatic updates? [Y/n]: ${input}',
+     *     params: {
+     *         input: ''
+     *     }
+     * });
+     *
+     * const confirmed = await terminal.confirm(
+     *     'Enable automatic updates?',
+     *     {
+     *         default: true,
+     *         entry
+     *     }
+     * );
+     *
+     * if (confirmed === null) {
+     *     entry.update('[Skipped] Automatic updates');
+     * } else if (confirmed) {
+     *     entry.update('Automatic updates enabled.');
+     * } else {
+     *     entry.update('Automatic updates disabled.');
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ERRORS
+     * ---------------------------------------------------------------------
+     *
+     * @throws {TypeError}
+     * Thrown when `message` is not a string.
+     *
+     * @throws {SyntaxError}
+     * Thrown when `message` is an empty or whitespace-only string.
+     * 
+     * @since 1.0.0
+     */
+    async confirm(
+        message: string,
+        options?: TerminalConfirmOptions
+    ): Promise<boolean | null> {
+        if (typeof message !== 'string') {
+            throw new TypeError(`Expected \`message\` to be a string, received \`${typeof message}\``);
+        }
+
+        if (message.trim().length === 0) {
+            throw new SyntaxError(`Expected \`message\` to be a non-empty string`);
+        }
+
+        const defaultYes = options?.default === true;
+        const choiceLabels = Object.freeze({
+            yes: {
+                value: defaultYes ? 'Y' : 'y',
+                get styled() {
+                    return consoleStyler.color(this.value, 'bright-green');
+                }
+            },
+            no: {
+                value: defaultYes ? 'n' : 'N',
+                get styled() {
+                    return consoleStyler.color(this.value, 'bright-red');
+                }
+            }
+        });
+
+        const extEntry = options?.entry instanceof TerminalEntry;
+        const entry = extEntry
+            ? options.entry!
+            : await this.createEntry({
+                template: `${message} [${choiceLabels.yes.styled}/${choiceLabels.no.styled}]: ` + '${input}',
+                params: { input: '' }
+            });
+
+        const answer = await new StdinCapture(entry, {
+            escapeBehavior: 'ignore',
+            timeoutAfter: options?.timeoutAfter,
+            onCustomValidation: (value, reject) => {
+                const input = value.trim();
+                if (input.length === 0) {
+                    return;
+                }
+
+                if (input.toLowerCase() === 'yes' || input.toLowerCase() === 'no') {
+                    return;
+                }
+
+                if (defaultYes) {
+                    if (input === 'Y') {
+                        return;
+                    }
+
+                    if (input === 'y') {
+                        return reject(
+                            `Please confirm your acceptance by typing '${choiceLabels.yes.styled}'.`
+                        );
+                    }
+
+                    if (input === 'n') {
+                        return;
+                    }
+                } else {
+                    if (input === 'N') {
+                        return;
+                    }
+
+                    if (input === 'n') {
+                        return reject(
+                            `Please confirm your rejection by typing '${choiceLabels.no.styled}'.`
+                        );
+                    }
+
+                    if (input === 'y') {
+                        return;
+                    }
+                }
+
+                reject(`Please enter '${choiceLabels.yes.value}' to accept or '${choiceLabels.no.value}' to reject.`);
+            }
+        }).capture();
+
+        try {
+            if (answer === null) {
+                entry.updateParams({ input: '' });
+                return null;
+            }
+
+            const normalized = answer.toLowerCase().trim();
+            const accepted = normalized === 'y' || normalized === 'yes';
+
+            entry.updateParams({
+                input: accepted
+                    ? consoleStyler.color('Yes', 'bright-green')
+                    : consoleStyler.color('No', 'bright-red')
+            });
+
+            return accepted;
+        } finally {
+            if (!extEntry) {
+                entry.finalize();
+            }
+        }
     }
 }
 
