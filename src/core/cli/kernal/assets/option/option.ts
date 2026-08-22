@@ -1,8 +1,10 @@
-import globalUtils from "../../../../../utils";
+import atomix from "@nasriya/atomix";
 import { normalizeName } from "../../utils/utils";
 import { ZexiOptionPreservedNamesOverrideSymbol } from "../keys";
 import type { OptionAbbrev, OptionName } from "../../types/types";
 import type { CLIOptionConfigType, CLIOptionParams, OptionDataType } from "./types";
+
+const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
 
 const preservedKeys = ['help'];
 const preservedAbbrevs = ['h'];
@@ -18,11 +20,11 @@ export class CLIOption<K extends OptionDataType = 'string'> {
     }
 
     constructor(configs: CLIOptionParams<K>, bypassPreservedKeysAuth?: symbol) {
-        if (!globalUtils.isRecord(configs)) {
+        if (!atomix.valueIs.record(configs)) {
             throw new TypeError(`Expected configs to be a record object, but got ${typeof configs}`);
         }
 
-        if (globalUtils.hasOwnProp(configs, 'name')) {
+        if (hasOwnProp(configs, 'name')) {
             const name = normalizeName(configs.name);
             if (bypassPreservedKeysAuth !== ZexiOptionPreservedNamesOverrideSymbol && preservedKeys.includes(name)) {
                 throw new Error(`The option name "${name}" is reserved`);
@@ -33,7 +35,7 @@ export class CLIOption<K extends OptionDataType = 'string'> {
             throw new Error('Option name is required');
         }
 
-        if (globalUtils.hasOwnProp(configs, 'abbrev')) {
+        if (hasOwnProp(configs, 'abbrev')) {
             const abbrev = normalizeName(configs.abbrev);
             if (abbrev.length > 1) {
                 throw new Error('Abbreviation must be a single character');
@@ -46,7 +48,7 @@ export class CLIOption<K extends OptionDataType = 'string'> {
             this.#_configs.abbrev = abbrev as OptionAbbrev;
         }
 
-        if (globalUtils.hasOwnProp(configs, 'description')) {
+        if (hasOwnProp(configs, 'description')) {
             if (typeof configs.description !== 'string') {
                 throw new TypeError(`The option description (when provided) must be a string, instead got ${typeof configs.description}`);
             }
@@ -59,7 +61,7 @@ export class CLIOption<K extends OptionDataType = 'string'> {
             this.#_configs.description = desc;
         }
 
-        if (globalUtils.hasOwnProp(configs, 'required')) {
+        if (hasOwnProp(configs, 'required')) {
             if (typeof configs.required !== 'boolean') {
                 throw new TypeError(`The option required (when provided) must be a boolean, instead got ${typeof configs.required}`);
             }
@@ -67,7 +69,7 @@ export class CLIOption<K extends OptionDataType = 'string'> {
             this.#_configs.required = configs.required;
         }
 
-        if (globalUtils.hasOwnProp(configs, 'dataType')) {
+        if (hasOwnProp(configs, 'dataType')) {
             if (typeof configs.dataType !== 'string') {
                 throw new TypeError(`The option dataType (when provided) must be a string, instead got ${typeof configs.dataType}`);
             }
@@ -80,7 +82,7 @@ export class CLIOption<K extends OptionDataType = 'string'> {
             this.#_configs.dataType = configs.dataType;
         }
 
-        if (globalUtils.hasOwnProp(configs, 'defaultValue')) {
+        if (hasOwnProp(configs, 'defaultValue')) {
             if (['string', 'number', 'boolean'].includes(this.#_configs.dataType)) {
                 if (typeof configs.defaultValue !== this.#_configs.dataType) {
                     throw new TypeError(`The option defaultValue (when provided) must match the option dataType (${this.#_configs.dataType}), instead got ${typeof configs.defaultValue}`);

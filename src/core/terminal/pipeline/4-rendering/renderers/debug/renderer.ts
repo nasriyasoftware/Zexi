@@ -1,3 +1,4 @@
+import atomix from "@nasriya/atomix";
 import path from "path";
 import keys from "../../shared/keys";
 import consoleStyler from "../../../../styling/styler";
@@ -6,10 +7,10 @@ import DebugHelpers from "./helpers";
 import ZexiRenderingContext from "../../shared/context/context";
 
 import { resolveRendererConfig } from "../../shared/helpers";
-import { deepFreeze, hasOwnProp, isRecord } from "../../../../../../utils/utils";
-
 import type { Token } from "../../../3-tokenization/types";
 import type { DebugConfig, DebugOptions, DebugPipelineFlags } from "./types";
+
+const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
 
 class DebugRenderer {
     /**
@@ -164,7 +165,7 @@ class DebugRenderer {
         options: DebugOptions
     ) {
         if (options !== undefined) {
-            if (!isRecord(options as object)) {
+            if (!atomix.valueIs.record(options as object)) {
                 throw new TypeError(`Expected options to be an object, but got ${typeof options}`);
             }
 
@@ -232,7 +233,7 @@ class DebugRenderer {
         });
 
         Object.seal(this.#_flags);
-        deepFreeze(this.#_config);
+        atomix.dataTypes.object.deepFreeze(this.#_config);
     }
 
     /**

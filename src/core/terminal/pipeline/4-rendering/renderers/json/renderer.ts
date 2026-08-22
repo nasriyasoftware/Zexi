@@ -1,3 +1,4 @@
+import atomix from "@nasriya/atomix";
 import keys from "../../shared/keys";
 import consoleStyler from "../../../../styling/styler";
 import TOKENS from "../../../3-tokenization/tokens";
@@ -10,11 +11,12 @@ import ErrorCache from "./assets/error.cache";
 import ObjectCache from "./assets/object.cache";
 
 import { resolveRendererConfig } from "../../shared/helpers";
-import { deepFreeze, hasOwnProp, isRecord } from "../../../../../../utils/utils";
 
 import type { AnsiColor } from "../../../../styling/types";
 import type { Token } from "../../../3-tokenization/types";
 import type { JSONConfig, JsonOptions, JSONPipelineFlags } from "./types";
+
+const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
 
 /**
  * JSON rendering engine responsible for transforming a token stream
@@ -215,7 +217,7 @@ class JSONRenderer {
         options: JsonOptions
     ) {
         if (options !== undefined) {
-            if (!isRecord(options as object)) {
+            if (!atomix.valueIs.record(options as object)) {
                 throw new TypeError(`Expected options to be an object, but got ${typeof options}`);
             }
 
@@ -287,7 +289,7 @@ class JSONRenderer {
         });
 
         Object.seal(this.#_flags);
-        deepFreeze(this.#_config);
+        atomix.dataTypes.object.deepFreeze(this.#_config);
     }
 
     /**

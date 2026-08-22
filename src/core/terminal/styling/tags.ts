@@ -1,6 +1,8 @@
-import { hasOwnProp } from "../../../utils/utils";
+import atomix from "@nasriya/atomix";
 import { ANSI } from "./ansi";
 import type { KnownColorNames, PredefinedStyle } from "./types";
+
+const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
 
 /**
  * TagsReplacer

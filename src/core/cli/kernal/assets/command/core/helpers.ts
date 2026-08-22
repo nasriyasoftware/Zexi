@@ -1,7 +1,10 @@
-import globalUtils from "../../../../../../utils";
+import atomix from "@nasriya/atomix";
 import zexiTerminal from "../../../../../terminal/zexi.terminal";
 import type { CommandContext } from "../../runner/context/cmd.context";
 import type { CLICommandHandler, CLICommandMiddlewareHandler, MiddlewareTerminateFunction, MiddlewareTerminateResult } from "../types";
+
+const PRINT_LOGS = process.env['ZEXI_ENV'] === 'testing' ? false : true;
+const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
 
 /**
  * Composes middleware functions into a single handler function.
@@ -33,11 +36,11 @@ export function compose(middlewares: CLICommandMiddlewareHandler[], action?: CLI
                 throw new SyntaxError(`The command middleware was terminated without specifying the result.`);
             }
 
-            if (!globalUtils.isRecord(result)) {
+            if (!atomix.valueIs.record(result)) {
                 throw new TypeError(`The command middleware result must be an object literal, received ${typeof result}.`);
             }
 
-            if (globalUtils.hasOwnProp(result, 'ok')) {
+            if (hasOwnProp(result, 'ok')) {
                 const value = result.ok;
                 if (typeof value !== 'boolean') {
                     throw new TypeError(`The "ok" property of the command middleware result must be a boolean, received ${typeof value}.`);
@@ -47,7 +50,7 @@ export function compose(middlewares: CLICommandMiddlewareHandler[], action?: CLI
             }
 
             if (result.ok) {
-                if (globalUtils.hasOwnProp(result, 'message')) {
+                if (hasOwnProp(result, 'message')) {
                     const value = result.message;
                     if (typeof value !== 'string') {
                         throw new TypeError(`The "message" property of the command middleware success result must be a string, received ${typeof value}.`);
@@ -60,7 +63,7 @@ export function compose(middlewares: CLICommandMiddlewareHandler[], action?: CLI
                     result.message = value.trim();
                 }
             } else {
-                if (globalUtils.hasOwnProp(result, 'reason')) {
+                if (hasOwnProp(result, 'reason')) {
                     const value = result.reason;
                     if (typeof value !== 'string') {
                         throw new TypeError(`The "reason" property of the command middleware failure result must be a string, received ${typeof value}.`);
@@ -71,7 +74,7 @@ export function compose(middlewares: CLICommandMiddlewareHandler[], action?: CLI
                     }
 
                     if (value === 'error') {
-                        if (globalUtils.hasOwnProp(result, 'error')) {
+                        if (hasOwnProp(result, 'error')) {
                             const error = result.error;
                             if (!(error instanceof Error)) {
                                 throw new TypeError(`The "error" property of the command middleware error result must be an instance of Error, received ${typeof error}.`);
@@ -82,7 +85,7 @@ export function compose(middlewares: CLICommandMiddlewareHandler[], action?: CLI
                     }
 
                     if (value === 'user_error') {
-                        if (globalUtils.hasOwnProp(result, 'message')) {
+                        if (hasOwnProp(result, 'message')) {
                             const message = result.message;
                             if (typeof message !== 'string') {
                                 throw new TypeError(`The "message" property of the command middleware user error result must be a string, received ${typeof message}.`);
@@ -97,13 +100,13 @@ export function compose(middlewares: CLICommandMiddlewareHandler[], action?: CLI
                             throw new SyntaxError(`The command middleware user error result must contain a "message" property.`);
                         }
 
-                        if (globalUtils.hasOwnProp(result, 'meta')) {
-                            if (!globalUtils.isRecord(result.meta)) {
+                        if (hasOwnProp(result, 'meta')) {
+                            if (!atomix.valueIs.record(result.meta)) {
                                 throw new TypeError(`The "meta" property of the command middleware user error result must be an object literal, received ${typeof result.meta}.`);
                             }
 
                             const meta = result.meta;
-                            if (globalUtils.hasOwnProp(meta, 'source')) {
+                            if (hasOwnProp(meta, 'source')) {
                                 const source = meta.source;
                                 if (typeof source !== 'string') {
                                     throw new TypeError(`The "source" property of the "meta" property of the command middleware user error result must be a string, received ${typeof source}.`);
@@ -139,15 +142,15 @@ export function compose(middlewares: CLICommandMiddlewareHandler[], action?: CLI
         if (terminated) {
             const res = terminationResult!;
             if (res.ok) {
-                if (res.message) { zexiTerminal.debug(res.message); }
+                if (res.message) { zexiTerminal.debug(res.message, { print: PRINT_LOGS }); }
             } else {
                 if (res.reason === 'error') {
                     throw res.error;
                 }
 
                 if (res.reason === 'user_error') {
-                    zexiTerminal.error(res.message);
-                    if (res.meta) { zexiTerminal.debug(res.meta); }
+                    zexiTerminal.error(res.message, { print: PRINT_LOGS });
+                    if (res.meta) { zexiTerminal.debug(res.meta, { print: PRINT_LOGS }); }
                 }
             }
             return;

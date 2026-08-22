@@ -10,6 +10,8 @@ import type { CLIAppHandler, CLICommandHandler, CLICommandInternalHandlers, CLIC
 import type { CommandName } from "../../../types/types";
 import type { CommandContext } from "../../runner/context/cmd.context";
 
+const PRINT_LOGS = process.env['ZEXI_ENV'] === 'testing' ? false : true;
+
 class CLICommand<M extends CommandMode> {
     readonly #_commands?: CLICommandManager;
     readonly #_options = new CLIOptionManager();
@@ -86,7 +88,7 @@ class CLICommand<M extends CommandMode> {
         aliases: (input: string[]) => {
             // Check for duplicates
             if (new Set(input).size !== input.length) {
-                zexiTerminal.warn(`Command "${this.name}" has duplicate aliases, which will be ignored`);
+                zexiTerminal.warn(`Command "${this.name}" has duplicate aliases, which will be ignored`, { print: PRINT_LOGS });
             }
 
             // Normalize names
@@ -455,14 +457,17 @@ class CLICommand<M extends CommandMode> {
             const runner = compose(this.#_handlers.middlewares, this.#_handlers.onAction);
             return await runner(ctx);
         } else {
-            zexiTerminal.info(this.help);
+            zexiTerminal.info(this.help, { print: PRINT_LOGS });
 
             /**
              * If the command is a non-delegation command, and is not the root command;
              * Show an error message for the user
              */
             if (!this.delegation.assigned && this.owner) {
-                zexiTerminal.error(`The command "${this.name}" action is not implemented. Read the above help message for more information on usage.`);
+                zexiTerminal.error(
+                    `The command "${this.name}" action is not implemented. Read the above help message for more information on usage.`,
+                    { print: PRINT_LOGS }
+                );
             }
             return;
         }

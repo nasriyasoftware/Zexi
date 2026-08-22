@@ -3,7 +3,8 @@ import CLIOption from "../../../../src/core/cli/kernal/assets/option/option";
 import AppRunner from "../../../../src/core/cli/kernal/assets/runner/app.runner";
 import ZexiApp from "../../../../src/core/cli/kernal/assets/app/app";
 import { ZexiCommandSymbol } from "../../../../src/core/cli/kernal/assets/keys";
-import type {CommandContext} from "../../../../src/core/cli/kernal/assets/runner/context/cmd.context";
+import type { CommandContext } from "../../../../src/core/cli/kernal/assets/runner/context/cmd.context";
+import zexi from "../../../../src";
 
 const makeArgv = (args: string[]) => {
     process.argv = ["node", "test", ...args];
@@ -58,7 +59,7 @@ describe("AppRunner (modern CLICommand model)", () => {
     it("warns when unknown options are provided", async () => {
         makeArgv(["build", "--unknown=true"]);
 
-        const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+        const warnSpy = jest.spyOn(zexi.terminal, 'warn').mockImplementation(async () => undefined);
 
         const root = new CLICommand("root", "static");
         const build = new CLICommand("build", "static");
@@ -71,7 +72,8 @@ describe("AppRunner (modern CLICommand model)", () => {
         await runner.run();
 
         expect(warnSpy).toHaveBeenCalledWith(
-            expect.stringContaining("Unknown CLI parameters")
+            expect.stringContaining("Unknown CLI parameters"),
+            { print: false }
         );
     });
 

@@ -1,6 +1,6 @@
+import atomix from "@nasriya/atomix";
 import TOKENS from "../../../3-tokenization/tokens";
 import { DEFERRED_BODY_ENVELOPES } from "./consts";
-import { isRecord } from "../../../../../../utils/utils";
 import type { Token } from "../../../3-tokenization/types";
 import type {
     EnvelopeTokenizationResult,
@@ -238,7 +238,7 @@ class DataEnvelope<K extends EnvelopeKind> {
             throw new SyntaxError(`${kind} envelope requires a payload and is missing.`);
         }
 
-        if (!isRecord(payload)) {
+        if (!atomix.valueIs.record(payload)) {
             throw new TypeError(`${kind} envelope payload must be an object, but got ${typeof payload}`);
         }
 

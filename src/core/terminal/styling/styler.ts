@@ -1,8 +1,10 @@
+import atomix from "@nasriya/atomix";
 import TagsReplacer from "./tags";
 import { ANSI } from "./ansi";
 import { buildTags, resolveAnsiColor, resolveAnsiStyle } from "./helpers";
-import { hasOwnProp, isRecord } from "../../../utils/utils";
 import type { AnsiColor, AnsiStyle, PredefinedColor, PredefinedStyle } from "./types";
+
+const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
 
 /**
  * ANSI-based terminal styling and formatting engine.
@@ -336,7 +338,7 @@ class ConsoleStyler {
         }
 
         if (options !== undefined) {
-            if (!isRecord(options)) {
+            if (!atomix.valueIs.record(options)) {
                 throw new TypeError(`Expected options (when provided) to be an object, got ${typeof options}`);
             }
 
@@ -441,7 +443,7 @@ class ConsoleStyler {
             throw new TypeError(`Expected options to be an object, got none was provided`);
         }
 
-        if (!isRecord(options)) {
+        if (!atomix.valueIs.record(options)) {
             throw new TypeError(`Expected options (when provided) to be an object, got ${typeof options}`);
         }
 

@@ -1,6 +1,6 @@
+import atomix from "@nasriya/atomix";
 import BaseDataNode from "./assets/base.node";
 import PropertyNode from "./assets/property.node";
-import { isRecord } from "../../../../../utils/utils";
 import type { GraphNode } from "../types";
 
 /**
@@ -126,7 +126,7 @@ class ObjectGraphNode extends BaseDataNode {
      * @since 1.0.0
      */
     constructor(value: object) {
-        const isRecordObject = isRecord(value);
+        const isRecordObject = atomix.valueIs.record(value);
 
         super(isRecordObject ? 'Record' : 'Object');
         this.#_type = isRecordObject ? 'record' : 'object';

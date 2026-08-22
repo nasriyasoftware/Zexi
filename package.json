@@ -7,9 +7,6 @@
     "test": "jest --detectOpenHandles --runInBand --silent",
     "test:verbose": "jest --detectOpenHandles --runInBand",
     "test:coverage": "jest --detectOpenHandles --runInBand --coverage",
-    "test:smoke": "jest --detectOpenHandles --runInBand tests/smoke.test.ts",
-    "test:dev": "cls && jest --detectOpenHandles --runInBand --silent",
-    "dev": "bun run .dev/dev.ts",
     "build": "npm run build:esm && npm run build:cjs && postbuild",
     "build:esm": "npx tsc -p tsconfig.esm.json",
     "build:cjs": "npx tsc -p tsconfig.cjs.json"
