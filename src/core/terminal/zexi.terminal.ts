@@ -340,7 +340,7 @@ class ZexiTerminal {
             },
 
             /**
-             * Freezes and emits a completed terminal log event.
+             * Freezes and asynchronously emits a completed terminal log event.
              *
              * The event is emitted through both:
              *
@@ -349,26 +349,33 @@ class ZexiTerminal {
              *
              * Both events receive the same immutable event object.
              *
+             * The level-specific event is fully emitted before the general `log` event
+             * is emitted. The returned promise resolves only after both event emissions
+             * and their asynchronous listeners have completed.
+             *
              * This helper performs event emission only. It does not serialize, render,
              * capture stack traces, or print the event.
              *
              * @param event - Completed terminal log event to emit.
              *
+             * @returns A promise that resolves after both log events have been emitted.
+             *
              * @internal
              * @since 1.0.0
              */
-            logEvent: (event: TerminalLogEvent) => {
+            logEvent: async (event: TerminalLogEvent) => {
                 const e = atomix.dataTypes.object.deepFreeze(event);
 
                 // Emit the specific log-level event
-                void ZexiTerminal.#_ct.events.emit<TerminalEventName>(`log.${e.level}`, e);
+                await ZexiTerminal.#_ct.events.emit<TerminalEventName>(`log.${e.level}`, e);
 
                 // Emit the general log event
-                void ZexiTerminal.#_ct.events.emit('log', e);
+                await ZexiTerminal.#_ct.events.emit('log', e);
             },
 
             /**
-             * Processes a value and creates a log event at the specified severity level.
+             * Processes a value and asynchronously creates, emits, and optionally prints
+             * a log event at the specified severity level.
              *
              * This operation:
              *
@@ -377,11 +384,16 @@ class ZexiTerminal {
              * 3. Produces the printable representation.
              * 4. Creates the terminal log event.
              * 5. Optionally captures the caller stack.
-             * 6. Emits the completed event through {@link logEvent}.
-             * 7. Optionally prints the event according to this terminal's log level.
+             * 6. Emits the completed event through {@link logEvent} and waits for all
+             *    event listeners to complete.
+             * 7. Optionally prints the event according to this terminal's log level and
+             *    waits for the queued screen operation to complete.
              *
              * The configured terminal log level affects printing only. It does not
              * prevent the event from being emitted.
+             *
+             * The returned promise resolves after all requested event emission and
+             * terminal rendering operations have completed.
              *
              * Unlike {@link logEntry}, this method accepts an arbitrary value and
              * processes it through the terminal's normal serialization and rendering
@@ -391,14 +403,17 @@ class ZexiTerminal {
              * @param value - Value to log.
              * @param options - Logging and rendering options.
              *
+             * @returns A promise that resolves after the log event has been emitted and,
+             * optionally, printed to the terminal.
+             *
              * @internal
              * @since 1.0.0
              */
-            logLevel: (
+            logLevel: async (
                 level: ZexiLogLevel,
                 value: unknown,
                 options?: TerminalLogOptions
-            ): void => {
+            ): Promise<void> => {
                 const ansiEnabled = (() => {
                     if (level === 'debug' || level === 'info') {
                         return true;
@@ -443,11 +458,11 @@ class ZexiTerminal {
                     draft.trace = { original: stack, printable };
                 }
 
-                this.#_helpers.logging.logEvent(draft);
+                await this.#_helpers.logging.logEvent(draft);
 
                 if (print) {
                     // Print to the console if the log level is high enough
-                    this.#_helpers.printEvent(draft);
+                    await this.#_helpers.printEvent(draft);
                 }
             },
         },
@@ -501,20 +516,31 @@ class ZexiTerminal {
          * that was constructed synchronously.
          *
          * ---------------------------------------------------------------------
-         * 🔷 SYNCHRONOUS API
+         * 🔷 ASYNCHRONOUS API
          * ---------------------------------------------------------------------
          *
-         * This method does not wait for the screen operation to complete.
+         * The printable message is constructed synchronously, but the screen
+         * mutation is executed asynchronously through the shared terminal task
+         * queue.
          *
-         * From the caller's perspective, the method remains synchronous. Only the
-         * final mutation of the shared screen is deferred to the queue.
+         * The returned promise resolves after the queued screen operation has
+         * completed.
+         *
+         * The promise rejects when the queued screen operation fails.
+         *
+         * Callers may await the returned promise when they need to ensure that
+         * the log event has been rendered to the terminal before continuing:
+         *
+         * ```ts
+         * await this.#_helpers.printEvent(event);
+         * ```
          *
          * @param event - Log event to print.
          *
          * @internal
          * @since 1.0.0
          */
-        printEvent: (event: TerminalLogEvent): void => {
+        printEvent: async (event: TerminalLogEvent): Promise<void> => {
             if (ZEXI_LOG_LEVELS.indexOf(this.#_configs.logLevel) > ZEXI_LOG_LEVELS.indexOf(event.level)) {
                 return;
             }
@@ -551,18 +577,27 @@ class ZexiTerminal {
             const message = parts.join(' ');
 
             this.#_helpers.ensureCursorPosition();
-            ZexiTerminal.#_ct.queue.addTask({
-                priority: 1,
-                type: 'logging',
-                action: () => {
-                    if (cursorPosition.state === 'failed') {
-                        console.error('Unable to print log event because terminal cursor position initialization failed.');
-                        return
-                    }
 
-                    ZexiTerminal.#_ct.screenEngine.create({ value: message, final: true });
-                }
-            });
+            return new Promise<void>((res, rej) => {
+                ZexiTerminal.#_ct.queue.addTask({
+                    priority: 1,
+                    type: 'logging',
+                    action: () => {
+                        if (cursorPosition.state === 'failed') {
+                            throw new Error(
+                                'Unable to print log event because terminal cursor position initialization failed.'
+                            );
+                        }
+
+                        ZexiTerminal.#_ct.screenEngine.create({
+                            value: message,
+                            final: true
+                        });
+                    },
+                    onResolve: res,
+                    onReject: rej
+                });
+            })
         },
 
         /**
@@ -867,32 +902,49 @@ class ZexiTerminal {
      * The emitted event is deeply frozen before being dispatched.
      *
      * ---------------------------------------------------------------------
-     * 🔷 SYNCHRONOUS API
+     * 🔷 ASYNCHRONOUS API
      * ---------------------------------------------------------------------
      *
-     * This method does not wait for the queued operation to complete.
+     * The clear operation is queued and executed asynchronously.
      *
-     * Calling `clear()` therefore remains synchronous from the caller's
-     * perspective, while the underlying terminal operation is serialized through
-     * the internal task queue.
+     * The returned promise resolves after:
+     *
+     * - the screen engine has cleared the terminal
+     * - the `clear` event has been emitted
+     * - all asynchronous `clear` event listeners have completed
+     *
+     * The promise rejects if the queued clear operation fails.
+     *
+     * Callers can therefore await the operation when they need to ensure that
+     * the terminal has completed clearing before continuing:
+     *
+     * ```ts
+     * await terminal.clear();
+     * ```
+     *
+     * The method remains non-blocking when the returned promise is not awaited.
      *
      * @since 1.0.0
      */
-    clear(): void {
+    clear(): Promise<void> {
         this.#_helpers.ensureCursorPosition();
 
-        ZexiTerminal.#_ct.queue.addTask({
-            priority: 3,
-            type: 'clear',
-            action: async () => {
-                ZexiTerminal.#_ct.screenEngine.clear();
+        return new Promise((res, rej) => {
+            ZexiTerminal.#_ct.queue.addTask({
+                priority: 3,
+                type: 'clear',
+                action: async () => {
+                    ZexiTerminal.#_ct.screenEngine.clear();
 
-                void ZexiTerminal.#_ct.events.emit('clear', atomix.dataTypes.object.deepFreeze({
-                    id: crypto.randomUUID(),
-                    time: new Date().toISOString(),
-                    name: 'clear'
-                }));
-            }
+                    await ZexiTerminal.#_ct.events.emit('clear', atomix.dataTypes.object.deepFreeze({
+                        id: crypto.randomUUID(),
+                        time: new Date().toISOString(),
+                        name: 'clear'
+                    }));
+                },
+                onResolve: res,
+                onReject: rej
+            });
         });
     }
 
@@ -901,13 +953,15 @@ class ZexiTerminal {
      *
      * Fatal messages represent the highest-severity logging level.
      *
-     * @param value Value to render and log.
-     * @param options Optional rendering, tracing, and printing options.
+     * @param value - Value to render and log.
+     * @param options - Optional rendering, tracing, and printing options.
+     *
+     * @returns A promise that resolves when the log operation has completed.
      *
      * @since 1.0.0
      */
-    fatal(value: unknown, options?: TerminalLogOptions): void {
-        this.#_helpers.logging.logLevel('fatal', value, options);
+    fatal(value: unknown, options?: TerminalLogOptions): Promise<void> {
+        return this.#_helpers.logging.logLevel('fatal', value, options);
     }
 
     /**
@@ -916,13 +970,15 @@ class ZexiTerminal {
      * Error messages represent serious failures that occurred during
      * application execution.
      *
-     * @param value Value to render and log.
-     * @param options Optional rendering, tracing, and printing options.
+     * @param value - Value to render and log.
+     * @param options - Optional rendering, tracing, and printing options.
+     *
+     * @returns A promise that resolves when the log operation has completed.
      *
      * @since 1.0.0
      */
-    error(value: unknown, options?: TerminalLogOptions): void {
-        this.#_helpers.logging.logLevel('error', value, options);
+    error(value: unknown, options?: TerminalLogOptions): Promise<void> {
+        return this.#_helpers.logging.logLevel('error', value, options);
     }
 
     /**
@@ -931,13 +987,15 @@ class ZexiTerminal {
      * Warning messages indicate potentially problematic conditions that do
      * not necessarily prevent the application from continuing.
      *
-     * @param value Value to render and log.
-     * @param options Optional rendering, tracing, and printing options.
+     * @param value - Value to render and log.
+     * @param options - Optional rendering, tracing, and printing options.
+     *
+     * @returns A promise that resolves when the log operation has completed.
      *
      * @since 1.0.0
      */
-    warn(value: unknown, options?: TerminalLogOptions): void {
-        this.#_helpers.logging.logLevel('warn', value, options);
+    warn(value: unknown, options?: TerminalLogOptions): Promise<void> {
+        return this.#_helpers.logging.logLevel('warn', value, options);
     }
 
     /**
@@ -945,13 +1003,15 @@ class ZexiTerminal {
      *
      * Informational messages describe normal application activity or state.
      *
-     * @param value Value to render and log.
-     * @param options Optional rendering, tracing, and printing options.
+     * @param value - Value to render and log.
+     * @param options - Optional rendering, tracing, and printing options.
+     *
+     * @returns A promise that resolves when the log operation has completed.
      *
      * @since 1.0.0
      */
-    info(value: unknown, options?: TerminalLogOptions): void {
-        this.#_helpers.logging.logLevel('info', value, options);
+    info(value: unknown, options?: TerminalLogOptions): Promise<void> {
+        return this.#_helpers.logging.logLevel('info', value, options);
     }
 
     /**
@@ -959,13 +1019,15 @@ class ZexiTerminal {
      *
      * Debug messages are intended for detailed diagnostic information.
      *
-     * @param value Value to render and log.
-     * @param options Optional rendering, tracing, and printing options.
+     * @param value - Value to render and log.
+     * @param options - Optional rendering, tracing, and printing options.
+     *
+     * @returns A promise that resolves when the log operation has completed.
      *
      * @since 1.0.0
      */
-    debug(value: unknown, options?: TerminalLogOptions): void {
-        this.#_helpers.logging.logLevel('debug', value, options);
+    debug(value: unknown, options?: TerminalLogOptions): Promise<void> {
+        return this.#_helpers.logging.logLevel('debug', value, options);
     }
 
     /**

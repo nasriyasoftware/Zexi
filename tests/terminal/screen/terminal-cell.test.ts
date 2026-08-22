@@ -1,7 +1,13 @@
 import TerminalEntry from "../../../src/core/terminal/screen/terminal-cell";
 import type {
+    ScreenCellEngineEvents,
     TerminalEntryUpdateLogger
 } from "../../../src/core/terminal/screen/types";
+
+const createEvents = (): ScreenCellEngineEvents => ({
+    onUpdate: () => { },
+    onRemove: () => { }
+});
 
 describe("TerminalEntry", () => {
     let entry: TerminalEntry;
@@ -11,7 +17,7 @@ describe("TerminalEntry", () => {
         logger = jest.fn();
 
         entry = new TerminalEntry(
-            () => { },
+            createEvents(),
             {
                 value: "Initial"
             }
@@ -24,13 +30,18 @@ describe("TerminalEntry", () => {
         it("creates an entry with the initial value", () => {
             expect(entry.value).toBe("Initial");
             expect(entry.final).toBe(false);
+            expect(entry.height).toBe(1);
+            expect(entry.template).toBeUndefined();
+            expect(entry.params).toEqual({});
         });
 
         it("supports template-based entries", () => {
             const templateEntry = new TerminalEntry(
-                () => { },
+                createEvents(),
                 {
-                    params: { name: "World" },
+                    params: {
+                        name: "World"
+                    },
                     template: "Hello ${name}"
                 }
             );
@@ -38,6 +49,26 @@ describe("TerminalEntry", () => {
             TerminalEntry.attachLogger(templateEntry, logger);
 
             expect(templateEntry.value).toBe("Hello World");
+            expect(templateEntry.template).toBe("Hello ${name}");
+            expect(templateEntry.params).toEqual({
+                name: "World"
+            });
+        });
+
+        it("does not invoke the logger during construction", () => {
+            const templateEntry = new TerminalEntry(
+                createEvents(),
+                {
+                    params: {
+                        name: "World"
+                    },
+                    template: "Hello ${name}"
+                }
+            );
+
+            TerminalEntry.attachLogger(templateEntry, logger);
+
+            expect(logger).not.toHaveBeenCalled();
         });
     });
 
@@ -62,6 +93,28 @@ describe("TerminalEntry", () => {
             entry.update("Updated");
 
             expect(entry.value).toBe("Updated");
+        });
+
+        it("preserves the active template", () => {
+            const templateEntry = new TerminalEntry(
+                createEvents(),
+                {
+                    params: {
+                        name: "World"
+                    },
+                    template: "Hello ${name}"
+                }
+            );
+
+            TerminalEntry.attachLogger(templateEntry, logger);
+
+            templateEntry.update("Updated");
+
+            expect(templateEntry.value).toBe("Updated");
+            expect(templateEntry.template).toBe("Hello ${name}");
+            expect(templateEntry.params).toEqual({
+                name: "World"
+            });
         });
 
         it("does not log updates by default", () => {
@@ -110,7 +163,10 @@ describe("TerminalEntry", () => {
 
             expect(logger).toHaveBeenLastCalledWith(
                 entry.value,
-                expect.any(Object)
+                {
+                    log: false,
+                    level: "info"
+                }
             );
         });
 
@@ -127,20 +183,14 @@ describe("TerminalEntry", () => {
             }).toThrow();
         });
 
-        it("does not pass unrelated logging options to ScreenCell", () => {
+        it("does not pass logging options to ScreenCell", () => {
             entry.update("Updated", {
                 log: true,
                 level: "warn"
             });
 
             expect(entry.value).toBe("Updated");
-            expect(logger).toHaveBeenCalledWith(
-                "Updated",
-                {
-                    log: true,
-                    level: "warn"
-                }
-            );
+            expect(entry.final).toBe(false);
         });
 
         it("does not invoke the logger when the underlying update fails", () => {
@@ -157,7 +207,7 @@ describe("TerminalEntry", () => {
     describe("updateParams()", () => {
         beforeEach(() => {
             entry = new TerminalEntry(
-                () => { },
+                createEvents(),
                 {
                     params: {
                         progress: 0,
@@ -201,6 +251,9 @@ describe("TerminalEntry", () => {
             );
 
             expect(entry.value).toBe("${status}: 50%");
+            expect(entry.params).toEqual({
+                progress: 50
+            });
         });
 
         it("passes logging options to the logger", () => {
@@ -210,7 +263,7 @@ describe("TerminalEntry", () => {
                 },
                 {
                     log: true,
-                    level: "info"
+                    level: "error"
                 }
             );
 
@@ -218,7 +271,7 @@ describe("TerminalEntry", () => {
                 "Starting: 50%",
                 {
                     log: true,
-                    level: "info"
+                    level: "error"
                 }
             );
         });
@@ -268,6 +321,9 @@ describe("TerminalEntry", () => {
             );
 
             expect(entry.value).toBe("${status}: 50%");
+            expect(entry.params).toEqual({
+                progress: 50
+            });
         });
 
         it("logs the resulting rendered value", () => {
@@ -298,19 +354,23 @@ describe("TerminalEntry", () => {
     });
 
     describe("finalization", () => {
-        it("prevents updates after finalization", () => {
+        it("prevents direct updates after finalization", () => {
             entry.finalize();
 
             expect(() => {
                 entry.update("Updated");
-            }).toThrow();
+            }).toThrow(
+                "Unable to update a terminal entry that has already been finalized"
+            );
         });
 
         it("prevents parameter updates after finalization", () => {
             const templateEntry = new TerminalEntry(
-                () => { },
+                createEvents(),
                 {
-                    params: { value: 1 },
+                    params: {
+                        value: 1
+                    },
                     template: "Value: ${value}"
                 }
             );
@@ -323,7 +383,56 @@ describe("TerminalEntry", () => {
                 templateEntry.updateParams({
                     value: 2
                 });
-            }).toThrow();
+            }).toThrow(
+                "Unable to update a terminal entry that has already been finalized"
+            );
+
+            expect(templateEntry.value).toBe("Value: 1");
+            expect(templateEntry.params).toEqual({
+                value: 1
+            });
+        });
+    });
+
+    describe("inherited ScreenCell behavior", () => {
+        it("emits update notifications through the supplied events object", () => {
+            const onUpdate = jest.fn();
+
+            const testEntry = new TerminalEntry(
+                {
+                    onUpdate,
+                    onRemove: () => { }
+                },
+                {
+                    value: "Initial"
+                }
+            );
+
+            TerminalEntry.attachLogger(testEntry, logger);
+
+            testEntry.update("Updated");
+
+            expect(onUpdate).toHaveBeenCalledTimes(1);
+        });
+
+        it("emits removal notifications through the supplied events object", () => {
+            const onRemove = jest.fn();
+
+            const testEntry = new TerminalEntry(
+                {
+                    onUpdate: () => { },
+                    onRemove
+                },
+                {
+                    value: "Initial"
+                }
+            );
+
+            TerminalEntry.attachLogger(testEntry, logger);
+
+            testEntry.remove();
+
+            expect(onRemove).toHaveBeenCalledTimes(1);
         });
     });
 });

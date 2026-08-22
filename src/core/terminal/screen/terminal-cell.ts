@@ -1,5 +1,6 @@
 import atomix from "@nasriya/atomix";
 import ScreenCell from "./cell";
+import type ZexiTerminal from "../zexi.terminal";
 import type {
     TerminalEntryParamsUpdateOptions,
     TerminalEntryUpdateLogger,
