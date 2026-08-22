@@ -212,7 +212,6 @@ describe("mapPass (integration)", () => {
         ]);
 
         const primitives = collectPrimitives(ctx);
-        console.debug(primitives);
 
         expect(primitives[0]).toMatch(/zexi@[0-9].[0-9]/);
         expect(primitives.slice(1)).toEqual([
