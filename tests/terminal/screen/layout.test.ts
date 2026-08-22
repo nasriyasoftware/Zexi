@@ -26,36 +26,60 @@ describe("ScreenLayout", () => {
 
     describe("add()", () => {
         it("adds an entry at the current cursor position", () => {
-            snapshot.add({
+            const id = snapshot.add({
                 value: "A",
                 height: 1
             });
 
-            expect(snapshot.get(0)).toEqual({
+            expect(typeof id).toBe("symbol");
+
+            expect(snapshot.get(id)).toEqual({
+                id,
+                index: 0,
                 value: "A",
                 height: 1,
                 startsAt: cursorPosition.row - 1
             });
         });
 
-        it("positions subsequent entries after the accumulated height", () => {
-            snapshot.add({ value: "A", height: 1 });
-            snapshot.add({ value: "B", height: 2 });
-            snapshot.add({ value: "C", height: 3 });
+        it("assigns a unique identity to each entry", () => {
+            const first = snapshot.add({
+                value: "A",
+                height: 1
+            });
 
-            expect(snapshot.get(0)).toEqual({
+            const second = snapshot.add({
+                value: "B",
+                height: 1
+            });
+
+            expect(first).not.toBe(second);
+        });
+
+        it("positions subsequent entries after the accumulated height", () => {
+            const a = snapshot.add({ value: "A", height: 1 });
+            const b = snapshot.add({ value: "B", height: 2 });
+            const c = snapshot.add({ value: "C", height: 3 });
+
+            expect(snapshot.get(a)).toEqual({
+                id: a,
+                index: 0,
                 value: "A",
                 height: 1,
                 startsAt: cursorPosition.row - 1
             });
 
-            expect(snapshot.get(1)).toEqual({
+            expect(snapshot.get(b)).toEqual({
+                id: b,
+                index: 1,
                 value: "B",
                 height: 2,
                 startsAt: cursorPosition.row
             });
 
-            expect(snapshot.get(2)).toEqual({
+            expect(snapshot.get(c)).toEqual({
+                id: c,
+                index: 2,
                 value: "C",
                 height: 3,
                 startsAt: cursorPosition.row + 2
@@ -77,7 +101,6 @@ describe("ScreenLayout", () => {
         });
 
         it("throws when cursor position has not been initialized", () => {
-            // Override the mocked state for this test.
             (cursorPosition as any).initialized = false;
 
             expect(() => {
@@ -96,7 +119,7 @@ describe("ScreenLayout", () => {
 
     describe("update()", () => {
         it("updates an entry's value and height", () => {
-            snapshot.add({
+            const id = snapshot.add({
                 value: "A",
                 height: 1
             });
@@ -106,7 +129,9 @@ describe("ScreenLayout", () => {
                 height: 2
             });
 
-            expect(snapshot.get(0)).toEqual({
+            expect(snapshot.get(id)).toEqual({
+                id,
+                index: 0,
                 value: "A1",
                 height: 2,
                 startsAt: cursorPosition.row - 1
@@ -121,25 +146,19 @@ describe("ScreenLayout", () => {
                 height: 2
             });
 
-            snapshot.add({
+            const b = snapshot.add({
                 value: "B",
                 height: 2
             });
 
-            const before = snapshot.get(1);
+            const before = snapshot.get(b);
 
             snapshot.update(0, {
                 value: "A1",
                 height: 2
             });
 
-            expect(snapshot.get(0)).toEqual({
-                value: "A1",
-                height: 2,
-                startsAt: cursorPosition.row - 1
-            });
-
-            expect(snapshot.get(1)).toEqual(before);
+            expect(snapshot.get(b)).toEqual(before);
             expect(snapshot.height).toBe(4);
         });
 
@@ -149,12 +168,12 @@ describe("ScreenLayout", () => {
                 height: 1
             });
 
-            snapshot.add({
+            const b = snapshot.add({
                 value: "B",
                 height: 1
             });
 
-            snapshot.add({
+            const c = snapshot.add({
                 value: "C",
                 height: 1
             });
@@ -165,18 +184,24 @@ describe("ScreenLayout", () => {
             });
 
             expect(snapshot.get(0)).toEqual({
+                id: expect.any(Symbol),
+                index: 0,
                 value: "A",
                 height: 3,
                 startsAt: cursorPosition.row - 1
             });
 
-            expect(snapshot.get(1)).toEqual({
+            expect(snapshot.get(b)).toEqual({
+                id: b,
+                index: 1,
                 value: "B",
                 height: 1,
                 startsAt: cursorPosition.row + 2
             });
 
-            expect(snapshot.get(2)).toEqual({
+            expect(snapshot.get(c)).toEqual({
+                id: c,
+                index: 2,
                 value: "C",
                 height: 1,
                 startsAt: cursorPosition.row + 3
@@ -191,12 +216,12 @@ describe("ScreenLayout", () => {
                 height: 3
             });
 
-            snapshot.add({
+            const b = snapshot.add({
                 value: "B",
                 height: 2
             });
 
-            snapshot.add({
+            const c = snapshot.add({
                 value: "C",
                 height: 2
             });
@@ -206,19 +231,17 @@ describe("ScreenLayout", () => {
                 height: 1
             });
 
-            expect(snapshot.get(0)).toEqual({
-                value: "A",
-                height: 1,
-                startsAt: cursorPosition.row - 1
-            });
-
-            expect(snapshot.get(1)).toEqual({
+            expect(snapshot.get(b)).toEqual({
+                id: b,
+                index: 1,
                 value: "B",
                 height: 2,
                 startsAt: cursorPosition.row
             });
 
-            expect(snapshot.get(2)).toEqual({
+            expect(snapshot.get(c)).toEqual({
+                id: c,
+                index: 2,
                 value: "C",
                 height: 2,
                 startsAt: cursorPosition.row + 2
@@ -233,7 +256,7 @@ describe("ScreenLayout", () => {
                 height: 1
             });
 
-            snapshot.add({
+            const b = snapshot.add({
                 value: "B",
                 height: 2
             });
@@ -243,13 +266,9 @@ describe("ScreenLayout", () => {
                 height: 4
             });
 
-            expect(snapshot.get(0)).toEqual({
-                value: "A",
-                height: 1,
-                startsAt: cursorPosition.row - 1
-            });
-
-            expect(snapshot.get(1)).toEqual({
+            expect(snapshot.get(b)).toEqual({
+                id: b,
+                index: 1,
                 value: "B1",
                 height: 4,
                 startsAt: cursorPosition.row
@@ -259,7 +278,7 @@ describe("ScreenLayout", () => {
         });
 
         it("ignores an invalid index", () => {
-            snapshot.add({
+            const id = snapshot.add({
                 value: "A",
                 height: 1
             });
@@ -269,7 +288,9 @@ describe("ScreenLayout", () => {
                 height: 5
             });
 
-            expect(snapshot.get(0)).toEqual({
+            expect(snapshot.get(id)).toEqual({
+                id,
+                index: 0,
                 value: "A",
                 height: 1,
                 startsAt: cursorPosition.row - 1
@@ -280,7 +301,7 @@ describe("ScreenLayout", () => {
         });
 
         it("ignores a negative index", () => {
-            snapshot.add({
+            const id = snapshot.add({
                 value: "A",
                 height: 1
             });
@@ -290,7 +311,9 @@ describe("ScreenLayout", () => {
                 height: 5
             });
 
-            expect(snapshot.get(0)).toEqual({
+            expect(snapshot.get(id)).toEqual({
+                id,
+                index: 0,
                 value: "A",
                 height: 1,
                 startsAt: cursorPosition.row - 1
@@ -305,38 +328,93 @@ describe("ScreenLayout", () => {
             expect(snapshot.get(0)).toBeNull();
         });
 
-        it("returns a snapshot entry", () => {
-            snapshot.add({
+        it("retrieves an entry by index", () => {
+            const id = snapshot.add({
                 value: "A",
                 height: 2
             });
 
             expect(snapshot.get(0)).toEqual({
+                id,
+                index: 0,
                 value: "A",
                 height: 2,
                 startsAt: cursorPosition.row - 1
             });
         });
 
-        it("returns a copy rather than the internal entry", () => {
-            snapshot.add({
+        it("retrieves an entry by ID", () => {
+            const id = snapshot.add({
                 value: "A",
                 height: 2
             });
 
-            const entry = snapshot.get(0)!;
-
-            entry.value = "mutated";
-            entry.height = 999;
-            entry.startsAt = 999;
-
-            expect(snapshot.get(0)).toEqual({
+            expect(snapshot.get(id)).toEqual({
+                id,
+                index: 0,
                 value: "A",
                 height: 2,
                 startsAt: cursorPosition.row - 1
             });
+        });
 
-            expect(snapshot.height).toBe(2);
+        it("returns null for an unknown ID", () => {
+            snapshot.add({
+                value: "A",
+                height: 1
+            });
+
+            expect(snapshot.get(Symbol())).toBeNull();
+        });
+
+        it("returns a read-only view rather than the internal entry", () => {
+            const id = snapshot.add({
+                value: "A",
+                height: 2
+            });
+
+            const entry = snapshot.get(id)!;
+
+            expect(entry).not.toBe(snapshot.get(id));
+            expect(entry).toEqual({
+                id,
+                index: 0,
+                value: "A",
+                height: 2,
+                startsAt: cursorPosition.row - 1
+            });
+        });
+
+        it("reflects changes to the entry's current index", () => {
+            const a = snapshot.add({ value: "A", height: 1 });
+            const b = snapshot.add({ value: "B", height: 1 });
+            const c = snapshot.add({ value: "C", height: 1 });
+
+            const bView = snapshot.get(b)!;
+
+            expect(bView.index).toBe(1);
+
+            snapshot.remove(0);
+
+            expect(bView.index).toBe(0);
+            expect(snapshot.get(a)).toBeNull();
+            expect(snapshot.get(c)!.index).toBe(1);
+        });
+
+        it("reflects changes to the entry's starting row", () => {
+            snapshot.add({ value: "A", height: 1 });
+
+            const b = snapshot.add({ value: "B", height: 2 });
+            const bView = snapshot.get(b)!;
+
+            expect(bView.startsAt).toBe(cursorPosition.row);
+
+            snapshot.update(0, {
+                value: "A",
+                height: 3
+            });
+
+            expect(bView.startsAt).toBe(cursorPosition.row + 2);
         });
 
         it("returns null for an out-of-range index", () => {
@@ -347,6 +425,134 @@ describe("ScreenLayout", () => {
 
             expect(snapshot.get(1)).toBeNull();
             expect(snapshot.get(999)).toBeNull();
+        });
+    });
+
+    describe("remove()", () => {
+        it("removes the entry at the specified index", () => {
+            snapshot.add({ value: "A", height: 1 });
+            snapshot.add({ value: "B", height: 2 });
+            snapshot.add({ value: "C", height: 3 });
+
+            snapshot.remove(1);
+
+            expect(snapshot.size()).toBe(2);
+            expect(snapshot.height).toBe(4);
+
+            expect(snapshot.get(0)).toMatchObject({
+                value: "A",
+                height: 1
+            });
+
+            expect(snapshot.get(1)).toMatchObject({
+                value: "C",
+                height: 3
+            });
+        });
+
+        it("shifts subsequent entries upward by the removed height", () => {
+            snapshot.add({ value: "A", height: 1 });
+            snapshot.add({ value: "B", height: 2 });
+            snapshot.add({ value: "C", height: 3 });
+
+            const c = snapshot.add({ value: "D", height: 4 });
+
+            snapshot.remove(1);
+
+            expect(snapshot.get(c)).toEqual({
+                id: c,
+                index: 2,
+                value: "D",
+                height: 4,
+                startsAt: cursorPosition.row + 3
+            });
+        });
+
+        it("does not change entries before the removed entry", () => {
+            const a = snapshot.add({ value: "A", height: 1 });
+            snapshot.add({ value: "B", height: 2 });
+
+            snapshot.remove(1);
+
+            expect(snapshot.get(a)).toEqual({
+                id: a,
+                index: 0,
+                value: "A",
+                height: 1,
+                startsAt: cursorPosition.row - 1
+            });
+        });
+
+        it("updates the indexes of subsequent entries dynamically", () => {
+            const a = snapshot.add({ value: "A", height: 1 });
+            const b = snapshot.add({ value: "B", height: 1 });
+            const c = snapshot.add({ value: "C", height: 1 });
+
+            expect(snapshot.get(a)!.index).toBe(0);
+            expect(snapshot.get(b)!.index).toBe(1);
+            expect(snapshot.get(c)!.index).toBe(2);
+
+            snapshot.remove(0);
+
+            expect(snapshot.get(a)).toBeNull();
+            expect(snapshot.get(b)!.index).toBe(0);
+            expect(snapshot.get(c)!.index).toBe(1);
+        });
+
+        it("does nothing for an index of -1", () => {
+            const id = snapshot.add({
+                value: "A",
+                height: 2
+            });
+
+            snapshot.remove(-1);
+
+            expect(snapshot.get(id)).toEqual({
+                id,
+                index: 0,
+                value: "A",
+                height: 2,
+                startsAt: cursorPosition.row - 1
+            });
+
+            expect(snapshot.height).toBe(2);
+            expect(snapshot.size()).toBe(1);
+        });
+
+        it("removes the first entry", () => {
+            snapshot.add({ value: "A", height: 2 });
+            const b = snapshot.add({ value: "B", height: 3 });
+
+            snapshot.remove(0);
+
+            expect(snapshot.size()).toBe(1);
+            expect(snapshot.height).toBe(3);
+
+            expect(snapshot.get(b)).toEqual({
+                id: b,
+                index: 0,
+                value: "B",
+                height: 3,
+                startsAt: cursorPosition.row - 1
+            });
+        });
+
+        it("removes the last entry without shifting previous entries", () => {
+            const a = snapshot.add({ value: "A", height: 2 });
+            snapshot.add({ value: "B", height: 3 });
+
+            snapshot.remove(1);
+
+            expect(snapshot.get(a)).toEqual({
+                id: a,
+                index: 0,
+                value: "A",
+                height: 2,
+                startsAt: cursorPosition.row - 1
+            });
+
+            expect(snapshot.height).toBe(2);
+            expect(snapshot.size()).toBe(1);
         });
     });
 
@@ -390,19 +596,23 @@ describe("ScreenLayout", () => {
         });
 
         it("allows entries to be added again after clearing", () => {
-            snapshot.add({
+            const previousId = snapshot.add({
                 value: "A",
                 height: 2
             });
 
             snapshot.clear();
 
-            snapshot.add({
+            const newId = snapshot.add({
                 value: "B",
                 height: 3
             });
 
-            expect(snapshot.get(0)).toEqual({
+            expect(newId).not.toBe(previousId);
+
+            expect(snapshot.get(newId)).toEqual({
+                id: newId,
+                index: 0,
                 value: "B",
                 height: 3,
                 startsAt: cursorPosition.row - 1

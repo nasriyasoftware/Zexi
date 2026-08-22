@@ -265,6 +265,22 @@ class ScreenLayout {
      * treated as an internal invariant violation.
      *
      * ---------------------------------------------------------------------
+     * 🔷 IDENTITY
+     * ---------------------------------------------------------------------
+     *
+     * Each entry receives a unique {@link symbol} when it is registered.
+     *
+     * The generated identifier remains stable for the lifetime of the entry and
+     * is independent of the entry's current position within the layout.
+     *
+     * The identifier is returned by this method so that callers can retain the
+     * entry's identity without receiving or mutating the layout's internal
+     * snapshot data.
+     *
+     * The identifier can subsequently be used to locate and manipulate the
+     * entry even after other entries have been inserted or removed.
+     *
+     * ---------------------------------------------------------------------
      * 🔷 POSITIONING RULE
      * ---------------------------------------------------------------------
      *
@@ -294,6 +310,7 @@ class ScreenLayout {
      *
      * - total height increases by the new entry's height
      * - ordering is preserved
+     * - the entry receives a stable identity
      *
      * ---------------------------------------------------------------------
      * 🔷 COMPLEXITY
@@ -307,22 +324,35 @@ class ScreenLayout {
      *
      * @param entry - Rendered entry snapshot data
      *
+     * @returns Stable unique identifier assigned to the newly registered entry
+     *
      * @throws Error if the cursor position has not been initialized
      *
      * @since 1.0.0
      */
-    add(entry: SnapshotEntryData) {
+    add(entry: SnapshotEntryData): symbol {
         if (!cursorPosition.initialized) {
             throw new Error("Invariant violation: Attempted to add layout entry before cursor position has been initialized.");
         }
+
+        const data = this.#_data;
+        const id = Symbol();
 
         this.#_data.push({
             value: entry.value,
             height: entry.height,
             startsAt: this.#_height + cursorPosition.row - 1,
+            get id() {
+                return id;
+            },
+            get index() {
+                return data.findIndex(e => e.id === id);
+            }
         });
 
         this.#_height += entry.height;
+
+        return id;
     }
 
     /**
@@ -446,15 +476,44 @@ class ScreenLayout {
     /**
      * Retrieves a read-only snapshot entry view.
      *
+     * An entry can be retrieved either by its current layout index or by its
+     * stable identity.
+     *
+     * Index-based lookup is useful when the current position of an entry is
+     * already known. Identity-based lookup allows an entry to be located
+     * independently of its current position, which is useful after entries
+     * have been inserted or removed before it.
+     *
+     * The returned object is a read-only view over the internal snapshot entry.
+     * Its properties are exposed through getters rather than by exposing the
+     * internal entry object directly. Consequently, derived properties such as
+     * `index` and `startsAt` always reflect the entry's current state within the
+     * layout.
+     *
      * ---------------------------------------------------------------------
-     * 🔷 IMMUTABILITY SAFETY
+     * 🔷 LOOKUP MODES
      * ---------------------------------------------------------------------
      *
-     * Returned entries are shallow-cloned to prevent external mutation
-     * of internal layout state.
+     * When `identifier` is a number, it is treated as the entry's current
+     * zero-based layout index.
+     *
+     * When `identifier` is a symbol, it is treated as the stable identity
+     * assigned to the entry when it was registered.
      *
      * ---------------------------------------------------------------------
-     * 🔷 INVALID INDICES
+     * 🔷 READ-ONLY VIEW
+     * ---------------------------------------------------------------------
+     *
+     * The returned view does not expose the internal layout entry by reference.
+     * Its properties are accessed through read-only getters, preventing callers
+     * from modifying the layout's internal state.
+     *
+     * Dynamic properties such as `index` and `startsAt` are evaluated when they
+     * are accessed, so the view remains synchronized with subsequent layout
+     * changes.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INVALID IDENTIFIERS
      * ---------------------------------------------------------------------
      *
      * Returns:
@@ -463,18 +522,86 @@ class ScreenLayout {
      * null
      * ```
      *
-     * when the entry does not exist.
+     * when no entry matches the supplied identifier.
      *
-     * @param index - Layout entry index
-     * @returns Cloned snapshot entry or `null`
+     * @param identifier - Current entry index or stable entry identity
+     * @returns Read-only snapshot entry view or `null`
      *
      * @since 1.0.0
      */
-    get(index: number) {
-        const entry = this.#_data[index];
+    get(identifier: symbol | number): Readonly<SnapshotEntry> | null {
+        const entry = typeof identifier === "symbol"
+            ? this.#_data.find(e => e.id === identifier)
+            : this.#_data[identifier];
+
         if (!entry) { return null }
 
-        return { ...entry };
+        return {
+            get id() { return entry.id; },
+            get index() { return entry.index; },
+            get value() { return entry.value; },
+            get height() { return entry.height; },
+            get startsAt() { return entry.startsAt; }
+        }
+    }
+
+    /**
+     * Removes an entry from the layout snapshot.
+     *
+     * The entry is removed from the layout and all entries positioned after it
+     * are shifted upward by the height previously occupied by the removed entry.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INVALID INDICES
+     * ---------------------------------------------------------------------
+     *
+     * An index of `-1` is treated as a missing entry and causes no operation.
+     *
+     * This allows the method to be used directly with the result of
+     * {@link SnapshotEntry.index} or an index lookup without requiring a
+     * separate existence check.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 LAYOUT REFLOW
+     * ---------------------------------------------------------------------
+     *
+     * When an entry is removed:
+     *
+     * - the entry is removed from the layout
+     * - the total snapshot height is reduced by the entry's height
+     * - every subsequent entry is shifted upward by the removed height
+     * - the relative ordering of the remaining entries is preserved
+     *
+     * The stable identities of the remaining entries are not affected.
+     *
+     * Their dynamically derived indexes therefore automatically reflect their
+     * new positions within the layout.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 COMPLEXITY
+     * ---------------------------------------------------------------------
+     *
+     * Time complexity:
+     *
+     * ```txt
+     * O(n)
+     * ```
+     *
+     * where `n` is the number of entries following the removed entry.
+     *
+     * @param index - Zero-based layout index of the entry to remove
+     *
+     * @since 1.0.0
+     */
+    remove(index: number) {
+        if (index === -1) { return; }
+
+        const [removed] = this.#_data.splice(index, 1);
+        this.#_height -= removed.height;
+
+        for (let i = index; i < this.#_data.length; i++) {
+            this.#_data[i].startsAt -= removed.height;
+        }
     }
 
     /**

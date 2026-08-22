@@ -1,11 +1,15 @@
 import ScreenCell from "../../../src/core/terminal/screen/cell";
+import type { ScreenCellEngineEvents } from "../../../src/core/terminal/screen/types";
 
-const noop = () => {};
+const createEvents = (): ScreenCellEngineEvents => ({
+    onUpdate: () => { },
+    onRemove: () => { }
+});
 
 describe("ScreenCell", () => {
     describe("construction", () => {
         it("creates an empty cell when no options are provided", () => {
-            const cell = new ScreenCell(noop);
+            const cell = new ScreenCell(createEvents());
 
             expect(cell.value).toBe("");
             expect(cell.final).toBe(false);
@@ -15,7 +19,7 @@ describe("ScreenCell", () => {
         });
 
         it("creates a cell with a direct string value", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Hello"
             });
 
@@ -25,7 +29,7 @@ describe("ScreenCell", () => {
         });
 
         it("creates a cell with a direct value and template", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Hello",
                 template: "Hello ${name}"
             });
@@ -36,7 +40,7 @@ describe("ScreenCell", () => {
         });
 
         it("creates a cell with template parameters", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: { name: "World" },
                 template: "Hello ${name}"
             });
@@ -47,7 +51,7 @@ describe("ScreenCell", () => {
         });
 
         it("creates a finalized cell when final is true", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Done",
                 final: true
             });
@@ -60,29 +64,78 @@ describe("ScreenCell", () => {
             }).toThrow();
         });
 
-        it("does not invoke the update callback during construction", () => {
-            const onUpdate = jest.fn();
+        it("does not emit update events during construction", () => {
+            let updateCount = 0;
 
-            new ScreenCell(onUpdate, {
+            const events: ScreenCellEngineEvents = {
+                onUpdate: () => {
+                    updateCount++;
+                },
+                onRemove: () => { }
+            };
+
+            new ScreenCell(events, {
                 value: "Hello"
             });
 
-            expect(onUpdate).not.toHaveBeenCalled();
+            expect(updateCount).toBe(0);
         });
     });
 
     describe("construction validation", () => {
-        it("throws when onUpdate is not a function", () => {
+        it("throws when events is not an object", () => {
             expect(() => {
                 new ScreenCell(null as any);
             }).toThrow(
-                "Terminal entry onUpdate must be a function"
+                "Expected `events` to be an object"
+            );
+        });
+
+        it("throws when events.onUpdate is missing", () => {
+            expect(() => {
+                new ScreenCell({
+                    onRemove: () => { }
+                } as any);
+            }).toThrow(
+                "Expected `events.onUpdate` to be a function"
+            );
+        });
+
+        it("throws when events.onUpdate is not a function", () => {
+            expect(() => {
+                new ScreenCell({
+                    onUpdate: null,
+                    onRemove: () => { }
+                } as any);
+            }).toThrow(
+                "Expected `events.onUpdate` to be a function"
+            );
+        });
+
+        it("throws when events.onRemove is missing", () => {
+            expect(() => {
+                new ScreenCell({
+                    onUpdate: () => { }
+                } as any);
+            }).toThrow(
+                "Expected `events.onRemove` to be a function"
+            );
+        });
+
+        it("throws when events.onRemove is not a function", () => {
+            expect(() => {
+                new ScreenCell({
+                    onUpdate: () => { },
+                    onRemove: null
+                } as any);
+            }).toThrow(
+                "Expected `events.onRemove` to be a function"
             );
         });
 
         it("throws when options are not an object", () => {
             expect(() => {
-                new ScreenCell(noop, "invalid" as any);
+                new ScreenCell(createEvents(), "invalid" as any);
             }).toThrow(
                 "Terminal entry options (when provided) must be an object"
             );
@@ -90,7 +143,7 @@ describe("ScreenCell", () => {
 
         it("throws when final is not a boolean", () => {
             expect(() => {
-                new ScreenCell(noop, {
+                new ScreenCell(createEvents(), {
                     value: "Hello",
                     final: "true"
                 } as any);
@@ -101,7 +154,7 @@ describe("ScreenCell", () => {
 
         it("throws when value is not a string", () => {
             expect(() => {
-                new ScreenCell(noop, {
+                new ScreenCell(createEvents(), {
                     value: 123
                 } as any);
             }).toThrow(
@@ -111,7 +164,7 @@ describe("ScreenCell", () => {
 
         it("throws when template is not a string", () => {
             expect(() => {
-                new ScreenCell(noop, {
+                new ScreenCell(createEvents(), {
                     value: "Hello",
                     template: 123
                 } as any);
@@ -122,7 +175,7 @@ describe("ScreenCell", () => {
 
         it("throws when params are not an object", () => {
             expect(() => {
-                new ScreenCell(noop, {
+                new ScreenCell(createEvents(), {
                     params: "invalid",
                     template: "${value}"
                 } as any);
@@ -133,7 +186,7 @@ describe("ScreenCell", () => {
 
         it("throws when params are provided without a template", () => {
             expect(() => {
-                new ScreenCell(noop, {
+                new ScreenCell(createEvents(), {
                     params: { value: 1 }
                 } as any);
             }).toThrow(
@@ -143,7 +196,7 @@ describe("ScreenCell", () => {
 
         it("throws when neither value nor params is provided", () => {
             expect(() => {
-                new ScreenCell(noop, {} as any);
+                new ScreenCell(createEvents(), {} as any);
             }).toThrow(
                 "Terminal entry requires either a string `value` or a `params` object to be provided"
             );
@@ -152,7 +205,7 @@ describe("ScreenCell", () => {
 
     describe("direct updates", () => {
         it("replaces the current rendered value", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A"
             });
 
@@ -162,7 +215,7 @@ describe("ScreenCell", () => {
         });
 
         it("preserves the active template", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A",
                 template: "Hello ${name}"
             });
@@ -173,7 +226,7 @@ describe("ScreenCell", () => {
         });
 
         it("preserves stored template parameters", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: { name: "World" },
                 template: "Hello ${name}"
             });
@@ -185,7 +238,7 @@ describe("ScreenCell", () => {
         });
 
         it("allows template rendering to resume after a direct update", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: { name: "World" },
                 template: "Hello ${name}"
             });
@@ -197,7 +250,7 @@ describe("ScreenCell", () => {
         });
 
         it("recalculates height after an update", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A"
             });
 
@@ -207,7 +260,7 @@ describe("ScreenCell", () => {
         });
 
         it("finalizes the cell after applying the update when final is true", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A"
             });
 
@@ -226,16 +279,16 @@ describe("ScreenCell", () => {
 
     describe("template rendering", () => {
         it("renders a single parameter", () => {
-            const cell = new ScreenCell(noop, {
-                params: { name: "AI" },
+            const cell = new ScreenCell(createEvents(), {
+                params: { name: "Ahmad" },
                 template: "Hello ${name}"
             });
 
-            expect(cell.value).toBe("Hello AI");
+            expect(cell.value).toBe("Hello Ahmad");
         });
 
         it("renders multiple parameters", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     a: 1,
                     b: 2
@@ -247,7 +300,7 @@ describe("ScreenCell", () => {
         });
 
         it("replaces every occurrence of a parameter", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     name: "World"
                 },
@@ -258,7 +311,7 @@ describe("ScreenCell", () => {
         });
 
         it("stringifies parameter values", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     count: 42,
                     enabled: true,
@@ -271,7 +324,7 @@ describe("ScreenCell", () => {
         });
 
         it("supports parameter names containing regular-expression characters", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     "a.b": "value"
                 },
@@ -282,7 +335,7 @@ describe("ScreenCell", () => {
         });
 
         it("leaves placeholders without parameters unchanged", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     name: "World"
                 },
@@ -295,7 +348,7 @@ describe("ScreenCell", () => {
 
     describe("parameter updates", () => {
         it("updates template parameters", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     value: 1
                 },
@@ -313,7 +366,7 @@ describe("ScreenCell", () => {
         });
 
         it("merges parameters in patch mode", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     x: 1,
                     y: 2
@@ -333,7 +386,7 @@ describe("ScreenCell", () => {
         });
 
         it("merges parameters when patch is explicitly true", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     x: 1,
                     y: 2
@@ -350,7 +403,7 @@ describe("ScreenCell", () => {
         });
 
         it("replaces all existing parameters when patch is false", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     x: 1,
                     y: 2
@@ -370,7 +423,7 @@ describe("ScreenCell", () => {
         });
 
         it("recalculates height after rendering parameters", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     value: "A"
                 },
@@ -385,7 +438,7 @@ describe("ScreenCell", () => {
         });
 
         it("finalizes after applying parameter updates when final is true", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     value: 1
                 },
@@ -409,7 +462,7 @@ describe("ScreenCell", () => {
         });
 
         it("throws when updating parameters without a template", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Hello"
             });
 
@@ -425,7 +478,7 @@ describe("ScreenCell", () => {
 
     describe("template lifecycle", () => {
         it("returns undefined when no template is assigned", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Hello"
             });
 
@@ -433,7 +486,7 @@ describe("ScreenCell", () => {
         });
 
         it("assigns a template", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Hello"
             });
 
@@ -443,7 +496,7 @@ describe("ScreenCell", () => {
         });
 
         it("clears parameters when a template is assigned", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     value: 1
                 },
@@ -456,7 +509,7 @@ describe("ScreenCell", () => {
         });
 
         it("clears the template and parameters when assigned undefined", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     value: 1
                 },
@@ -470,7 +523,7 @@ describe("ScreenCell", () => {
         });
 
         it("clears the template and parameters when assigned null", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     value: 1
                 },
@@ -484,7 +537,7 @@ describe("ScreenCell", () => {
         });
 
         it("rejects an empty template", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Hello"
             });
 
@@ -496,7 +549,7 @@ describe("ScreenCell", () => {
         });
 
         it("rejects a whitespace-only template", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Hello"
             });
 
@@ -508,7 +561,7 @@ describe("ScreenCell", () => {
         });
 
         it("rejects non-string template assignments", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Hello"
             });
 
@@ -520,7 +573,7 @@ describe("ScreenCell", () => {
         });
 
         it("rejects template changes after finalization", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Hello"
             });
 
@@ -536,13 +589,13 @@ describe("ScreenCell", () => {
 
     describe("height calculation", () => {
         it("reports zero height for an empty cell", () => {
-            const cell = new ScreenCell(noop);
+            const cell = new ScreenCell(createEvents());
 
             expect(cell.height).toBe(0);
         });
 
         it("counts a single line as one row", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "Hello"
             });
 
@@ -550,7 +603,7 @@ describe("ScreenCell", () => {
         });
 
         it("counts multiple lines correctly", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A\nB\nC"
             });
 
@@ -558,7 +611,7 @@ describe("ScreenCell", () => {
         });
 
         it("counts an empty string as one line when explicitly rendered", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A"
             });
 
@@ -569,7 +622,7 @@ describe("ScreenCell", () => {
         });
 
         it("counts trailing newlines as additional rows", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A\n\n"
             });
 
@@ -577,7 +630,7 @@ describe("ScreenCell", () => {
         });
 
         it("counts a value consisting only of newlines correctly", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "\n\n"
             });
 
@@ -587,7 +640,7 @@ describe("ScreenCell", () => {
 
     describe("finalization", () => {
         it("starts as non-finalized", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A"
             });
 
@@ -595,7 +648,7 @@ describe("ScreenCell", () => {
         });
 
         it("finalizes the cell", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A"
             });
 
@@ -605,7 +658,7 @@ describe("ScreenCell", () => {
         });
 
         it("prevents direct updates after finalization", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A"
             });
 
@@ -619,7 +672,7 @@ describe("ScreenCell", () => {
         });
 
         it("prevents parameter updates after finalization", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     value: 1
                 },
@@ -638,7 +691,7 @@ describe("ScreenCell", () => {
         });
 
         it("prevents template changes after finalization", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A"
             });
 
@@ -650,7 +703,7 @@ describe("ScreenCell", () => {
         });
 
         it("is idempotent", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 value: "A"
             });
 
@@ -662,72 +715,194 @@ describe("ScreenCell", () => {
     });
 
     describe("update notifications", () => {
-        it("invokes the callback after a direct update", () => {
-            const onUpdate = jest.fn();
+        it("emits an update event after a direct update", () => {
+            let updateCount = 0;
 
-            const cell = new ScreenCell(onUpdate, {
+            const events: ScreenCellEngineEvents = {
+                onUpdate: () => {
+                    updateCount++;
+                },
+                onRemove: () => { }
+            };
+
+            const cell = new ScreenCell(events, {
                 value: "A"
             });
 
-            onUpdate.mockClear();
+            updateCount = 0;
 
             cell.update("B");
 
-            expect(onUpdate).toHaveBeenCalledTimes(1);
-            expect(onUpdate).toHaveBeenCalledWith(cell);
+            expect(updateCount).toBe(1);
         });
 
-        it("invokes the callback after a parameter update", () => {
-            const onUpdate = jest.fn();
+        it("emits an update event after a parameter update", () => {
+            let updateCount = 0;
 
-            const cell = new ScreenCell(onUpdate, {
+            const events: ScreenCellEngineEvents = {
+                onUpdate: () => {
+                    updateCount++;
+                },
+                onRemove: () => { }
+            };
+
+            const cell = new ScreenCell(events, {
                 params: {
                     value: 1
                 },
                 template: "${value}"
             });
 
-            onUpdate.mockClear();
+            updateCount = 0;
 
             cell.updateParams({
                 value: 2
             });
 
-            expect(onUpdate).toHaveBeenCalledTimes(1);
-            expect(onUpdate).toHaveBeenCalledWith(cell);
+            expect(updateCount).toBe(1);
         });
 
-        it("does not invoke the callback when finalize is called directly", () => {
-            const onUpdate = jest.fn();
+        it("does not emit an update event when finalize is called directly", () => {
+            let updateCount = 0;
 
-            const cell = new ScreenCell(onUpdate, {
+            const events: ScreenCellEngineEvents = {
+                onUpdate: () => {
+                    updateCount++;
+                },
+                onRemove: () => { }
+            };
+
+            const cell = new ScreenCell(events, {
                 value: "A"
             });
 
-            onUpdate.mockClear();
+            updateCount = 0;
 
             cell.finalize();
 
-            expect(onUpdate).not.toHaveBeenCalled();
+            expect(updateCount).toBe(0);
         });
 
-        it("does not invoke the callback during construction", () => {
-            const onUpdate = jest.fn();
+        it("does not emit an update event during construction", () => {
+            let updateCount = 0;
 
-            new ScreenCell(onUpdate, {
+            const events: ScreenCellEngineEvents = {
+                onUpdate: () => {
+                    updateCount++;
+                },
+                onRemove: () => { }
+            };
+
+            new ScreenCell(events, {
                 params: {
                     value: 1
                 },
                 template: "${value}"
             });
 
-            expect(onUpdate).not.toHaveBeenCalled();
+            expect(updateCount).toBe(0);
+        });
+    });
+
+    describe("removal", () => {
+        it("emits a removal event when removed", () => {
+            let removed = false;
+
+            const events: ScreenCellEngineEvents = {
+                onUpdate: () => { },
+                onRemove: () => {
+                    removed = true;
+                }
+            };
+
+            const cell = new ScreenCell(events, {
+                value: "A"
+            });
+
+            cell.remove();
+
+            expect(removed).toBe(true);
+        });
+
+        it("does not emit the removal event more than once", () => {
+            let removeCount = 0;
+
+            const events: ScreenCellEngineEvents = {
+                onUpdate: () => { },
+                onRemove: () => {
+                    removeCount++;
+                }
+            };
+
+            const cell = new ScreenCell(events, {
+                value: "A"
+            });
+
+            cell.remove();
+            cell.remove();
+            cell.remove();
+
+            expect(removeCount).toBe(1);
+        });
+
+        it("ignores updates after removal", () => {
+            let updateCount = 0;
+
+            const events: ScreenCellEngineEvents = {
+                onUpdate: () => {
+                    updateCount++;
+                },
+                onRemove: () => { }
+            };
+
+            const cell = new ScreenCell(events, {
+                value: "A"
+            });
+
+            cell.remove();
+
+            updateCount = 0;
+            cell.update("B");
+
+            expect(cell.value).toBe("A");
+            expect(updateCount).toBe(0);
+        });
+
+        it("ignores parameter updates after removal", () => {
+            let updateCount = 0;
+
+            const events: ScreenCellEngineEvents = {
+                onUpdate: () => {
+                    updateCount++;
+                },
+                onRemove: () => { }
+            };
+
+            const cell = new ScreenCell(events, {
+                params: {
+                    value: 1
+                },
+                template: "${value}"
+            });
+
+            cell.remove();
+
+            updateCount = 0;
+            cell.updateParams({
+                value: 2
+            });
+
+            expect(cell.value).toBe("1");
+            expect(cell.params).toEqual({
+                value: 1
+            });
+            expect(updateCount).toBe(0);
         });
     });
 
     describe("params exposure", () => {
         it("returns the current parameters", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     x: 1,
                     y: 2
@@ -742,7 +917,7 @@ describe("ScreenCell", () => {
         });
 
         it("returns a frozen snapshot", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     x: 1
                 },
@@ -755,7 +930,7 @@ describe("ScreenCell", () => {
         });
 
         it("prevents mutation of the returned snapshot", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     x: 1
                 },
@@ -774,7 +949,7 @@ describe("ScreenCell", () => {
         });
 
         it("returns a new snapshot for each access", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     x: 1
                 },
@@ -785,7 +960,7 @@ describe("ScreenCell", () => {
         });
 
         it("reflects parameter updates in subsequent snapshots", () => {
-            const cell = new ScreenCell(noop, {
+            const cell = new ScreenCell(createEvents(), {
                 params: {
                     x: 1
                 },

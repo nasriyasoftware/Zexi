@@ -1,5 +1,7 @@
-import { hasOwnProp, isRecord } from "../../../utils/utils";
-import type { TerminalCellOptions } from "./types";
+import atomix from "@nasriya/atomix";
+import type { ScreenCellEngineEvents, TerminalCellOptions } from "./types";
+
+const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
 
 /**
  * Stateful reactive terminal screen cell.
@@ -13,7 +15,8 @@ import type { TerminalCellOptions } from "./types";
  * - optional template projection logic
  * - persistent rendering parameters
  * - terminal line height metadata
- * - reactive update propagation
+ * - reactive engine event propagation
+ * - screen lifecycle state
  *
  * ---------------------------------------------------------------------
  * 🔷 ARCHITECTURE ROLE
@@ -64,7 +67,7 @@ import type { TerminalCellOptions } from "./types";
  *
  * ```ts
  * cell.template = 'Loading ${progress}%'
- * cell.update({ progress: 42 })
+ * cell.updateParams({ progress: 42 })
  * ```
  *
  * Characteristics:
@@ -98,17 +101,26 @@ import type { TerminalCellOptions } from "./types";
  * ```
  *
  * ---------------------------------------------------------------------
- * 🔷 REACTIVE UPDATE MODEL
+ * 🔷 REACTIVE ENGINE EVENTS
  * ---------------------------------------------------------------------
  *
- * Each cell is connected to the screen engine using an internal
- * update callback.
+ * Each cell is connected to the screen engine through an internal
+ * {@link ScreenCellEngineEvents} event interface.
  *
- * Whenever the rendered value changes:
+ * The engine receives notifications when:
  *
- * - visual height is recalculated
- * - the screen engine is notified
- * - the renderer reconciliation pipeline executes
+ * - the rendered value changes
+ * - the cell is removed
+ *
+ * Update events synchronize the cell's current rendered value and
+ * visual height with the screen layout and rendering pipeline.
+ *
+ * Removal events detach the cell from the screen layout and cause the
+ * affected terminal region to be reconciled.
+ *
+ * The event interface is supplied by the owning screen engine and is
+ * an internal implementation detail. It is not intended to be exposed
+ * or replaced by consumers.
  *
  * ---------------------------------------------------------------------
  * 🔷 HEIGHT MODEL
@@ -126,6 +138,29 @@ import type { TerminalCellOptions } from "./types";
  * height.
  *
  * ---------------------------------------------------------------------
+ * 🔷 REMOVAL MODEL
+ * ---------------------------------------------------------------------
+ *
+ * A cell may be removed from the screen using:
+ *
+ * ```ts
+ * cell.remove();
+ * ```
+ *
+ * Removal is irreversible with respect to screen rendering.
+ *
+ * Once removed:
+ *
+ * - the cell is detached from the screen layout
+ * - the terminal is reconciled to reflect its removal
+ * - subsequent updates are ignored
+ * - subsequent removal requests are ignored
+ *
+ * The cell object itself remains valid and may continue to be referenced
+ * by application code after removal. Removal therefore detaches the cell
+ * from the rendering system rather than destroying the cell instance.
+ *
+ * ---------------------------------------------------------------------
  * 🔷 FINALIZATION MODEL
  * ---------------------------------------------------------------------
  *
@@ -135,9 +170,13 @@ import type { TerminalCellOptions } from "./types";
  * - `cell.finalize()`
  *
  * Finalized cells:
+ *
  * - reject further updates
  * - reject template changes
  * - preserve stable rendered output
+ *
+ * Finalization is independent of screen removal. A removed cell remains
+ * removed regardless of whether it was finalized before or after removal.
  *
  * ---------------------------------------------------------------------
  * 🔷 STATEFUL DESIGN
@@ -156,22 +195,29 @@ import type { TerminalCellOptions } from "./types";
  * This design enables efficient incremental terminal rendering
  * without reconstructing entire output trees.
  *
- * ---------------------------------------------------------------------
  * @since 1.0.0
  */
 export class ScreenCell {
     /**
-     * Callback invoked whenever the visible state of the cell changes.
+     * Internal engine event handlers used to synchronize the cell's
+     * lifecycle with the screen engine.
      *
-     * The renderer uses this callback to synchronize screen state after:
+     * The event handlers are supplied by the owning screen engine when
+     * the cell is created.
      *
-     * - direct value updates
-     * - template re-rendering
-     * - height recalculation
+     * - `onUpdate` synchronizes rendered value and height changes.
+     * - `onRemove` removes the cell from the screen layout and triggers
+     *   the required terminal reconciliation.
+     * - `removed`
+     *   Indicates that the cell has been removed from the screen.
+     *   Removed cells ignore subsequent updates and removal requests.
+     *
+     * The event handlers are an internal implementation detail and MUST
+     * NOT be treated as part of the cell's public API.
      *
      * @since 1.0.0
      */
-    readonly #_onUpdate: (cell: ScreenCell) => void;
+    readonly #_engineEvents: ScreenCellEngineEvents
 
     /**
      * Internal lifecycle and mutability flags.
@@ -189,7 +235,11 @@ export class ScreenCell {
      *
      * @since 1.0.0
      */
-    readonly #_flags = { constructed: false, finalized: false }
+    readonly #_flags = {
+        constructed: false,
+        finalized: false,
+        removed: false
+    }
 
     /**
      * Current rendered output string.
@@ -286,7 +336,7 @@ export class ScreenCell {
             this.#_helpers.calcHeight();
 
             if (this.#_flags.constructed) {
-                this.#_onUpdate(this);
+                this.#_engineEvents.onUpdate(this);
             }
         },
 
@@ -378,6 +428,16 @@ export class ScreenCell {
      * - update is applied first
      * - cell becomes immutable afterward
      *
+     * ---------------------------------------------------------------------
+     * 🔷 REMOVED CELLS
+     * ---------------------------------------------------------------------
+     *
+     * Once a cell has been removed, subsequent updates are silently ignored.
+     *
+     * Removal is terminal with respect to screen rendering: the cell object
+     * may continue to exist and be referenced by application code, but it is
+     * no longer connected to the screen layout.
+     * 
      * @param value - Direct string output or template parameters
      * @param options - Update configuration
      *
@@ -388,6 +448,8 @@ export class ScreenCell {
      * @since 1.0.0
      */
     #_update(value: string | Record<string, any>, options?: { final?: boolean; patch?: boolean }): void {
+        if (this.#_flags.removed) { return; }
+
         if (this.#_flags.finalized) {
             throw new Error(`Unable to update a terminal entry that has already been finalized`);
         }
@@ -399,7 +461,7 @@ export class ScreenCell {
         }
 
         if (options !== undefined) {
-            if (!isRecord(options)) {
+            if (!atomix.valueIs.record(options)) {
                 throw new Error(`Terminal entry options (when provided) must be an object, instead got ${typeof options}`);
             }
 
@@ -422,7 +484,7 @@ export class ScreenCell {
 
         if (typeof value === 'string') {
             // do nothing to params or template
-        } else if (isRecord(value)) {
+        } else if (atomix.valueIs.record(value)) {
             if (!this.#_template) {
                 throw new Error(`Terminal entry template is required when updating with an object`);
             }
@@ -518,15 +580,31 @@ export class ScreenCell {
      * @since 1.0.0
      */
     constructor(
-        onUpdate: (cell: ScreenCell) => void,
+        events: ScreenCellEngineEvents,
         options?: TerminalCellOptions
     ) {
         try {
-            if (typeof onUpdate !== 'function') {
-                throw new Error(`Terminal entry onUpdate must be a function, instead got ${typeof onUpdate}`);
-            }
+            if (atomix.valueIs.record(events)) {
+                if (hasOwnProp(events, 'onUpdate')) {
+                    if (typeof events.onUpdate !== 'function') {
+                        throw new TypeError(`Expected \`events.onUpdate\` to be a function, received \`${typeof events.onUpdate}\``);
+                    }
+                } else {
+                    throw new Error(`Expected \`events.onUpdate\` to be a function, received \`${typeof events.onUpdate}\``);
+                }
 
-            this.#_onUpdate = onUpdate;
+                if (hasOwnProp(events, 'onRemove')) {
+                    if (typeof events.onRemove !== 'function') {
+                        throw new TypeError(`Expected \`events.onRemove\` to be a function, received \`${typeof events.onRemove}\``);
+                    }
+                } else {
+                    throw new Error(`Expected \`events.onRemove\` to be a function, received \`${typeof events.onRemove}\``);
+                }
+
+                this.#_engineEvents = events;
+            } else {
+                throw new TypeError(`Expected \`events\` to be an object, received \`${typeof events}\``);
+            }
 
             if (options === undefined) { return }
             const config = {
@@ -534,7 +612,7 @@ export class ScreenCell {
                 hasTemplate: false
             }
 
-            if (!isRecord(options)) {
+            if (!atomix.valueIs.record(options)) {
                 throw new Error(`Terminal entry options (when provided) must be an object, instead got ${typeof options}`);
             }
 
@@ -565,7 +643,7 @@ export class ScreenCell {
             } else {
                 if (hasOwnProp(options, 'params')) {
                     const params = (options as Record<string, unknown>).params as Record<string, unknown>;
-                    if (!isRecord(params)) {
+                    if (!atomix.valueIs.record(params)) {
                         throw new Error(`Terminal entry options.params must be an object, instead got ${typeof params}`);
                     }
 
@@ -856,6 +934,41 @@ export class ScreenCell {
         options?: { final?: boolean; patch?: boolean }
     ): void {
         this.#_update(params, options);
+    }
+
+    /**
+     * Removes the cell from the screen.
+     *
+     * Removal detaches the cell from the screen engine's managed layout and
+     * causes the affected terminal region to be reconciled.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 REMOVAL
+     * ---------------------------------------------------------------------
+     *
+     * Once removed:
+     *
+     * - the cell is no longer rendered
+     * - subsequent updates are ignored
+     * - subsequent removal requests are ignored
+     * - the cell object itself remains valid and may still be referenced
+     *
+     * Removal is irreversible.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 IDEMPOTENT
+     * ---------------------------------------------------------------------
+     *
+     * Calling `remove()` multiple times is safe. Only the first invocation
+     * dispatches the removal event to the screen engine.
+     *
+     * @since 1.0.0
+     */
+    remove(): void {
+        if (this.#_flags.removed) { return; }
+
+        this.#_flags.removed = true;
+        this.#_engineEvents.onRemove();
     }
 
     /**

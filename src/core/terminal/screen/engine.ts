@@ -1,3 +1,4 @@
+import atomix from "@nasriya/atomix";
 import ScreenLayout from "./layout";
 import ScreenCell from "./cell";
 import TerminalEntry from "./terminal-cell";
@@ -198,47 +199,141 @@ class ScreenEngine {
         /**
          * Processes an update for a specific screen cell.
          *
+         * The current snapshot entry is obtained as a read-only getter-based view.
+         * Because the view reflects the current underlying entry state, its properties
+         * must not be relied upon after the snapshot is updated when previous state is
+         * required for comparison.
+         *
+         * The previous value and height are therefore captured before applying the
+         * update. The cached height is used to determine whether the update changes
+         * the
+         * layout structure and requires downstream entries to be re-rendered.
+         *
          * Responsibilities:
          *
-         * - compare against previous snapshot state
+         * - compare against the previous rendered state
+         * - cache previous entry details before mutation
          * - update layout metadata
-         * - determine whether cascade rendering is required
+         * - determine whether cascading rendering is required
          * - trigger the rendering pipeline
          *
-         * Cascade rendering becomes necessary when the visual height changes,
-         * because all subsequent entries shift vertically.
+         * Cascade rendering becomes necessary when the visual height changes, because
+         * all subsequent entries may shift vertically.
          *
-         * If only the rendered value changes while its height remains stable,
-         * the update can be performed locally without recalculating or
-         * re-rendering downstream entries.
+         * If only the rendered value changes while its height remains stable, the
+         * update can be performed locally without recalculating or re-rendering
+         * downstream entries.
          *
-         * @param index - Snapshot entry index
-         * @param dataToUpdate - Updated rendered state
+         * @param index - Snapshot entry index.
+         * @param dataToUpdate - Updated rendered state.
          *
-         * @throws Error if the snapshot entry does not exist
+         * @throws Error if the snapshot entry does not exist.
          *
          * @since 1.0.0
          */
         update: (index: number, dataToUpdate: SnapshotEntryData) => {
             const snapshot = this.#_snapshot;
 
-            const prevEntry = snapshot.get(index);
-            if (!prevEntry) {
+            const entry = snapshot.get(index);
+            if (!entry) {
                 throw new Error(`Invariant violation: snapshot entry ${index} does not exist`);
             }
 
-            // Skip if no visible change
-            if (prevEntry.value === dataToUpdate.value) { return }
+            // Skip the update when the rendered value has not changed.
+            if (entry.value === dataToUpdate.value) { return }
 
-            // Apply update to snapshot
+            // Snapshot entries are getter-based read-only views, so their properties
+            // reflect the current underlying state. Cache the previous values before
+            // mutating the snapshot; otherwise, reading entry.height after update()
+            // would return the new height rather than the previous height.
+            const prev = {
+                value: entry.value,
+                height: entry.height
+            }
+
+            // Apply the new rendered state to the snapshot.
             snapshot.update(index, dataToUpdate);
 
+            // A height change alters the positions of entries below this one and
+            // therefore requires cascading re-rendering.
             const cascade = {
-                required: prevEntry.height !== dataToUpdate.height,
+                required: prev.height !== dataToUpdate.height,
                 startFrom: index + 1
             }
 
             this.#_helpers.render(index, cascade);
+        },
+
+        /**
+         * Removes a registered screen entry and synchronizes the terminal.
+         *
+         * The entry is located using its stable snapshot identity. Its current layout
+         * index is resolved immediately before removal so that structural changes that
+         * occurred after registration are correctly accounted for.
+         *
+         * ---------------------------------------------------------------------
+         * 🔷 REMOVAL
+         * ---------------------------------------------------------------------
+         *
+         * The removal process:
+         *
+         * - resolves the entry's current layout index
+         * - removes the entry from the screen layout
+         * - determines whether downstream entries require re-rendering
+         * - re-renders affected entries when necessary
+         * - restores the cursor to the logical end of the rendered output
+         *
+         * Removing an entry may change the position of every entry below it. When
+         * downstream entries remain, the renderer therefore performs a cascading
+         * render beginning at the removed entry's former index.
+         *
+         * ---------------------------------------------------------------------
+         * 🔷 NO DOWNSTREAM ENTRIES
+         * ---------------------------------------------------------------------
+         *
+         * Rendering is skipped when there are no entries after the removed entry.
+         *
+         * This occurs in either of two cases:
+         *
+         * - the removed entry was the only entry in the snapshot, leaving the
+         *   snapshot empty
+         * - the removed entry was the final entry in the snapshot, leaving entries
+         *   before it but no entries that require positional reflow
+         *
+         * In both cases, there is no downstream terminal output that needs to be
+         * synchronized. Attempting to render from the removed entry's former index
+         * would also be invalid because that index no longer identifies an entry
+         * after removal.
+         *
+         * ---------------------------------------------------------------------
+         * 🔷 IDENTITY
+         * ---------------------------------------------------------------------
+         *
+         * The entry is identified by its stable snapshot identity rather than by
+         * its layout index. This allows entries to be removed in any order without
+         * requiring their callers to track changes to the layout.
+         *
+         * @param id - Stable snapshot identity of the entry to remove.
+         *
+         * @throws Error if the snapshot entry does not exist.
+         *
+         * @since 1.0.0
+         */
+        remove: (id: symbol) => {
+            const entry = this.#_snapshot.get(id);
+            if (!entry) {
+                throw new Error('Invariant violation: unable to remove a snapshot entry because it does not exist');
+            }
+
+            const index = entry.index;
+
+            this.#_snapshot.remove(index);
+            const sizeAfterRemoval = this.#_snapshot.size();
+
+            // No downstream entries remain to re-render.
+            if (sizeAfterRemoval === 0 || index === sizeAfterRemoval) { return }
+
+            this.#_helpers.render(index, { required: true, startFrom: index });
         },
 
         /**
@@ -339,8 +434,8 @@ class ScreenEngine {
      * Creates and registers a new screen output entry.
      *
      * The created entry becomes part of the rendering pipeline immediately.
-     * Any future updates to the entry automatically propagate into the terminal
-     * renderer.
+     * Any future updates or removal of the entry are automatically propagated
+     * into the terminal renderer.
      *
      * By default, the method creates an internal {@link ScreenCell}. When the
      * `target` is set to `'external'`, the method creates a {@link TerminalEntry}
@@ -367,24 +462,51 @@ class ScreenEngine {
      *
      * Creating an entry performs the following operations:
      *
-     * - reserves a snapshot entry
-     * - assigns the entry its snapshot index
-     * - attaches the entry's update callback
+     * - registers an empty snapshot entry
+     * - receives a stable snapshot identity
+     * - attaches update and removal event handlers
      * - creates the requested entry type
      * - performs the initial render
      *
      * The snapshot entry initially contains an empty value so that the entry's
      * first update produces a visible rendering change.
      *
+     * The snapshot identity remains associated with the entry for its entire
+     * lifetime. The entry's current layout index is resolved dynamically from
+     * this identity whenever the entry is updated or removed.
+     *
+     * This ensures that structural changes to the layout, such as inserting or
+     * removing entries before this entry, do not invalidate its ability to locate
+     * its corresponding snapshot entry.
+     *
      * ---------------------------------------------------------------------
      * 🔷 UPDATE PROPAGATION
      * ---------------------------------------------------------------------
      *
      * Once registered, changes to the entry are propagated through the internal
-     * update callback.
+     * update event handler.
      *
-     * The callback forwards the entry's current rendered value and visual height
+     * The handler resolves the entry's current snapshot position using its stable
+     * snapshot identity and forwards the latest rendered value and visual height
      * to the screen layout and rendering pipeline.
+     *
+     * The layout index is therefore never retained by the entry and may change
+     * throughout its lifetime.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 REMOVAL
+     * ---------------------------------------------------------------------
+     *
+     * The entry is associated with an internal removal event handler.
+     *
+     * When invoked, the handler:
+     *
+     * - resolves the entry's current snapshot position using its stable identity
+     * - removes the corresponding snapshot entry
+     * - allows the screen engine to reflow the entries below it
+     *
+     * The removal handler is executed at most once. Once an entry has been
+     * removed, it cannot be removed from the screen again.
      *
      * ---------------------------------------------------------------------
      * 🔷 TARGET
@@ -398,6 +520,14 @@ class ScreenEngine {
      * The external target is intended for entries exposed through the terminal's
      * public API, while the default target is used internally by the screen
      * engine.
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 ENTRY LIFECYCLE
+     * ---------------------------------------------------------------------
+     *
+     * The created entry remains associated with its snapshot identity until it is
+     * removed from the screen. Its layout index and terminal starting row are
+     * derived from the current layout and may change as the layout is modified.
      *
      * @param config - Initial configuration for the entry.
      * @param target - Determines whether an internal or externally exposed entry
@@ -416,38 +546,64 @@ class ScreenEngine {
             throw new Error('Invariant violation: Attempting to create a cell before cursor position is initialized.');
         }
 
-        /** Snapshot index assigned to the new cell. */
-        const index = this.#_snapshot.size();
-
-        /**
-         * Internal update callback invoked whenever the cell mutates.
-         *
-         * Pushes the latest rendered state into the renderer pipeline.
-         *
-         * @param cell - Updated screen cell
-         */
-        const onUpdate = (cell: ScreenCell) => {
-            this.#_helpers.update(index, {
-                value: cell.value,
-                height: cell.height
-            });
-        }
-
         /**
          * Register initial empty snapshot state.
          *
          * The entry intentionally starts empty so the initial render always
          * produces a visible diff.
          */
-        this.#_snapshot.add({ value: '', height: 1 });
+        const snapshotId = this.#_snapshot.add({ value: '', height: 1 });
+
+        const events = {
+            /**
+             * Internal update callback invoked whenever the cell mutates.
+             *
+             * Pushes the latest rendered state into the renderer pipeline.
+             *
+             * @param cell - Updated screen cell
+             * @throws Error if the snapshot entry does not exist
+             * 
+             * @since 1.0.0
+             */
+            onUpdate: (cell: ScreenCell) => {
+                const entry = this.#_snapshot.get(snapshotId);
+                if (!entry) {
+                    throw new Error('Invariant violation: unable to update a snapshot entry because it does not exist');
+                }
+
+                this.#_helpers.update(entry.index, {
+                    value: cell.value,
+                    height: cell.height
+                });
+            },
+
+            /**
+             * Internal removal event invoked when the screen entry is removed.
+             *
+             * Delegates removal to the screen engine's removal helper using the entry's
+             * stable snapshot identity.
+             *
+             * The stable identity is used instead of retaining the entry's layout index,
+             * because the index may change when other entries are inserted or removed
+             * before this entry.
+             *
+             * The removal helper removes the entry from the layout and synchronizes the
+             * affected terminal output.
+             *
+             * The handler is guaranteed to execute at most once.
+             *
+             * @since 1.0.0
+             */
+            onRemove: atomix.utils.once(() => this.#_helpers.remove(snapshotId))
+        }
 
         /** Create screen cell instance. */
         const entry = target === 'external'
-            ? new TerminalEntry(onUpdate, config)
-            : new ScreenCell(onUpdate, config);
+            ? new TerminalEntry(events, config)
+            : new ScreenCell(events, config);
 
         // Perform initial render.
-        onUpdate(entry);
+        events.onUpdate(entry);
 
         return entry;
     }

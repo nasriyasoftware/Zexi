@@ -1,3 +1,4 @@
+import type ScreenCell from "./cell";
 import type TerminalEntry from "./terminal-cell";
 import type { ZexiLogLevel } from "../types";
 import type { BaseQueueTask, Prettify } from "@nasriya/atomix";
@@ -84,6 +85,23 @@ export type TerminalCellOptions = Prettify<{
     template: string;
 })>;
 
+export interface ScreenCellEngineEvents {
+    /**
+     * Callback invoked whenever the visible state of the cell changes.
+     *
+     * The renderer uses this callback to synchronize screen state after:
+     *
+     * - direct value updates
+     * - template re-rendering
+     * - height recalculation
+     *
+     * @since 1.0.0
+     */
+    onUpdate: (cell: ScreenCell) => void;
+
+    onRemove: () => void;
+}
+
 /**
  * Data required to register a rendered entry in the screen snapshot.
  *
@@ -103,18 +121,38 @@ export interface SnapshotEntryData {
 /**
  * A registered entry in the screen snapshot.
  *
- * Extends the rendered entry data with the terminal row at which the entry
- * begins.
+ * Extends the rendered entry data with its stable identity, current layout
+ * position, and terminal row at which the entry begins.
  *
- * The `startsAt` position is calculated relative to the terminal cursor
- * position captured when the screen subsystem was initialized. As entries
- * are
- * added, their positions advance according to the total height of the
- * entries preceding them.
+ * The `id` remains stable for the lifetime of the entry, while `index` and
+ * `startsAt` are derived from the entry's current position within the layout.
  *
  * @since 1.0.0
  */
 export type SnapshotEntry = SnapshotEntryData & {
+    /**
+     * Stable identity assigned when the entry is registered with the screen
+     * layout.
+     *
+     * The identity remains unchanged for the lifetime of the entry and can
+     * therefore be used to locate the entry independently of its current
+     * position in the layout.
+     *
+     * @since 1.0.0
+     */
+    readonly id: symbol;
+
+    /**
+     * Current zero-based index of the entry within the layout.
+     *
+     * The index is derived dynamically from the entry's stable {@link id}.
+     * Consequently, it automatically reflects structural changes such as
+     * insertion or removal of entries before this entry.
+     *
+     * @since 1.0.0
+     */
+    readonly index: number;
+
     /**
      * Terminal row at which the entry begins.
      *
