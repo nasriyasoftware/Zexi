@@ -232,7 +232,7 @@ export class ZexiDynamicCommand {
      *
      * @example
      * cmd.action(ctx => {
-     *   console.log('Running command...');
+     *   zexi.terminal.info('Running command...');
      * });
      */
     action(handler: CLICommandHandler): this {

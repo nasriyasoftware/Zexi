@@ -1,3 +1,4 @@
+import zexiTerminal from "../../../../../terminal/zexi.terminal";
 import ZexiApp from "../../app/app";
 import CommandDelegation from "./cli.delegation";
 import CLIOptionManager from "../../option/manager";
@@ -85,7 +86,7 @@ class CLICommand<M extends CommandMode> {
         aliases: (input: string[]) => {
             // Check for duplicates
             if (new Set(input).size !== input.length) {
-                console.warn(`Command "${this.name}" has duplicate aliases, which will be ignored`);
+                zexiTerminal.warn(`Command "${this.name}" has duplicate aliases, which will be ignored`);
             }
 
             // Normalize names
@@ -454,14 +455,14 @@ class CLICommand<M extends CommandMode> {
             const runner = compose(this.#_handlers.middlewares, this.#_handlers.onAction);
             return await runner(ctx);
         } else {
-            console.info(this.help);
+            zexiTerminal.info(this.help);
 
             /**
              * If the command is a non-delegation command, and is not the root command;
              * Show an error message for the user
              */
             if (!this.delegation.assigned && this.owner) {
-                console.error(`The command "${this.name}" action is not implemented. Read the above help message for more information on usage.`);
+                zexiTerminal.error(`The command "${this.name}" action is not implemented. Read the above help message for more information on usage.`);
             }
             return;
         }

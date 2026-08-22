@@ -14,7 +14,7 @@ import type { CommandMode } from "./kernal/assets/command/types";
  * const serve = zexi.cli.createCommand('serve')
  *   .description('Start the server')
  *   .action(ctx => {
- *     console.log('Serving...');
+ *     zexi.terminal.info('Serving...');
  *   });
  *
  * app.command(serve).run();

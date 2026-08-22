@@ -1,3 +1,4 @@
+import zexiTerminal from "../../../../terminal/zexi.terminal";
 import AppRunnerContext from "./context/runner.ctx";
 import CommandContext from "./context/cmd.context";
 import OptionData from "../option/option.data";
@@ -267,7 +268,7 @@ export class AppRunner {
                 if (context.options.has('help')) {
                     const needsHelp = context.options.get('help') as boolean;
                     if (needsHelp) {
-                        console.info(target.help);
+                        zexiTerminal.info(target.help);
                         return;
                     }
                 }                
@@ -285,7 +286,7 @@ export class AppRunner {
                 }
 
                 if (unknownOptions.length > 0) {
-                    console.warn(`[WARNING] Unknown CLI parameters "${unknownOptions.join(', ')}" in command "${target.name}"`);
+                    zexiTerminal.warn(`[WARNING] Unknown CLI parameters "${unknownOptions.join(', ')}" in command "${target.name}"`);
                 }
             }
 

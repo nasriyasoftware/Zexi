@@ -50,7 +50,6 @@ describe("ZexiApp", () => {
         });
 
         const res = await app.run();
-        console.log(events);
         expect(events).toEqual(["mw:before", "action"]);
 
         expect(res).toBe("done");

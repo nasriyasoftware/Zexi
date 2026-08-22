@@ -41,9 +41,6 @@ describe('Zexi CLI Smoke Tests', () => {
                     const source = ctx.options.get('source');
                     const saveDev = ctx.options.get('save-dev');
 
-                    console.log(`Installing packages from ${source}`);
-                    console.log(`Save dev: ${saveDev}`);
-
                     const pkgs = ctx.args.all;
 
                     if (pkgs.length > 0) {

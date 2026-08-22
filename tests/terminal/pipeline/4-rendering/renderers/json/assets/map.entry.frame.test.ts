@@ -79,7 +79,6 @@ describe("MapEntryFrame contracts", () => {
                 end: generatedTokensKinds.slice(18)
             }
 
-            console.log(parts);
             expect(
                 parts.start.length +
                 parts.middle.length +

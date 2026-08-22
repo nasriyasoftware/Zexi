@@ -1,4 +1,5 @@
 import globalUtils from "../../../../../../utils";
+import zexiTerminal from "../../../../../terminal/zexi.terminal";
 import type { CommandContext } from "../../runner/context/cmd.context";
 import type { CLICommandHandler, CLICommandMiddlewareHandler, MiddlewareTerminateFunction, MiddlewareTerminateResult } from "../types";
 
@@ -138,15 +139,15 @@ export function compose(middlewares: CLICommandMiddlewareHandler[], action?: CLI
         if (terminated) {
             const res = terminationResult!;
             if (res.ok) {
-                if (res.message) { console.debug(res.message); }
+                if (res.message) { zexiTerminal.debug(res.message); }
             } else {
                 if (res.reason === 'error') {
                     throw res.error;
                 }
 
                 if (res.reason === 'user_error') {
-                    console.error(res.message);
-                    if (res.meta) { console.debug(res.meta); }
+                    zexiTerminal.error(res.message);
+                    if (res.meta) { zexiTerminal.debug(res.meta); }
                 }
             }
             return;
