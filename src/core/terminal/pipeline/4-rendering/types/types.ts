@@ -1,10 +1,10 @@
 
 import { DEFAULT_JSON_CONFIG } from "../renderers/json/configs";
+import { DEFAULT_DEBUG_CONFIG } from "../renderers/debug/configs";
 
-import type { DebugOptions } from "../../types";
+import type { DebugOptions } from "../renderers/debug/types";
 import type { JsonProjection } from "../renderers/json/types";
 import type { CircularReferencePolicy } from "../../1-graphing/types";
-import { DEFAULT_DEBUG_CONFIG } from "../renderers/debug/configs";
 
 export interface GraphConfig {
     /**
@@ -160,44 +160,3 @@ export const DEFAULT_OUTPUT_CONFIG = {
     json: DEFAULT_JSON_CONFIG,
     debug: DEFAULT_DEBUG_CONFIG
 } as const;
-
-
-type Projection = 'json' | 'debug';
-interface LogCallOptions {
-    /**
-     * Namespace used for filtering / routing.
-     */
-    namespace?: string;
-
-    /**
-     * Which projections are requested for this log call.
-     * If omitted → default projection rules apply.
-     */
-    as?: Projection | Projection[];
-
-    /**
-     * Which projections to generate from the pipeline output.
-     */
-    customize?: {
-        json?: JsonProjection;
-        debug?: DebugOptions;
-    };
-
-    /**
-     * Sink routing configuration.
-     * At least one output should be enabled.
-     */
-    output?: {
-        terminal?: boolean | {
-            /**
-             * Preferred projection when writing to terminal.
-             * Falls back if unavailable.
-             * 
-             * @default to `debug` if available
-             */
-            prefer?: Projection;
-        };
-
-        events?: boolean;
-    };
-}

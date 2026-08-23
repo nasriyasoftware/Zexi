@@ -1,4 +1,4 @@
-import type TraversalDepth from "../context/traversal/traversal.depth";
+import type TraversalDepth from "../traversal/traversal.depth";
 import type WritingLine from "./line/line";
 
 export interface WriterConfig {

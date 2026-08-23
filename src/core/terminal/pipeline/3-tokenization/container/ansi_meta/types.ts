@@ -1,4 +1,4 @@
-import type { AnsiColor, AnsiStyle } from "../../../styling/types";
+import type { AnsiColor, AnsiStyle } from "../../../../styling/types";
 
 /**
  * Internal storage structure for ANSI metadata resolution.

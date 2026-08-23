@@ -115,7 +115,12 @@ const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
  *
  * @since 1.0.0
  */
-class ZexiTerminal {
+export class ZexiTerminal {
+    // Exported intentionally: ZexiTerminal is part of the public API and
+    // consumers may create additional instances with independent configuration.
+    // Do not remove this export merely because the package also provides a
+    // pre-created terminal instance.
+
     /**
      * Shared terminal controller used by every `ZexiTerminal` instance.
      *
