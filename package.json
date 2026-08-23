@@ -1,6 +1,6 @@
 {
   "name": "@nasriya/zexi",
-  "version": "0.0.1-alpha",
+  "version": "0.0.1-alpha.1",
   "description": "A TypeScript toolkit for building interactive CLI applications with terminal interfaces, styling, and structured logging.",
   "keywords": [
     "zexi",
