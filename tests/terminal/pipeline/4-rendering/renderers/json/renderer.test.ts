@@ -2,6 +2,23 @@ import JSONTokenizer from "../../../../../../src/core/terminal/pipeline/3-tokeni
 import JSONRenderer from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/renderer";
 import type { JsonOptions } from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
 
+import path from 'path';
+import fs from 'fs';
+
+const stableVersion = (() => {
+    try {
+        const pkgPath = path.join(process.cwd(), 'package.json');
+
+        const pkgStr = fs.readFileSync(pkgPath, 'utf-8');
+        const pkg = JSON.parse(pkgStr);
+
+        const versionSegments = (pkg?.version || "0.0.0").split(".");
+        return `${versionSegments[0]}.${versionSegments[1]}`;
+    } catch (err) {
+        return "0.0";
+    }
+})();
+
 /* ------------------------------------------------------------------ */
 /* TEST UTIL                                                          */
 /* ------------------------------------------------------------------ */
@@ -55,7 +72,7 @@ describe("JSONRenderer - primitives", () => {
 describe("JSONRenderer - numeric edge cases", () => {
     it("renders NaN and infinities deterministically", () => {
         const out = render({ a: NaN, b: Infinity, c: -Infinity });
-        const expected = `{"a":{"$codec":"zexi@1.0","$kind":"number","$payload":{"value":"NaN"}},"b":{"$codec":"zexi@1.0","$kind":"number","$payload":{"value":"Infinity"}},"c":{"$codec":"zexi@1.0","$kind":"number","$payload":{"value":"-Infinity"}}}`;
+        const expected = `{"a":{"$codec":"zexi@${stableVersion}","$kind":"number","$payload":{"value":"NaN"}},"b":{"$codec":"zexi@${stableVersion}","$kind":"number","$payload":{"value":"Infinity"}},"c":{"$codec":"zexi@${stableVersion}","$kind":"number","$payload":{"value":"-Infinity"}}}`;
         expect(out).toBe(expected);
     });
 });
@@ -435,7 +452,7 @@ describe("JSONRenderer - pretty special values", () => {
         const expectedParts = [
             '{',
             '  "fn": {',
-            '    "$codec": "zexi@1.0",',
+            `    "$codec": "zexi@${stableVersion}",`,
             '    "$kind": "function",',
             '    "$payload": { "name": "fn" }',
             '  }',
@@ -460,7 +477,7 @@ describe("JSONRenderer - pretty special values", () => {
 
         const expectedParts = [
             '{',
-            '  "$codec": "zexi@1.0",',
+            `  "$codec": "zexi@${stableVersion}",`,
             '  "$kind": "error",',
             '  "$payload": {',
             '    "message": "boom",',
@@ -497,10 +514,10 @@ describe("JSONRenderer - pretty special values", () => {
 
     it("renders regex envelopes correctly", () => {
         const out = render(/abc/gi, { mode: "pretty" });
-        
+
         const expectedParts = [
             '{',
-            '  "$codec": "zexi@1.0",',
+            `  "$codec": "zexi@${stableVersion}",`,
             '  "$kind": "regex",',
             '  "$payload": { "flags": "gi", "pattern": "abc" }',
             '}'
