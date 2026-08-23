@@ -1,20 +1,75 @@
 {
-  "name": "typescript",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "jest --detectOpenHandles --runInBand --silent",
-    "test:verbose": "jest --detectOpenHandles --runInBand",
-    "test:coverage": "jest --detectOpenHandles --runInBand --coverage",
-    "build": "npm run build:esm && npm run build:cjs && postbuild",
-    "build:esm": "npx tsc -p tsconfig.esm.json",
-    "build:cjs": "npx tsc -p tsconfig.cjs.json"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "name": "@nasriya/zexi",
+  "version": "0.0.1-alpha",
+  "description": "A TypeScript toolkit for building interactive CLI applications with terminal interfaces, styling, and structured logging.",
+  "keywords": [
+    "zexi",
+    "typescript",
+    "javascript",
+    "cli",
+    "cli-app",
+    "cli-framework",
+    "command-line",
+    "command-line-interface",
+    "terminal",
+    "terminal-ui",
+    "tui",
+    "interactive-terminal",
+    "interactive-cli",
+    "console",
+    "logging",
+    "logger",
+    "structured-logging",
+    "terminal-styling",
+    "terminal-colors",
+    "developer-tools"
+  ],
   "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/@types/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/@types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bun run .builder/builder.ts",
+    "build:pending": "rm -rf dist && npm run build:esm && npm run build:cjs && postbuild",
+    "build:esm": "tsc --p tsconfig.esm.json",
+    "build:cjs": "tsc --p tsconfig.cjs.json",
+    "build:types": "tsc -p tsconfig.types.json",
+    "test": "jest --detectOpenHandles --runInBand --silent",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "upgrade": "ncu -u --dep dev,peer"
+  },
+  "maintainers": [
+    {
+      "name": "Ahmad Nasriya",
+      "email": "ahmad@nasriya.net",
+      "url": "https://www.linkedin.com/in/ahmadnasriya/"
+    }
+  ],
+  "repository": {
+    "type": "github",
+    "url": "git+https://github.com/nasriyasoftware/Zexi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nasriyasoftware/Zexi/issues"
+  },
+  "homepage": "https://package.nasriya.net/Zexi",
+  "funding": {
+    "type": "individual",
+    "url": "https://fund.nasriya.net/"
+  },
+  "license": "NPCL-2.0",
+  "author": "Nasriya Software",
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^25.6.0",
