@@ -1,5 +1,6 @@
 .*
 !.gitignore
+!.github
 !.builder
 node_modules
 dist
