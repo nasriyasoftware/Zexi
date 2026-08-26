@@ -4,7 +4,7 @@
 
 Zexi is a powerful terminal interface and CLI application framework for Node.js. It provides structured logging, interactive terminal input, dynamic terminal output, screen management, terminal events, and styling capabilities for building rich command-line applications.
 
-[![NPM License](https://img.shields.io/npm/l/%40nasriya%2Fzexi?color=lightgreen)](https://github.com/nasriyasoftware/Zexi?tab=License-1-ov-file) [![NPM Version](https://img.shields.io/npm/v/%40nasriya%2Fzexi)](https://www.npmjs.com/package/@nasriya/zexi) [![NPM Unpacked Size](https://img.shields.io/npm/unpacked-size/%40nasriya%2Fzexi)](https://www.npmjs.com/package/@nasriya/zexi) [![Last Commit](https://img.shields.io/github/last-commit/nasriyasoftware/Zexi.svg)](https://github.com/nasriyasoftware/Zexi) [![Status](https://img.shields.io/badge/Status-Alpha-orange.svg)](https://github.com/nasriyasoftware/Zexi)
+[![NPM License](https://img.shields.io/npm/l/%40nasriya%2Fzexi?color=lightgreen)](https://github.com/nasriyasoftware/Zexi?tab=License-1-ov-file) [![NPM Version](https://img.shields.io/npm/v/%40nasriya%2Fzexi)](https://www.npmjs.com/package/@nasriya/zexi) [![NPM Unpacked Size](https://img.shields.io/npm/unpacked-size/%40nasriya%2Fzexi)](https://www.npmjs.com/package/@nasriya/zexi) [![Last Commit](https://img.shields.io/github/last-commit/nasriyasoftware/Zexi.svg)](https://github.com/nasriyasoftware/Zexi) [![Status](https://img.shields.io/badge/Status-Stable-brightgreen.svg)](https://github.com/nasriyasoftware/Zexi)
 
 ##### Visit us at [www.nasriya.net](https://nasriya.net).
 
