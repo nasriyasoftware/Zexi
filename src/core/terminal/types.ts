@@ -1,3 +1,4 @@
+export type { TerminalEntry } from "./screen/terminal-cell";
 import type TerminalEntry from "./screen/terminal-cell";
 import {
     StdinCaptureOptions,
@@ -101,6 +102,21 @@ export type TerminalLogOptions = {
      * @default true
      */
     print?: boolean;
+
+    /**
+     * Determines whether ANSI escape sequences are included in the printable
+     * log representation.
+     *
+     * When disabled, the rendered output is emitted without ANSI escape
+     * sequences. This is useful when the caller needs raw terminal text or wants
+     * to apply its own ANSI formatting.
+     *
+     * This option only affects terminal presentation. It does not modify the
+     * structured log event or its emitted data.
+     *
+     * @default true
+     */
+    ansi?: boolean;
 }
 
 /**

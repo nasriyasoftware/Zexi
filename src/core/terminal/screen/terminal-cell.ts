@@ -126,7 +126,7 @@ const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
  *
  * @since 1.0.0
  */
-class TerminalEntry extends ScreenCell {
+export class TerminalEntry extends ScreenCell {
     #_logger?: TerminalEntryUpdateLogger;
 
     /**

@@ -457,7 +457,7 @@ class CLICommand<M extends CommandMode> {
             const runner = compose(this.#_handlers.middlewares, this.#_handlers.onAction);
             return await runner(ctx);
         } else {
-            zexiTerminal.info(this.help, { print: PRINT_LOGS });
+            zexiTerminal.info(this.help, { print: PRINT_LOGS, ansi: false });
 
             /**
              * If the command is a non-delegation command, and is not the root command;

@@ -4,6 +4,7 @@ import consoleStyler from "./core/terminal/styling/styler";
 import zexiTerminal from "./core/terminal/zexi.terminal";
 
 export type * from './core/cli/types';
+export type * from './core/terminal/types';
 
 /**
  * ---------------------------------------------------------------------

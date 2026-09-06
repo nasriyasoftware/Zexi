@@ -19,7 +19,13 @@ export class CLIOptionManager {
 
         for (const option of this.#_data.values()) {
             for (const name of aliases) {
-                if (option.name === name || option.abbrev === name) {
+                if (
+                    option.name === name ||
+                    (
+                        option.abbrev !== undefined &&
+                        option.abbrev === name
+                    )
+                ) {
                     return option;
                 }
             }

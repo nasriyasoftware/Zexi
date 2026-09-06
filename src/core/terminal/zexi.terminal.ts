@@ -419,17 +419,11 @@ export class ZexiTerminal {
                 value: unknown,
                 options?: TerminalLogOptions
             ): Promise<void> => {
-                const ansiEnabled = (() => {
-                    if (level === 'debug' || level === 'info') {
-                        return true;
-                    }
-
-                    if (ZexiTerminal.#_utils.isPrimitive(value)) {
-                        return false;
-                    }
-
-                    return true;
-                })();
+                const ansiEnabled = options?.ansi ?? (
+                    level === 'debug' ||
+                    level === 'info' ||
+                    !ZexiTerminal.#_utils.isPrimitive(value)
+                );
 
                 const target = options?.target ?? (level === 'debug' ? 'debug' : 'json');
                 const mode = 'pretty' as const;
@@ -449,7 +443,7 @@ export class ZexiTerminal {
                     value: {
                         original: value,
                         serialized,
-                        printable: target === 'debug' ? ZexiTerminal.#_utils.render.debug(value, { ...baseConfigs, ansiEnabled }) : json
+                        printable: target === 'debug' ? ZexiTerminal.#_utils.render.debug(value, baseConfigs) : json
                     }
                 }
 
@@ -1540,14 +1534,29 @@ export class ZexiTerminal {
     async prompt(
         prompt?: TerminalPromptOptions
     ): Promise<string | null> {
-        const extEntry = prompt?.entry instanceof TerminalEntry;
+        const isExternalEntry = prompt?.entry instanceof TerminalEntry;
 
-        const entry = extEntry
-            ? prompt.entry!
-            : await this.createEntry({
+        const entry = await (() => {
+            if (isExternalEntry) {
+                const e = prompt.entry!;
+
+                if (!e.template?.includes('${input}')) {
+                    e.template = (
+                        e.template ??
+                        prompt?.message ??
+                        ''
+                    ) + '${input}';
+                }
+
+                e.updateParams({ input: '' });
+                return e;
+            }
+
+            return this.createEntry({
                 template: `${prompt?.message ?? ''}` + '${input}',
                 params: { input: '' }
             });
+        })();
 
         const value = await new StdinCapture(entry, {
             privacy: prompt?.privacy,
@@ -1556,7 +1565,7 @@ export class ZexiTerminal {
             onCustomValidation: prompt?.onCustomValidation
         }).capture();
 
-        if (!extEntry) {
+        if (!isExternalEntry) {
             entry.finalize();
         }
 
@@ -1801,13 +1810,21 @@ export class ZexiTerminal {
             }
         });
 
-        const extEntry = options?.entry instanceof TerminalEntry;
-        const entry = extEntry
-            ? options.entry!
-            : await this.createEntry({
-                template: `${message} [${choiceLabels.yes.styled}/${choiceLabels.no.styled}]: ` + '${input}',
+        const isExternalEntry = options?.entry instanceof TerminalEntry;
+        const template = `${message} [${choiceLabels.yes.styled}/${choiceLabels.no.styled}]: ` + '${input}';
+        const entry = await (() => {
+            if (isExternalEntry) {
+                const e = options.entry!;
+                e.template = template;
+                e.updateParams({ input: '' });
+                return e;
+            }
+
+            return this.createEntry({
+                template: template,
                 params: { input: '' }
             });
+        })();
 
         const answer = await new StdinCapture(entry, {
             escapeBehavior: 'ignore',
@@ -1863,7 +1880,9 @@ export class ZexiTerminal {
             }
 
             const normalized = answer.toLowerCase().trim();
-            const accepted = normalized === 'y' || normalized === 'yes';
+            const accepted = normalized.length === 0
+                ? defaultYes
+                : normalized === 'y' || normalized === 'yes';
 
             entry.updateParams({
                 input: accepted
@@ -1873,7 +1892,7 @@ export class ZexiTerminal {
 
             return accepted;
         } finally {
-            if (!extEntry) {
+            if (!isExternalEntry) {
                 entry.finalize();
             }
         }

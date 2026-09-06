@@ -270,7 +270,7 @@ export class AppRunner {
                 if (context.options.has('help')) {
                     const needsHelp = context.options.get('help') as boolean;
                     if (needsHelp) {
-                        zexiTerminal.info(target.help, { print: PRINT_LOGS });
+                        zexiTerminal.info(target.help, { print: PRINT_LOGS, ansi: false });
                         return;
                     }
                 }                
