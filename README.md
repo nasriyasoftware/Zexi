@@ -212,6 +212,12 @@ The supplied value is rendered into Zexi's canonical representation before the l
 
 The log operation produces a structured event containing the original value, serialized representation, and printable representation.
 
+You can also disable **ANSI** escape sequence processing for terminal output:
+
+```ts
+await terminal.info('Information.', { ansi: false });
+```
+
 ---
 
 ## Log Levels

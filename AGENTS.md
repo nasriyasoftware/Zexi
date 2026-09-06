@@ -562,8 +562,7 @@ Options can be accessed through the context:
 
 ```ts
 command.action(ctx => {
-    const production =
-        ctx.options.get("production");
+    const production = ctx.options.get("production");
 
     if (production) {
         // Production build.
@@ -1132,7 +1131,7 @@ Use Zexi terminal methods for user-facing output.
 For example:
 
 ```ts
-zexi.terminal.info(
+await zexi.terminal.info(
     "Building project..."
 );
 ```
@@ -1157,6 +1156,12 @@ process.stderr
 for normal Zexi terminal output.
 
 Using the terminal API keeps output integrated with Zexi's terminal infrastructure and event system.
+
+To disable ANSI escape sequences from terminal output, add the `ansi: false` option to any logging method:
+
+```ts
+await zexi.terminal.info("Building project...", { ansi: false });
+```
 
 ---
 
@@ -1279,9 +1284,7 @@ Terminal events allow application code to observe terminal activity programmatic
 For example:
 
 ```ts
-zexi.terminal.events.on(
-    "...",
-    event => {
+zexi.terminal.events.on("...", event => {
         // Handle terminal event.
     }
 );
@@ -1763,7 +1766,7 @@ When generating Zexi CLI code, use the terminal API for application-facing outpu
 Prefer:
 
 ```ts
-zexi.terminal.info(
+await zexi.terminal.info(
     "Build completed."
 );
 ```
