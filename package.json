@@ -40,7 +40,6 @@
   },
   "scripts": {
     "build": "bun run .builder/builder.ts",
-    "build:types": "tsc -p tsconfig.types.json",
     "test": "bun test --parallel",
     "upgrade": "ncu -u --dep dev,peer"
   },

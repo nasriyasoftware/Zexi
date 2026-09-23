@@ -182,13 +182,9 @@ class Builder {
 
         compileFile: async (configFile: string) => {
             await execFileAsync(
-                process.platform === 'win32'
-                    ? 'tsc.cmd'
-                    : 'tsc',
+                'tsc',
                 ['--project', configFile],
-                {
-                    cwd: buildConfigs.root
-                }
+                { cwd: buildConfigs.root }
             );
         },
 
