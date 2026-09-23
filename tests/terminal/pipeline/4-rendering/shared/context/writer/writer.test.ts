@@ -46,7 +46,7 @@ describe("RenderingWriter (deterministic)", () => {
     });
 
     // ---------------------------------------------------------------------
-    // STREAMING BEHAVIOR
+    // STREAMING BEHAjest.R
     // ---------------------------------------------------------------------
     describe("streaming", () => {
 

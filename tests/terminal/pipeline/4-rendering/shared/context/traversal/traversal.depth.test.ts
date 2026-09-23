@@ -90,7 +90,7 @@ describe("TraversalDepth (deterministic)", () => {
 
     describe("state consistency", () => {
 
-        it("maintains correct LIFO-style nesting behavior", () => {
+        it("maintains correct LIFO-style nesting behajest.r", () => {
             const depth = new TraversalDepth();
 
             depth.increase(); // 1

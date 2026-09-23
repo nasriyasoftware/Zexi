@@ -10,8 +10,6 @@ import type CLICommand from "../command/core/cli.command";
 import type { CommandContextData, CommandContextOptions, CommandMode } from "../command/types";
 import type { CommandName, OptionAbbrev, OptionName } from "../../types/types";
 
-const PRINT_LOGS = process.env['ZEXI_ENV'] === 'testing' ? false : true;
-
 const helpOption = new CLIOption({
     name: 'help',
     abbrev: 'h',
@@ -270,10 +268,10 @@ export class AppRunner {
                 if (context.options.has('help')) {
                     const needsHelp = context.options.get('help') as boolean;
                     if (needsHelp) {
-                        zexiTerminal.info(target.help, { print: PRINT_LOGS, ansi: false });
+                        zexiTerminal.info(target.help, { ansi: false });
                         return;
                     }
-                }                
+                }
             }
 
             {
@@ -289,8 +287,7 @@ export class AppRunner {
 
                 if (unknownOptions.length > 0) {
                     zexiTerminal.warn(
-                        `[WARNING] Unknown CLI parameters "${unknownOptions.join(', ')}" in command "${target.name}"`,
-                        { print: PRINT_LOGS }
+                        `[WARNING] Unknown CLI parameters "${unknownOptions.join(', ')}" in command "${target.name}"`
                     );
                 }
             }

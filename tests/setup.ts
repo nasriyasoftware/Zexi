@@ -1,1 +1,0 @@
-process.env.ZEXI_ENV = 'testing';

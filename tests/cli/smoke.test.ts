@@ -1,179 +1,46 @@
-import zexi from '../../src';
-import { StdoutMock } from '../mocks/stdout.mock';
+import zexi from "../../src";
+import terminalIO from "../../src/core/terminal/io/terminal.io";
+import StdMocks from "../mocks/std";
 
-jest.mock('../../src/core/terminal/screen/cursor-position', () => ({
-    __esModule: true,
-    default: {
-        initialized: true,
-        row: 1,
-        column: 0
-    }
-}));
-
-describe('Zexi CLI Smoke Tests', () => {
-    let mock: StdoutMock;
-
+describe("Zexi CLI Smoke Tests", () => {
     beforeEach(() => {
-        mock = new StdoutMock();
-
-        Object.defineProperty(process, 'stdout', {
-            value: mock,
-            configurable: true
-        });
+        StdMocks.reset();
     });
 
     afterEach(() => {
-        jest.restoreAllMocks();
+        mock.restore();
+
+        if (!terminalIO.intercepting) {
+            terminalIO.intercepting = true;
+        }
     });
-
-    function setArgv(input: string) {
-        process.argv = ['node', 'test', ...input.split(' ').filter(Boolean)];
-    }
-
-    function createTestApp() {
-        const pkgApp = zexi.cli.createApp('packages-manager').command(
-            zexi.cli.createCommand('install', 'dynamic')
-                .aliases(['i', 'ins'])
-                .option([
-                    {
-                        name: 'source',
-                        abbrev: 's',
-                        dataType: 'string',
-                        defaultValue: 'npm'
-                    },
-                    {
-                        name: 'save-dev',
-                        abbrev: 'd',
-                        dataType: 'boolean',
-                        defaultValue: false
-                    }
-                ])
-                .action(async ctx => {
-                    const source = ctx.options.get('source');
-                    const saveDev = ctx.options.get('save-dev');
-
-                    const pkgs = ctx.args.all;
-
-                    if (pkgs.length > 0) {
-                        await zexi.terminal.info(
-                            `Packages: ${pkgs.join(', ')}`
-                        );
-                    } else {
-                        await zexi.terminal.info('No packages');
-                    }
-
-                    return {
-                        installed: pkgs,
-                        source,
-                        saveDev
-                    };
-                })
-        ).onRun(async () => {
-            await zexi.terminal.info('pkgApp onRun');
-        });
-
-        const app = zexi.cli.createApp('my-cli').onRun(async () => {
-            await zexi.terminal.info('root onRun');
-        });
-
-        app.option({
-            name: 'fail',
-            dataType: 'boolean',
-            defaultValue: false
-        });
-
-        app.command(
-            zexi.cli.createCommand('version')
-                .aliases('v')
-                .option({
-                    name: 'output',
-                    abbrev: 'o',
-                    dataType: 'string',
-                    defaultValue: 'text'
-                })
-                .onSeen(async () => {
-                    await zexi.terminal.info('onSeen: version');
-                })
-                .action(async ctx => {
-                    const out = ctx.options.get('output');
-
-                    if (out === 'json') {
-                        await zexi.terminal.info('json-output');
-
-                        return {
-                            version: '1.0.0'
-                        };
-                    }
-
-                    if (out === 'text') {
-                        await zexi.terminal.info('text-output');
-
-                        return '1.0.0';
-                    }
-
-                    throw new Error(
-                        `Unknown output type: ${out}`
-                    );
-                })
-        );
-
-        // Delegator (NO action)
-        app.command(
-            zexi.cli.createCommand('pkgs', 'dynamic', pkgApp)
-        );
-
-        // Root action
-        app.action(async () => {
-            await zexi.terminal.info('root action');
-
-            return 'root-result';
-        });
-
-        // Middleware
-        app.use(async (ctx, terminate) => {
-            await zexi.terminal.info('middleware hit');
-
-            if (
-                ctx.options.has('fail') &&
-                ctx.options.get('fail') === true
-            ) {
-                return terminate({
-                    ok: false,
-                    reason: 'user_error',
-                    message: 'Forced failure'
-                });
-            }
-        });
-
-        return app;
-    }
 
     // ---------------------------
     // SEEN HANDLERS
     // ---------------------------
 
-    test('seen handlers run in correct order', async () => {
+    it("seen handlers run in correct order", async () => {
         const calls: string[] = [];
 
-        const app = zexi.cli.createApp('app');
+        const app = zexi.cli.createApp("app");
 
         app.command(
-            zexi.cli.createCommand('a')
-                .onSeen(() => calls.push('a'))
+            zexi.cli.createCommand("a")
+                .onSeen(() => calls.push("a"))
                 .command(
-                    zexi.cli.createCommand('b')
-                        .onSeen(() => calls.push('b'))
+                    zexi.cli.createCommand("b")
+                        .onSeen(() => calls.push("b"))
                         .action(() => { })
                 )
         );
 
-        setArgv('a b');
+        setArgv("a b");
 
         await app.run();
 
         expect(calls).toEqual([
-            'a',
-            'b'
+            "a",
+            "b"
         ]);
     });
 
@@ -181,257 +48,198 @@ describe('Zexi CLI Smoke Tests', () => {
     // ROOT
     // ---------------------------
 
-    test('runs root action', async () => {
+    it("runs root action", async () => {
         const app = createTestApp();
-
-        setArgv('');
+        setArgv("");
 
         const res = await app.run();
+        await zexi.terminal.drain();
 
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('root onRun')
-        );
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("root onRun");
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("middleware hit");
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("root action");
 
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('middleware hit')
-        );
-
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('root action')
-        );
-
-        expect(res).toBe('root-result');
+        expect(res).toBe("root-result");
     });
 
     // ---------------------------
     // VERSION COMMAND
     // ---------------------------
 
-    test('runs version command (default)', async () => {
+    it("runs version command (default)", async () => {
         const app = createTestApp();
-
-        setArgv('version');
+        setArgv("version");
 
         const res = await app.run();
+        await zexi.terminal.drain();
 
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('onSeen: version')
-        );
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("onSeen: version");
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("text-output");
 
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('text-output')
-        );
-
-        expect(res).toBe('1.0.0');
+        expect(res).toBe("1.0.0");
     });
 
-    test('runs version with long option', async () => {
+    it("runs version with long option", async () => {
         const app = createTestApp();
-
-        setArgv('version --output=json');
+        setArgv("version --output=json");
 
         const res = await app.run();
+        await zexi.terminal.drain();
 
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('json-output')
-        );
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("onSeen: version");
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("json-output");
 
-        expect(res).toEqual({
-            version: '1.0.0'
-        });
+        expect(res).toEqual({ version: "1.0.0" });
     });
 
-    test('runs version with short option', async () => {
+    it("runs version with short option", async () => {
         const app = createTestApp();
-
-        setArgv('version -o json');
+        setArgv("version -o json");
 
         const res = await app.run();
+        await zexi.terminal.drain();
 
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('json-output')
-        );
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("onSeen: version");
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("json-output");
 
-        expect(res).toEqual({
-            version: '1.0.0'
-        });
+        expect(res).toEqual({ version: "1.0.0" });
     });
 
-    test('runs version via alias', async () => {
+    it("runs version via alias", async () => {
         const app = createTestApp();
-
-        setArgv('v');
+        setArgv("v");
 
         const res = await app.run();
+        await zexi.terminal.drain();
 
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('text-output')
-        );
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("onSeen: version");
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("text-output");
 
-        expect(res).toBe('1.0.0');
+        expect(res).toBe("1.0.0");
     });
 
     // ---------------------------
     // DELEGATION
     // ---------------------------
 
-    test('delegates to pkg app', async () => {
+    it("delegates to pkg app", async () => {
         const app = createTestApp();
-
-        setArgv('pkgs install react');
+        setArgv("pkgs install react");
 
         const res = await app.run();
+        await zexi.terminal.drain();
 
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('pkgApp onRun')
-        );
-
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('Packages: react')
-        );
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("pkgApp onRun");
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("Packages: react");
 
         expect(res).toEqual({
-            installed: ['react'],
-            source: 'npm',
+            installed: ["react"],
+            source: "npm",
             saveDev: false
         });
     });
 
-    test('delegation with options', async () => {
+    it("delegation with options", async () => {
         const app = createTestApp();
-
-        setArgv(
-            'pkgs install react -d --source=github'
-        );
+        setArgv("pkgs install react -d --source=github");
 
         const res = await app.run();
+        await zexi.terminal.drain();
 
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('Packages: react')
-        );
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("Packages: react");
 
         expect(res).toEqual({
-            installed: ['react'],
-            source: 'github',
+            installed: ["react"],
+            source: "github",
             saveDev: true
         });
     });
 
-    test('multiple packages', async () => {
+    it("multiple packages", async () => {
         const app = createTestApp();
+        setArgv("pkgs install react vue svelte");
 
-        setArgv(
-            'pkgs install react vue svelte'
-        );
+        const res = await app.run() as { installed: string[]; };
+        await zexi.terminal.drain();
 
-        const res = await app.run() as {
-            installed: string[];
-        };
-
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining(
-                'Packages: react, vue, svelte'
-            )
-        );
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("Packages: react, vue, svelte");
 
         expect(res.installed).toEqual([
-            'react',
-            'vue',
-            'svelte'
+            "react",
+            "vue",
+            "svelte"
         ]);
     });
 
-    test('no packages', async () => {
+    it("no packages", async () => {
         const app = createTestApp();
+        setArgv("pkgs install");
 
-        setArgv('pkgs install');
+        const res = await app.run() as { installed: string[]; };
+        await zexi.terminal.drain();
 
-        const res = await app.run() as {
-            installed: string[];
-        };
-
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('No packages')
-        );
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("No packages");
 
         expect(res.installed).toEqual([]);
     });
 
-    test('delegation preserves remaining args correctly', async () => {
+    it("delegation preserves remaining args correctly", async () => {
         const app = createTestApp();
+        setArgv("pkgs install react vue -- --flag");
 
-        setArgv(
-            'pkgs install react vue -- --flag'
-        );
-
-        const res = await app.run() as {
-            installed: string[];
-        };
+        const res = await app.run() as { installed: string[]; };
 
         expect(res.installed).toEqual([
-            'react',
-            'vue',
-            '--flag'
+            "react",
+            "vue",
+            "--flag"
         ]);
     });
 
-    test('delegated command return propagates to root', async () => {
+    it("delegated command return propagates to root", async () => {
         const app = createTestApp();
+        setArgv("pkgs install react");
 
-        setArgv('pkgs install react');
+        const res = await app.run() as { installed: string[]; };
 
-        const res = await app.run() as {
-            installed: string[];
-        };
-
-        expect(res.installed).toEqual([
-            'react'
-        ]);
+        expect(res.installed).toEqual(["react"]);
     });
 
     // ---------------------------
     // TERMINATION
     // ---------------------------
 
-    test('middleware user_error terminates execution', async () => {
+    it("middleware user_error terminates execution", async () => {
         const app = createTestApp();
-
-        setArgv('--fail');
+        setArgv("--fail");
 
         const res = await app.run();
+        await zexi.terminal.drain();
 
-        expect(mock.write).toHaveBeenCalledWith(
-            expect.stringContaining('middleware hit')
-        );
-
-        expect(mock.write).not.toHaveBeenCalledWith(
-            expect.stringContaining('root action')
-        );
+        StdMocks.expect.stdout.write.toHaveBeenCalledWith("middleware hit");
+        StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("root action");
 
         expect(res).toBeUndefined();
     });
 
-    test('middleware success termination stops execution', async () => {
-        const app = zexi.cli.createApp('test')
-            .use(async (ctx, terminate) => {
+    it("middleware success termination stops execution", async () => {
+        const app = zexi.cli.createApp("test")
+            .use(async (_ctx, terminate) => {
                 terminate({
                     ok: true,
-                    message: 'Stopped early'
+                    message: "Stopped early"
                 });
             })
             .action(async () => {
-                await zexi.terminal.info(
-                    'should not run'
-                );
+                zexi.terminal.info("should not run");
             });
 
-        setArgv('');
+        setArgv("");
 
         const res = await app.run();
+        await zexi.terminal.drain();
 
-        expect(mock.write).not.toHaveBeenCalledWith(
-            expect.stringContaining('should not run')
-        );
+        StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("should not run");
 
         expect(res).toBeUndefined();
     });
@@ -440,101 +248,80 @@ describe('Zexi CLI Smoke Tests', () => {
     // OPTIONS / PARSING
     // ---------------------------
 
-    test('flag without value works', async () => {
+    it("flag without value works", async () => {
         const app = createTestApp();
+        setArgv("pkgs install react -d");
 
-        setArgv('pkgs install react -d');
-
-        const res = await app.run() as {
-            saveDev: boolean;
-        };
+        const res = await app.run() as { saveDev: boolean; };
 
         expect(res.saveDev).toBe(true);
     });
 
-    test('-- stops option parsing', async () => {
+    it("-- stops option parsing", async () => {
         const app = createTestApp();
+        setArgv("pkgs install -- --not-an-option file.txt");
 
-        setArgv(
-            'pkgs install -- --not-an-option file.txt'
-        );
+        const res = await app.run() as { installed: string[]; };
 
-        const res = await app.run() as {
-            installed: string[];
-        };
-
-        expect(res.installed).toContain(
-            '--not-an-option'
-        );
-
-        expect(res.installed).toContain(
-            'file.txt'
-        );
+        expect(res.installed).toContain("--not-an-option");
+        expect(res.installed).toContain("file.txt");
     });
 
-    test('unknown options trigger warning', async () => {
+    it("unknown options trigger warning", async () => {
         const app = createTestApp();
+        setArgv("version --unknown=123");
 
-        setArgv('version --unknown=123');
-
-        const warnSpy = jest
-            .spyOn(zexi.terminal, 'warn')
-            .mockImplementation(async () => undefined);
+        const warnSpy = spyOn(zexi.terminal, "warn").mockImplementation(() => undefined);
 
         await app.run();
 
         expect(warnSpy).toHaveBeenCalledTimes(1);
         expect(warnSpy.mock.calls[0][0]).toEqual(
-            expect.stringContaining('unknown')
+            expect.stringContaining("unknown")
         );
     });
 
-    test('invalid boolean value throws', async () => {
+    it("invalid boolean value throws", async () => {
         const app = createTestApp();
+        setArgv("version --output=maybe");
 
-        setArgv(
-            'version --output=maybe'
-        );
-
-        await expect(
-            app.run()
-        ).rejects.toThrow();
+        await expect(app.run()).rejects.toThrow();
     });
 
-    test('invalid number option throws', async () => {
-        const app = zexi.cli.createApp('test')
+    it("invalid number option throws", async () => {
+        const app = zexi.cli.createApp("test")
             .command(
-                zexi.cli.createCommand('run')
+                zexi.cli.createCommand("run")
                     .option({
-                        name: 'port',
-                        dataType: 'number',
+                        name: "port",
+                        dataType: "number",
                         required: true
                     })
                     .action(() => { })
             );
 
-        setArgv('run --port=abc');
+        setArgv("run --port=abc");
 
         await expect(
             app.run()
         ).rejects.toThrow(
-            'Invalid number value'
+            "Invalid number value"
         );
     });
 
-    test('missing required option throws', async () => {
-        const app = zexi.cli.createApp('test')
+    it("missing required option throws", async () => {
+        const app = zexi.cli.createApp("test")
             .command(
-                zexi.cli.createCommand('deploy')
+                zexi.cli.createCommand("deploy")
                     .option({
-                        name: 'env',
-                        dataType: 'string',
+                        name: "env",
+                        dataType: "string",
                         required: true
                     })
                     .action(() => { })
             );
 
-        setArgv('deploy');
+        setArgv("deploy");
 
         await expect(
             app.run()
@@ -543,94 +330,192 @@ describe('Zexi CLI Smoke Tests', () => {
         );
     });
 
-    test('last option wins', async () => {
+    it("last option wins", async () => {
         const app = createTestApp();
+        setArgv("version --output=text --output=json");
 
-        setArgv(
-            'version --output=text --output=json'
-        );
+        const res = await app.run() as { version: string; };
 
-        const res = await app.run() as {
-            version: string;
-        };
-
-        expect(res.version).toBe('1.0.0');
+        expect(res.version).toBe("1.0.0");
     });
 
-    test('explicit overrides abbrev even if abbrev is later', async () => {
+    it("explicit overrides abbrev even if abbrev is later", async () => {
         const app = createTestApp();
+        setArgv("version --output=json -o text");
 
-        setArgv(
-            'version --output=json -o text'
-        );
+        const res = await app.run() as { version: string; };
 
-        const res = await app.run() as {
-            version: string;
-        };
-
-        expect(res.version).toBe('1.0.0');
+        expect(res.version).toBe("1.0.0");
     });
 
-    test('last explicit option wins among explicit options', async () => {
+    it("last explicit option wins among explicit options", async () => {
         const app = createTestApp();
+        setArgv("version --output=text --output=json");
 
-        setArgv(
-            'version --output=text --output=json'
-        );
+        const res = await app.run() as { version: string; };
 
-        const res = await app.run() as {
-            version: string;
-        };
-
-        expect(res.version).toBe('1.0.0');
+        expect(res.version).toBe("1.0.0");
     });
 
-    test('last abbrev option wins among abbrevs', async () => {
+    it("last abbrev option wins among abbrevs", async () => {
         const app = createTestApp();
+        setArgv("version -o text -o json");
 
-        setArgv(
-            'version -o text -o json'
-        );
+        const res = await app.run() as { version: string; };
 
-        const res = await app.run() as {
-            version: string;
-        };
-
-        expect(res.version).toBe('1.0.0');
+        expect(res.version).toBe("1.0.0");
     });
 
-    test('explicit still wins even if multiple abbrevs appear after it', async () => {
+    it("explicit still wins even if multiple abbrevs appear after it", async () => {
         const app = createTestApp();
+        setArgv("version --output=json -o text -o xml");
 
-        setArgv(
-            'version --output=json -o text -o xml'
-        );
+        const res = await app.run() as { version: string; };
 
-        const res = await app.run() as {
-            version: string;
-        };
-
-        expect(res.version).toBe('1.0.0');
+        expect(res.version).toBe("1.0.0");
     });
 
     // ---------------------------
     // ERROR PROPAGATION
     // ---------------------------
 
-    test('system error in middleware throws', async () => {
-        const app = zexi.cli.createApp('err')
-            .use(async (ctx, terminate) => {
+    it("system error in middleware throws", async () => {
+        const app = zexi.cli.createApp("err")
+            .use(async (_ctx, terminate) => {
                 terminate({
                     ok: false,
-                    reason: 'error',
-                    error: new Error('boom')
+                    reason: "error",
+                    error: new Error("boom")
                 });
             });
 
-        setArgv('');
+        setArgv("");
 
         await expect(
             app.run()
-        ).rejects.toThrow('boom');
+        ).rejects.toThrow("boom");
     });
 });
+
+function setArgv(input: string) {
+    process.argv = [
+        "node",
+        "test",
+        ...input.split(" ").filter(Boolean)
+    ];
+}
+
+function createTestApp() {
+    const pkgApp = zexi.cli.createApp("packages-manager").command(
+        zexi.cli.createCommand("install", "dynamic")
+            .aliases(["i", "ins"])
+            .option([
+                {
+                    name: "source",
+                    abbrev: "s",
+                    dataType: "string",
+                    defaultValue: "npm"
+                },
+                {
+                    name: "save-dev",
+                    abbrev: "d",
+                    dataType: "boolean",
+                    defaultValue: false
+                }
+            ])
+            .action(async ctx => {
+                const source = ctx.options.get("source");
+                const saveDev = ctx.options.get("save-dev");
+
+                const pkgs = ctx.args.all;
+
+                if (pkgs.length > 0) {
+                    zexi.terminal.info(
+                        `Packages: ${pkgs.join(", ")}`
+                    );
+                } else {
+                    zexi.terminal.info("No packages");
+                }
+
+                return {
+                    installed: pkgs,
+                    source,
+                    saveDev
+                };
+            })
+    ).onRun(async () => {
+        zexi.terminal.info("pkgApp onRun");
+    });
+
+    const app = zexi.cli.createApp("my-cli").onRun(async () => {
+        zexi.terminal.info("root onRun");
+    });
+
+    app.option({
+        name: "fail",
+        dataType: "boolean",
+        defaultValue: false
+    });
+
+    app.command(
+        zexi.cli.createCommand("version")
+            .aliases("v")
+            .option({
+                name: "output",
+                abbrev: "o",
+                dataType: "string",
+                defaultValue: "text"
+            })
+            .onSeen(async () => {
+                zexi.terminal.info("onSeen: version");
+            })
+            .action(async ctx => {
+                const out = ctx.options.get("output");
+
+                if (out === "json") {
+                    zexi.terminal.info("json-output");
+
+                    return {
+                        version: "1.0.0"
+                    };
+                }
+
+                if (out === "text") {
+                    zexi.terminal.info("text-output");
+
+                    return "1.0.0";
+                }
+
+                throw new Error(
+                    `Unknown output type: ${out}`
+                );
+            })
+    );
+
+    app.command(
+        zexi.cli.createCommand("pkgs", "dynamic", pkgApp)
+    );
+
+    app.action(async () => {
+        zexi.terminal.info("root action");
+
+        return "root-result";
+    });
+
+    app.use(async (ctx, terminate) => {
+        zexi.terminal.info("middleware hit");
+
+        if (
+            ctx.options.has("fail") &&
+            ctx.options.get("fail") === true
+        ) {
+            return terminate({
+                ok: false,
+                reason: "user_error",
+                message: "Forced failure"
+            });
+        }
+    });
+
+    return app;
+}

@@ -195,7 +195,7 @@ describe("GraphIdentityTracker (cycle semantics)", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* release behavior */
+/* release behajest.r */
 /* ------------------------------------------------------------------ */
 
 describe("GraphIdentityTracker (release)", () => {

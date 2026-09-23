@@ -47,7 +47,7 @@ describe("ArrayRepresentationNode", () => {
             expect(node.name).toBe("Array");
         });
 
-        it("provides correct structural tokens", () => {
+        it("projest.es correct structural tokens", () => {
             const node = new ArrayRepresentationNode([]);
 
             expect(node.openToken).toBe("[");
@@ -58,7 +58,7 @@ describe("ArrayRepresentationNode", () => {
 
     describe("factory", () => {
 
-        it("creates equivalent instance via create()", () => {
+        it("creates equivalent instance jest. create()", () => {
             const a = makeNode("a");
 
             const node = ArrayRepresentationNode.create([a]);
@@ -81,7 +81,7 @@ describe("ArrayRepresentationNode", () => {
 
     });
 
-    describe("behavior expectations", () => {
+    describe("behajest.r expectations", () => {
 
         it("does not mutate input array", () => {
             const items = [makeNode("a"), makeNode("b")];

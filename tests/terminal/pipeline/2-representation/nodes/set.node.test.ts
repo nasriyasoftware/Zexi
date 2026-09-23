@@ -31,7 +31,7 @@ describe("SetRepresentationNode", () => {
 
     describe("factory", () => {
 
-        it("creates instance via create()", () => {
+        it("creates instance jest. create()", () => {
             const a = node("a");
             const b = node("b");
 
@@ -66,7 +66,7 @@ describe("SetRepresentationNode", () => {
 
     });
 
-    describe("behavior", () => {
+    describe("behajest.r", () => {
 
         it("supports multiple items", () => {
             const set = SetRepresentationNode.create([
@@ -78,7 +78,7 @@ describe("SetRepresentationNode", () => {
             expect(set.items.length).toBe(3);
         });
 
-        it("reflects external array mutations (reference behavior)", () => {
+        it("reflects external array mutations (reference behajest.r)", () => {
             const items = [node("a")];
 
             const set = SetRepresentationNode.create(items);

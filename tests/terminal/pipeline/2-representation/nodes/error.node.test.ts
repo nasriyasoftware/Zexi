@@ -7,7 +7,7 @@ import CircularReferenceError from "../../../../../src/core/terminal/pipeline/1-
 import type { ErrorGraphNodeData } from "../../../../../src/core/terminal/pipeline/1-graphing/types";
 import GRAPH_NODES from "../../../../../src/core/terminal/pipeline/1-graphing/nodes";
 
-describe("ErrorRepresentationNode (integration via pipeline)", () => {
+describe("ErrorRepresentationNode (integration jest. pipeline)", () => {
 
     const buildGraph = (value: unknown) => {
         return GraphBuilder.build(value, {
@@ -18,7 +18,7 @@ describe("ErrorRepresentationNode (integration via pipeline)", () => {
 
     const buildRep = (value: unknown) => RepresentationBuilder.build(buildGraph(value));
 
-    describe("construction via graph → representation pipeline", () => {
+    describe("construction jest. graph → representation pipeline", () => {
 
         it("stores error data correctly", () => {
             const error = new Error("Something went wrong");
@@ -45,9 +45,9 @@ describe("ErrorRepresentationNode (integration via pipeline)", () => {
 
     });
 
-    describe("from() behavior", () => {
+    describe("from() behajest.r", () => {
 
-        it("builds representation from GraphErrorNode via pipeline", () => {
+        it("builds representation from GraphErrorNode jest. pipeline", () => {
             const error = new Error("Graph failure");
 
             const graph = buildGraph(error);
@@ -187,7 +187,7 @@ describe("ErrorRepresentationNode (integration via pipeline)", () => {
 
             const child = new Error("child");
 
-            // introduce circular structure via cause
+            // introduce circular structure jest. cause
             error.cause = child;
             child.cause = error;
 

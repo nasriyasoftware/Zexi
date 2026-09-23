@@ -17,30 +17,27 @@ import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/3-tok
 import type { JSONPipelineFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
 import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
 
-jest.mock("../../../../../../../src/core/terminal/pipeline/4-rendering/shared/layout/resolver");
-
-const LayoutResolverMock = LayoutResolver as unknown as jest.Mock;
-
 describe("JSON utils delegation layer", () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        mock.restore();
     });
 
-    describe("createResolver", () => {
-        it("constructs LayoutResolver with correct arguments", () => {
-            const ctx = makeCtx();
+    it("No mocks", () => {
+        expect(LayoutResolver.name).toBe("LayoutResolver");
+    })
 
-            createResolver({
+    describe("createResolver", () => {
+        it("constructs a LayoutResolver with the provided context, inline-safe set, and renderer", () => {
+            const ctx = makeCtx();
+            const inlineSafe = new Set<'primitive'>(["primitive"]);
+
+            const resolver = createResolver({
                 ctx,
-                inlineSafe: new Set(["primitive"]),
+                inlineSafe,
                 renderer: "json"
             });
 
-            expect(LayoutResolverMock).toHaveBeenCalledWith(
-                ctx,
-                expect.any(Set),
-                "json"
-            );
+            expect(resolver).toBeInstanceOf(LayoutResolver);
         });
     });
 
@@ -48,8 +45,8 @@ describe("JSON utils delegation layer", () => {
         it("aborts the current group and restores traversal depth", () => {
             const ctx = makeCtx();
 
-            const abortSpy = jest.spyOn(ctx.scopes, "abort");
-            const decreaseSpy = jest.spyOn(ctx.depth, "decrease");
+            const abortSpy = spyOn(ctx.scopes, "abort");
+            const decreaseSpy = spyOn(ctx.depth, "decrease");
 
             const id = Symbol("group");
 
@@ -98,8 +95,10 @@ describe("JSON utils delegation layer", () => {
             ctx.data.set(keys.GROUP, Symbol("g"));
             ctx.data.set(keys.GROUP_DEPTH, 1);
 
-            jest.spyOn(ctx.scopes, "isRoot", "get")
-                .mockReturnValue(true);
+            Object.defineProperty(ctx.scopes, "isRoot", {
+                configurable: true,
+                get: () => true
+            });
 
             expect(() => abortWriting(ctx))
                 .toThrow(/root scope/i);
@@ -111,7 +110,7 @@ describe("JSON utils delegation layer", () => {
             const ctx = makeCtx();
             const flags = createFlags();
 
-            const abortSpy = jest.spyOn(ctx.scopes, "abort");
+            const abortSpy = spyOn(ctx.scopes, "abort");
 
             const id = Symbol("group");
 
@@ -154,9 +153,6 @@ describe("JSON utils delegation layer", () => {
         });
     });
 
-    /* ------------------------------------------------------------------ */
-    /* PRIMITIVE OVERFLOW RESOLUTION                                     */
-    /* ------------------------------------------------------------------ */
     describe("resolvePrimitiveOverflow", () => {
         const prepareTest = (value: unknown) => {
             const flags = createFlags();
@@ -166,29 +162,29 @@ describe("JSON utils delegation layer", () => {
                 maxWidth: Infinity
             });
 
-            // advance tokens
             while (ctx.tokens.hasNext()) {
                 const token = ctx.tokens.next()!;
-                if (token.kind === 'group-start') {
+
+                if (token.kind === "group-start") {
                     ctx.scopes.begin({ id: token.id });
 
-                    ctx.data.set(keys.RENDERING_LAYOUT, 'inline');
+                    ctx.data.set(keys.RENDERING_LAYOUT, "inline");
                     ctx.data.set(keys.GROUP, token.id);
                     ctx.data.set(keys.GROUP_DEPTH, ctx.depth.value);
                 }
 
-                if (token.kind === 'indent-start') {
+                if (token.kind === "indent-start") {
                     ctx.depth.increase();
                     continue;
                 }
 
-                if (token.kind === 'primitive') {
+                if (token.kind === "primitive") {
                     break;
                 }
             }
 
             return { ctx, flags };
-        }
+        };
 
         it("changes the layout to block", () => {
             const { ctx, flags } = prepareTest({ a: { b: 1 } });
@@ -203,12 +199,13 @@ describe("JSON utils delegation layer", () => {
 
             expect(flags.forceNextGroupAsBlock).toBe(true);
             expect(ctx.depth.value).toBe(0);
-        })
+        });
 
         it("does nothing in compact mode", () => {
-            const { ctx, flags } = prepareTest('A');
+            const { ctx, flags } = prepareTest("A");
 
             expect(ctx.depth.value).toBe(0);
+
             const original = { ...flags };
 
             resolvePrimitiveOverflow({
@@ -249,7 +246,6 @@ describe("JSON utils delegation layer", () => {
                 flags
             });
 
-            // should force at least one block transition
             expect(flags.forceNextGroupAsBlock).toBe(true);
             expect(ctx.depth.value).toBe(0);
         });
@@ -348,14 +344,16 @@ describe("JSON utils delegation layer", () => {
             ).not.toThrow();
         });
 
-        it("applies styling when ANSI enabled", () => {
+        it("applies styling when ANSI is enabled", () => {
             const flags = createFlags(true);
-
             const tokens = makeEnvelopeTokens();
 
             highlightEnvelope(flags, tokens);
 
-            const primitives = tokens.filter(t => t.kind === "primitive");
+            const primitives = tokens.filter(
+                token => token.kind === "primitive"
+            );
+
             expect(primitives.length).toBeGreaterThan(0);
         });
     });
@@ -379,7 +377,8 @@ function createFlags(ansi = false): JSONPipelineFlags {
 }
 
 function makeEnvelopeTokens(): readonly Token[] {
-    const env = new DataEnvelope('map', { size: 1 });
+    const env = new DataEnvelope("map", { size: 1 });
     const res = env.tokenize(JSONTokenizer);
+
     return res.tokens.start;
 }

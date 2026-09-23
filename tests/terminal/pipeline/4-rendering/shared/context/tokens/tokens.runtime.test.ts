@@ -339,7 +339,7 @@ describe("TokensRuntime", () => {
     // ---------------------------------------------------------------------
     // INTEGRATION
     // ---------------------------------------------------------------------
-    describe("integration behavior", () => {
+    describe("integration behajest.r", () => {
 
         it("maintains deterministic traversal under mixed operations", () => {
             const runtime = createRuntime([token("A"), token("D")]);

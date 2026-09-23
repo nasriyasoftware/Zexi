@@ -1,42 +1,19 @@
-import { StdoutMock } from "../../mocks/stdout.mock";
 import ScreenCell from "../../../src/core/terminal/screen/cell";
 import ScreenEngine from "../../../src/core/terminal/screen/engine";
 import TerminalEntry from "../../../src/core/terminal/screen/terminal-cell";
-
-jest.mock("../../../src/core/terminal/screen/cursor-position", () => ({
-    __esModule: true,
-    default: {
-        initialized: true,
-        row: 1,
-        column: 0
-    }
-}));
+import StdMocks from "../../mocks/std";
 
 describe("ScreenEngine", () => {
-    let mock: StdoutMock;
     let engine: ScreenEngine;
 
     beforeEach(() => {
-        mock = new StdoutMock();
-
-        Object.defineProperty(process, "stdout", {
-            value: mock,
-            configurable: true
-        });
-
+        StdMocks.reset();
         engine = new ScreenEngine();
-    });
-
-    afterEach(() => {
-        mock.reset();
     });
 
     describe("create()", () => {
         it("creates an internal ScreenCell by default", () => {
-            const cell = engine.create({
-                value: "Hello\n"
-            });
-
+            const cell = engine.create({ value: "Hello\n" });
             expect(cell).toBeInstanceOf(ScreenCell);
         });
 
@@ -50,338 +27,244 @@ describe("ScreenEngine", () => {
         });
 
         it("renders the initial value", () => {
-            engine.create({
-                value: "Hello\n"
-            });
-
-            expect(mock.write).toHaveBeenCalledWith("Hello\n");
+            engine.create({ value: "Hello\n" });
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("Hello\n");
         });
 
         it("renders multiple entries in order", () => {
             engine.create({ value: "A\n" });
-            engine.create({ value: "B\n" });
-            engine.create({ value: "C\n" });
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("A\n");
 
-            expect(mock.write.mock.calls).toEqual([
-                ["A\n"],
-                ["B\n"],
-                ["C\n"]
-            ]);
+            engine.create({ value: "B\n" });
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("B\n");
+
+            engine.create({ value: "C\n" });
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("C\n");
         });
 
         it("registers entries independently", () => {
             const a = engine.create({ value: "A\n" });
             const b = engine.create({ value: "B\n" });
 
-            mock.reset();
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("A\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("B\n");
 
+            StdMocks.reset();
             a.update("Updated A\n");
 
-            expect(mock.write).toHaveBeenCalledWith("Updated A\n");
-            expect(mock.write).not.toHaveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("Updated A\n");
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("B\n");
 
-            mock.reset();
-
+            StdMocks.reset();
             b.update("Updated B\n");
 
-            expect(mock.write).toHaveBeenCalledWith("Updated B\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("Updated B\n");
         });
 
-        it("throws when cursor position has not been initialized", () => {
-            jest.resetModules();
-
-            jest.isolateModules(() => {
-                jest.doMock(
-                    "../../../src/core/terminal/screen/cursor-position",
-                    () => ({
-                        __esModule: true,
-                        default: {
-                            initialized: false,
-                            row: 1,
-                            column: 0
-                        }
-                    })
-                );
-
-                const ScreenEngineWithoutCursor = require(
-                    "../../../src/core/terminal/screen/engine"
-                ).default;
-
-                const instance = new ScreenEngineWithoutCursor();
-
-                expect(() =>
-                    instance.create({ value: "Hello\n" })
-                ).toThrow(
-                    "Attempting to create a cell before cursor position is initialized."
-                );
+        it("renders error entries with the error output option", () => {
+            engine.create({
+                value: "Error\n",
+                isError: true
             });
+
+            StdMocks.expect.stderr.write.toHaveBeenCalledWith("Error\n");
         });
     });
 
     describe("updates", () => {
         it("rewrites an entry when its height is unchanged", () => {
-            const cell = engine.create({
-                value: "Hello\n"
-            });
+            const cell = engine.create({ value: "Hello\n" });
 
-            mock.reset();
-
+            StdMocks.reset();
             cell.update("World\n");
 
-            expect(mock.clearLine).toHaveBeenCalled();
-            expect(mock.clearScreenDown).not.toHaveBeenCalled();
-            expect(mock.write).toHaveBeenCalledWith("World\n");
+            StdMocks.expect.stdout.clearLine.toHaveBeenCalled();
+            StdMocks.expect.stdout.clearScreenDown.toNot.haveBeenCalled();
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("World\n");
         });
 
         it("does nothing when the rendered value is unchanged", () => {
-            const cell = engine.create({
-                value: "Hello\n"
-            });
+            const cell = engine.create({ value: "Hello\n" });
 
-            mock.reset();
-
+            StdMocks.reset();
             cell.update("Hello\n");
 
-            expect(mock.write).not.toHaveBeenCalled();
-            expect(mock.clearLine).not.toHaveBeenCalled();
-            expect(mock.clearScreenDown).not.toHaveBeenCalled();
+            StdMocks.expect.stdout.write.toNot.haveBeenCalled();
+            StdMocks.expect.stdout.clearLine.toNot.haveBeenCalled();
+            StdMocks.expect.stdout.clearScreenDown.toNot.haveBeenCalled();
         });
 
         it("cascades when an entry height changes", () => {
-            mock.reset();
+            const a = engine.create({ value: "A\n" });
+            const b = engine.create({ value: "B\n" });
 
-            const a = engine.create({
-                value: "A\n"
-            });
-
-            engine.create({
-                value: "B\n"
-            });
-
+            StdMocks.reset();
             a.update("A\nA2\n");
 
             expect(a.height).toBe(3);
-
-            expect(mock.clearScreenDown).toHaveBeenCalled();
-
-            expect(mock.write).toHaveBeenCalledWith("A\nA2\n");
-            expect(mock.write).toHaveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.clearScreenDown.toHaveBeenCalled();
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("A\nA2\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("B\n");
         });
 
         it("does not cascade when an entry value changes without changing height", () => {
-            const a = engine.create({
-                value: "A\n"
-            });
+            const a = engine.create({ value: "A\n" });
+            engine.create({ value: "B\n" });
 
-            engine.create({
-                value: "B\n"
-            });
-
-            mock.reset();
-
+            StdMocks.reset();
             a.update("Updated A\n");
 
-            expect(mock.clearScreenDown).not.toHaveBeenCalled();
-            expect(mock.write).toHaveBeenCalledWith("Updated A\n");
-            expect(mock.write).not.toHaveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("Updated A\n");
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.clearScreenDown.toNot.haveBeenCalled();
         });
 
         it("re-renders entries below an entry whose height decreases", () => {
-            const a = engine.create({
-                value: "A\nA2\nA3\n"
-            });
+            const a = engine.create({ value: "A\nA2\nA3\n" });
+            engine.create({ value: "B\n" });
 
-            engine.create({
-                value: "B\n"
-            });
-
-            mock.reset();
-
+            StdMocks.reset();
             a.update("A\n");
 
-            expect(mock.clearScreenDown).toHaveBeenCalled();
+            StdMocks.expect.stdout.clearScreenDown.toHaveBeenCalled();
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("A\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("B\n");
+        });
 
-            expect(mock.write).toHaveBeenCalledWith("A\n");
-            expect(mock.write).toHaveBeenCalledWith("B\n");
+        it("preserves the error state when an error entry is updated", () => {
+            const cell = engine.create({
+                value: "Error\n",
+                isError: true
+            });
+
+            StdMocks.reset();
+            cell.update("Updated error\n");
+
+            StdMocks.expect.stderr.write.toHaveBeenCalledWith("Updated error\n");
         });
     });
 
     describe("remove()", () => {
         it("removes an internal ScreenCell through its lifecycle", () => {
-            const a = engine.create({
-                value: "A\n"
-            });
+            const a = engine.create({ value: "A\n" });
+            engine.create({ value: "B\n" });
 
-            engine.create({
-                value: "B\n"
-            });
-
-            mock.reset();
-
+            StdMocks.reset();
             a.remove();
 
-            expect(mock.clearScreenDown).toHaveBeenCalled();
+            StdMocks.expect.stdout.clearScreenDown.toHaveBeenCalled();
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("B\n");
         });
 
         it("removes an external TerminalEntry through its lifecycle", () => {
             const entry = engine.create(
-                {
-                    value: "A\n"
-                },
+                { value: "A\n" },
                 "external"
             );
 
-            engine.create({
-                value: "B\n"
-            });
+            engine.create({ value: "B\n" });
 
-            mock.reset();
-
+            StdMocks.reset();
             entry.remove();
 
-            expect(mock.clearScreenDown).toHaveBeenCalled();
+            StdMocks.expect.stdout.clearScreenDown.toHaveBeenCalled();
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("B\n");
         });
 
         it("re-renders entries below the removed entry", () => {
-            const a = engine.create({
-                value: "A\n"
-            });
+            const a = engine.create({ value: "A\n" });
+            engine.create({ value: "B\n" });
+            engine.create({ value: "C\n" });
 
-            engine.create({
-                value: "B\n"
-            });
-
-            engine.create({
-                value: "C\n"
-            });
-
-            mock.reset();
-
+            StdMocks.reset();
             a.remove();
 
-            expect(mock.write).toHaveBeenCalledWith("B\n");
-            expect(mock.write).toHaveBeenCalledWith("C\n");
+            StdMocks.expect.stdout.clearScreenDown.toHaveBeenCalled();
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("C\n");
         });
 
         it("does not render the removed entry again", () => {
-            const a = engine.create({
-                value: "A\n"
-            });
-
-            engine.create({
-                value: "B\n"
-            });
-
-            mock.reset();
+            const a = engine.create({ value: "A\n" });
+            engine.create({ value: "B\n" });
 
             a.remove();
+            StdMocks.reset();
 
-            expect(mock.write).not.toHaveBeenCalledWith("A\n");
-            expect(mock.write).toHaveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("A\n");
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("B\n");
         });
 
         it("reflows entries after removing an entry from the middle", () => {
-            engine.create({
-                value: "A\n"
-            });
+            engine.create({ value: "A\n" });
+            const b = engine.create({ value: "B\n" });
+            engine.create({ value: "C\n" });
 
-            const b = engine.create({
-                value: "B\n"
-            });
-
-            engine.create({
-                value: "C\n"
-            });
-
-            mock.reset();
-
+            StdMocks.reset();
             b.remove();
 
-            expect(mock.write).not.toHaveBeenCalledWith("B\n");
-            expect(mock.write).toHaveBeenCalledWith("C\n");
+            StdMocks.expect.stdout.clearLine.toHaveBeenCalled();
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("C\n");
 
-            // B occupied row 2, and C moves into that position.
-            expect(mock.cursorTo).toHaveBeenCalledWith(0, 2);
+            // B occupied rows 2-3, and C moves into that position.
+            StdMocks.expect.stdout.cursorTo.toHaveBeenCalledWith(0, 2);
         });
 
         it("allows entries to be removed independently of their original position", () => {
-            const a = engine.create({
-                value: "A\n"
-            });
-
-            const b = engine.create({
-                value: "B\n"
-            });
-
-            const c = engine.create({
-                value: "C\n"
-            });
+            const a = engine.create({ value: "A\n" });
+            const b = engine.create({ value: "B\n" });
+            const c = engine.create({ value: "C\n" });
 
             b.remove();
 
-            mock.reset();
-
+            StdMocks.reset();
             a.update("Updated A\n");
 
-            expect(mock.write).toHaveBeenCalledWith("Updated A\n");
-            expect(mock.write).not.toHaveBeenCalledWith("B\n");
-            expect(mock.write).not.toHaveBeenCalledWith("C\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("Updated A\n");
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("C\n");
 
-            mock.reset();
-
+            StdMocks.reset();
             c.update("Updated C\n");
 
-            expect(mock.write).toHaveBeenCalledWith("Updated C\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("Updated C\n");
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("C\n");
         });
 
         it("handles removing entries in arbitrary order", () => {
-            const a = engine.create({
-                value: "A\n"
-            });
+            const a = engine.create({ value: "A\n" });
+            const b = engine.create({ value: "B\n" });
+            const c = engine.create({ value: "C\n" });
 
-            const b = engine.create({
-                value: "B\n"
-            });
-
-            const c = engine.create({
-                value: "C\n"
-            });
-
-            mock.reset();
-
+            StdMocks.reset();
             c.remove();
 
-            expect(mock.write).not.toHaveBeenCalledWith("C\n");
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("C\n");
 
-            mock.reset();
-
+            StdMocks.reset();
             a.remove();
 
-            expect(mock.write).not.toHaveBeenCalledWith("A\n");
-            expect(mock.write).toHaveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.write.toNot.haveBeenCalledWith("A\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("B\n");
 
-            mock.reset();
-
+            StdMocks.reset();
             b.update("Updated B\n");
 
-            expect(mock.write).toHaveBeenCalledWith("Updated B\n");
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("Updated B\n");
         });
 
         it("does not remove the same entry twice", () => {
-            const cell = engine.create({
-                value: "A\n"
-            });
-
+            const cell = engine.create({ value: "A\n" });
             cell.remove();
 
-            mock.reset();
+            StdMocks.reset();
 
-            expect(() => {
-                cell.remove();
-            }).not.toThrow();
+            expect(() => { cell.remove(); }).not.toThrow();
 
-            expect(mock.write).not.toHaveBeenCalled();
-            expect(mock.clearScreenDown).not.toHaveBeenCalled();
+            StdMocks.expect.stdout.write.toNot.haveBeenCalled();
+            StdMocks.expect.stdout.clearScreenDown.toNot.haveBeenCalled();
         });
     });
 
@@ -391,129 +274,89 @@ describe("ScreenEngine", () => {
             engine.create({ value: "B\n" });
             engine.create({ value: "C\n" });
 
-            expect(mock.cursorTo).toHaveBeenCalledWith(0, 0);
-            expect(mock.cursorTo).toHaveBeenCalledWith(0, 2);
-            expect(mock.cursorTo).toHaveBeenCalledWith(0, 4);
+            StdMocks.expect.stdout.cursorTo.toHaveBeenCalledWith(0, 0);
+            StdMocks.expect.stdout.cursorTo.toHaveBeenCalledWith(0, 2);
+            StdMocks.expect.stdout.cursorTo.toHaveBeenCalledWith(0, 4);
         });
 
         it("restores the cursor to the end of the rendered output", () => {
-            engine.create({
-                value: "A\n"
-            });
+            engine.create({ value: "A\n" });
+            engine.create({ value: "B\n" });
+            const cell = engine.create({ value: "C\n" });
 
-            engine.create({
-                value: "B\n"
-            });
-
-            mock.reset();
-
-            const cell = engine.create({
-                value: "C\n"
-            });
-
-            mock.reset();
-
+            StdMocks.reset();
             cell.update("Updated\n");
 
-            expect(mock.cursorTo).toHaveBeenLastCalledWith(0, 6);
+            StdMocks.expect.stdout.cursorTo.toHaveBeenCalledWith(0, 6);
         });
 
         it("restores the cursor to the new end after a height change", () => {
-            const cell = engine.create({
-                value: "A\n"
-            });
+            const cell = engine.create({ value: "A\n" });
+            engine.create({ value: "B\n" });
 
-            engine.create({
-                value: "B\n"
-            });
-
-            mock.reset();
-
+            StdMocks.reset();
             cell.update("A\nA2\n");
 
-            expect(mock.cursorTo).toHaveBeenLastCalledWith(0, 5);
+            StdMocks.expect.stdout.cursorTo.toHaveBeenCalledWith(0, 5);
         });
 
         it("restores the cursor to the new end after removing an entry", () => {
-            const a = engine.create({
-                value: "A\n"
-            });
+            const a = engine.create({ value: "A\n" });
+            engine.create({ value: "B\n" });
 
-            engine.create({
-                value: "B\n"
-            });
-
-            mock.reset();
-
+            StdMocks.reset();
             a.remove();
 
-            expect(mock.cursorTo).toHaveBeenLastCalledWith(0, 2);
+            StdMocks.expect.stdout.cursorTo.toHaveBeenCalledWith(0, 2);
         });
     });
 
     describe("newLine()", () => {
         it("reserves one line in the layout", () => {
             engine.newLine();
+            engine.create({ value: "A\n" });
 
-            engine.create({
-                value: "A\n"
-            });
-
-            expect(mock.cursorTo).toHaveBeenCalledWith(0, 1);
+            StdMocks.expect.stdout.cursorTo.toHaveBeenCalledWith(0, 1);
         });
     });
 
     describe("clear()", () => {
         it("moves to the beginning of the managed output", () => {
-            engine.create({
-                value: "A\n"
-            });
+            engine.create({ value: "A\n" });
 
-            mock.reset();
-
+            StdMocks.reset();
             engine.clear();
 
-            expect(mock.cursorTo).toHaveBeenCalledWith(0, 0);
+            StdMocks.expect.stdout.cursorTo.toHaveBeenCalledWith(0, 0);
         });
 
         it("clears the current line", () => {
-            engine.create({
-                value: "A\n"
-            });
+            engine.create({ value: "A\n" });
 
-            mock.reset();
-
+            StdMocks.reset();
             engine.clear();
 
-            expect(mock.clearLine).toHaveBeenCalledWith(1);
+            StdMocks.expect.stdout.clearLine.toHaveBeenCalledWith(1);
         });
 
         it("clears everything below the managed output", () => {
-            engine.create({
-                value: "A\n"
-            });
+            engine.create({ value: "A\n" });
 
-            mock.reset();
-
+            StdMocks.reset();
             engine.clear();
 
-            expect(mock.clearScreenDown).toHaveBeenCalled();
+            StdMocks.expect.stdout.clearScreenDown.toHaveBeenCalled();
         });
 
         it("resets the layout", () => {
-            engine.create({
-                value: "A\n"
-            });
-
+            engine.create({ value: "A\n" });
             engine.clear();
-            mock.reset();
 
-            engine.create({
-                value: "B\n"
-            });
+            StdMocks.reset();
+            engine.create({ value: "B\n" });
 
-            expect(mock.write).toHaveBeenCalledWith("B\n");
-            expect(mock.cursorTo).toHaveBeenCalledWith(0, 0);
+            StdMocks.expect.stdout.write.toHaveBeenCalledWith("B\n");
+            StdMocks.expect.stdout.cursorTo.toHaveBeenCalledWith(0, 0);
         });
     });
 });

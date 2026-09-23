@@ -34,7 +34,7 @@ describe("SeparatorToken", () => {
         expect(token.value).toBe(token.value);
     });
 
-    it("maintains consistent default behavior contract", () => {
+    it("maintains consistent default behajest.r contract", () => {
         const defaultToken = new SeparatorToken();
         const explicitToken = new SeparatorToken(",");
 

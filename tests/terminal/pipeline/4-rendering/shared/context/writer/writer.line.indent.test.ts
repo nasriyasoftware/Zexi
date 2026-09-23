@@ -65,7 +65,7 @@ describe("LineIndent", () => {
         });
     });
 
-    describe("width behavior", () => {
+    describe("width behajest.r", () => {
 
         it("returns 0 when pending", () => {
             const indent = new LineIndent();

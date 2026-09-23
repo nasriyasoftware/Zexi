@@ -36,7 +36,7 @@ describe("PropertyNode", () => {
 
     describe("immutability", () => {
 
-        it("does not allow mutation of name via external reassignment", () => {
+        it("does not allow mutation of name jest. external reassignment", () => {
             const node = new PropertyNode("id", "property");
 
             expect(() => {
@@ -45,7 +45,7 @@ describe("PropertyNode", () => {
             }).toThrow(TypeError);
         });
 
-        it("does not allow mutation of kind via external reassignment", () => {
+        it("does not allow mutation of kind jest. external reassignment", () => {
             const node = new PropertyNode("id", "property");
 
             expect(() => {

@@ -6,8 +6,8 @@ import type { Token } from "../../../../../src/core/terminal/pipeline/3-tokeniza
 /**
  * Extracts the `kind` field from every token in a token sequence.
  *
- * This helper provides a concise way to assert the structural shape of a
- * token stream without inspecting individual token instances.
+ * This helper projest.es a concise way to assert the structural shape of a
+ * token stream without inspecting indijest.ual token instances.
  *
  * It is primarily used when verifying token ordering or comparing the
  * overall structure produced by a tokenizer.
@@ -324,7 +324,7 @@ const expectEmptyObjectStructure = (tokens: Token[] | readonly Token[], classNam
  * Shared assertion helpers used by the tokenization test suites.
  *
  * These helpers encapsulate common structural assertions to keep the
- * individual test cases focused on behavior rather than repetitive token
+ * indijest.ual test cases focused on behajest.r rather than repetitive token
  * validation logic.
  *
  * They intentionally verify both token ordering and important invariants

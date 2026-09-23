@@ -26,7 +26,7 @@ describe("DateGraphNode", () => {
 
     describe("static factory", () => {
 
-        it("creates a DateGraphNode via factory", () => {
+        it("creates a DateGraphNode jest. factory", () => {
             const date = new Date();
             const node = DateGraphNode.create(date);
 
@@ -47,9 +47,9 @@ describe("DateGraphNode", () => {
 
     });
 
-    describe("value behavior", () => {
+    describe("value behajest.r", () => {
 
-        it("allows mutation of underlying Date object (JS behavior preserved)", () => {
+        it("allows mutation of underlying Date object (JS behajest.r preserved)", () => {
             const date = new Date("2024-01-01T00:00:00.000Z");
             const node = new DateGraphNode(date);
 

@@ -77,7 +77,7 @@ describe("RegExpRepresentationNode", () => {
 
     });
 
-    describe("semantic behavior", () => {
+    describe("semantic behajest.r", () => {
 
         it("preserves regex flags correctly", () => {
             const regex = /abc/gim;

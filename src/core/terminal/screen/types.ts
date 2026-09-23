@@ -45,6 +45,15 @@ import type { BaseQueueTask, Prettify } from "@nasriya/atomix";
  * Setting `final` to `true` finalizes the cell after its initial value has
  * been rendered, preventing subsequent updates.
  *
+ * ---------------------------------------------------------------------
+ * 🔷 ERROR OUTPUT
+ * ---------------------------------------------------------------------
+ *
+ * Setting `isError` to `true` marks the cell as error output.
+ *
+ * Error cells are written through the terminal's stderr output stream
+ * instead of stdout.
+ *
  * @since 1.0.0
  */
 export type TerminalCellOptions = Prettify<{
@@ -55,6 +64,17 @@ export type TerminalCellOptions = Prettify<{
      * @since 1.0.0
      */
     final?: boolean;
+
+    /**
+     * Marks the cell as error output.
+     *
+     * Error output is written through the terminal's stderr stream instead
+     * of stdout.
+     *
+     * @default false
+     * @since 1.0.0
+     */
+    isError?: boolean;
 } & ({
     /**
      * Initial string value rendered directly by the cell.
@@ -99,37 +119,73 @@ export interface ScreenCellEngineEvents {
      */
     onUpdate: (cell: ScreenCell) => void;
 
+    /**
+     * Callback invoked when the cell is removed from the managed screen.
+     *
+     * The renderer uses this callback to remove the cell's corresponding
+     * snapshot entry and synchronize the affected terminal output.
+     *
+     * The callback is invoked at most once for a given cell.
+     *
+     * @since 1.0.0
+     */
     onRemove: () => void;
 }
 
 /**
- * Data required to register a rendered entry in the screen snapshot.
+ * Data required to register a new entry in the screen snapshot.
  *
- * This type represents the rendered state supplied when an entry is added
- * to the snapshot. The snapshot derives the entry's terminal position from
- * the current snapshot height and cursor position.
+ * Extends {@link SnapshotEntryUpdateData} with the output metadata assigned
+ * when the entry is registered.
+ *
+ * The `isError` property determines whether the entry's terminal output is
+ * written through stderr instead of stdout. This property is established
+ * when the entry is created and remains unchanged for its lifetime.
  *
  * @since 1.0.0
  */
-export interface SnapshotEntryData {
-    /** The value of the cell */
+export type SnapshotNewEntryData = SnapshotEntryUpdateData & Pick<SnapshotEntry, 'isError'>;
+
+/**
+ * Rendered state of a screen snapshot entry.
+ *
+ * This type contains only the state that can be updated after an entry has
+ * been registered with the snapshot.
+ *
+ * The snapshot uses `value` and `height` to determine the entry's rendered
+ * state and calculate its position within the terminal layout.
+ *
+ * @since 1.0.0
+ */
+export interface SnapshotEntryUpdateData {
+    /**
+     * Rendered value of the cell.
+     *
+     * @since 1.0.0
+     */
     value: string;
-    /** The number of lines the cell spans */
+
+    /**
+     * Number of terminal lines occupied by the cell.
+     *
+     * @since 1.0.0
+     */
     height: number;
 }
 
 /**
  * A registered entry in the screen snapshot.
  *
- * Extends the rendered entry data with its stable identity, current layout
- * position, and terminal row at which the entry begins.
+ * Extends the rendered entry data with its stable identity, output metadata,
+ * current layout position, and terminal row at which the entry begins.
  *
- * The `id` remains stable for the lifetime of the entry, while `index` and
- * `startsAt` are derived from the entry's current position within the layout.
+ * The `id` and `isError` properties remain stable for the lifetime of the
+ * entry, while `index` and `startsAt` are derived from the entry's current
+ * position within the layout.
  *
  * @since 1.0.0
  */
-export type SnapshotEntry = SnapshotEntryData & {
+export type SnapshotEntry = SnapshotEntryUpdateData & {
     /**
      * Stable identity assigned when the entry is registered with the screen
      * layout.
@@ -152,6 +208,17 @@ export type SnapshotEntry = SnapshotEntryData & {
      * @since 1.0.0
      */
     readonly index: number;
+
+    /**
+     * Marks the cell as error output.
+     *
+     * Error output is written through the terminal's stderr stream instead
+     * of stdout.
+     *
+     * @default false
+     * @since 1.0.0
+     */
+    readonly isError: boolean;
 
     /**
      * Terminal row at which the entry begins.

@@ -1,8 +1,6 @@
 import TerminalEntry from "../../../src/core/terminal/screen/terminal-cell";
-import type {
-    ScreenCellEngineEvents,
-    TerminalEntryUpdateLogger
-} from "../../../src/core/terminal/screen/types";
+import type { Mock } from 'bun:test'
+import type { ScreenCellEngineEvents, TerminalEntryUpdateLogger } from "../../../src/core/terminal/screen/types";
 
 const createEvents = (): ScreenCellEngineEvents => ({
     onUpdate: () => { },
@@ -11,17 +9,11 @@ const createEvents = (): ScreenCellEngineEvents => ({
 
 describe("TerminalEntry", () => {
     let entry: TerminalEntry;
-    let logger: jest.MockedFunction<TerminalEntryUpdateLogger>;
+    let logger: Mock<TerminalEntryUpdateLogger>;
 
     beforeEach(() => {
-        logger = jest.fn();
-
-        entry = new TerminalEntry(
-            createEvents(),
-            {
-                value: "Initial"
-            }
-        );
+        logger = mock();
+        entry = new TerminalEntry(createEvents(), { value: "Initial" });
 
         TerminalEntry.attachLogger(entry, logger);
     });
@@ -396,16 +388,11 @@ describe("TerminalEntry", () => {
 
     describe("inherited ScreenCell behavior", () => {
         it("emits update notifications through the supplied events object", () => {
-            const onUpdate = jest.fn();
+            const onUpdate = mock();
 
             const testEntry = new TerminalEntry(
-                {
-                    onUpdate,
-                    onRemove: () => { }
-                },
-                {
-                    value: "Initial"
-                }
+                { onUpdate, onRemove: () => { } },
+                { value: "Initial" }
             );
 
             TerminalEntry.attachLogger(testEntry, logger);
@@ -416,16 +403,11 @@ describe("TerminalEntry", () => {
         });
 
         it("emits removal notifications through the supplied events object", () => {
-            const onRemove = jest.fn();
+            const onRemove = mock();
 
             const testEntry = new TerminalEntry(
-                {
-                    onUpdate: () => { },
-                    onRemove
-                },
-                {
-                    value: "Initial"
-                }
+                { onUpdate: () => { }, onRemove },
+                { value: "Initial" }
             );
 
             TerminalEntry.attachLogger(testEntry, logger);

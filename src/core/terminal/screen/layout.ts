@@ -1,5 +1,17 @@
-import cursorPosition from "./cursor-position";
-import type { SnapshotEntry, SnapshotEntryData } from "./types";
+import ZexiTerminalControllerInstance from "../controller/controller";
+import type ScreenEngine from "./engine";
+import type { SnapshotEntry, SnapshotEntryUpdateData, SnapshotNewEntryData } from "./types";
+
+/**
+ * Lazily retrieves the screen engine's initial cursor position.
+ *
+ * The position must be read after screen initialization because
+ * {@link ScreenEngine.cursorInitPosition} is a getter whose value may not be
+ * valid when this module is evaluated.
+ *
+ * @since 1.0.0
+ */
+const cursorInitPosition = () => ZexiTerminalControllerInstance.screenEngine.cursorInitPosition;
 
 /**
  * Positional terminal layout tracker.
@@ -12,6 +24,7 @@ import type { SnapshotEntry, SnapshotEntryData } from "./types";
  * - rendered output value
  * - rendered visual height
  * - absolute vertical starting position within the terminal
+ * - output stream metadata
  *
  * The layout accounts for both the terminal position at which rendering
  * begins and the accumulated height of entries already present in the
@@ -28,12 +41,14 @@ import type { SnapshotEntry, SnapshotEntryData } from "./types";
  * - tracking terminal row allocation
  * - maintaining positional consistency
  * - calculating absolute entry positions
+ * - preserving entry output metadata
  * - recalculating downstream offsets
  * - enabling efficient partial re-rendering
  *
  * `ScreenLayout` does not perform terminal I/O itself. It maintains the
- * positional model consumed by the rendering engine, allowing the renderer
- * to determine where each entry must be written within the terminal.
+ * positional model and entry metadata consumed by the rendering engine,
+ * allowing the renderer to determine where each entry must be written within
+ * the terminal and which output stream the entry belongs to.
  *
  * ---------------------------------------------------------------------
  * 🔷 CORE MODEL
@@ -41,6 +56,10 @@ import type { SnapshotEntry, SnapshotEntryData } from "./types";
  *
  * The layout behaves similarly to a prefix-sum structure with an external
  * terminal-position offset.
+ *
+ * Each registered entry consists of mutable rendered state and stable output
+ * metadata. The rendered state includes its value and visual height, while
+ * output metadata identifies whether the entry is error output.
  *
  * The first entry is positioned relative to the terminal cursor row:
  *
@@ -64,6 +83,7 @@ import type { SnapshotEntry, SnapshotEntryData } from "./types";
  * - height mutations propagate their positional effect to downstream
  *   entries
  * - stable heights avoid unnecessary cascading updates
+ * - output stream metadata remains associated with its registered entry
  *
  * The `-1` adjustment converts the terminal's one-based cursor row into
  * the zero-based row coordinate used by the layout.
@@ -107,6 +127,7 @@ import type { SnapshotEntry, SnapshotEntryData } from "./types";
  * - determine the absolute starting row of an entry
  * - determine repaint boundaries
  * - determine whether downstream entries must be re-rendered
+ * - determine the output stream associated with each entry
  * - optimize incremental rendering
  * - preserve terminal spatial correctness
  *
@@ -131,6 +152,8 @@ import type { SnapshotEntry, SnapshotEntryData } from "./types";
  * - only the entry's rendered content changes
  * - subsequent entry positions remain valid
  * - positional recalculation is unnecessary
+ *
+ * Output metadata is not modified as part of rendered-state updates.
  *
  * This distinction allows the rendering engine to avoid re-rendering
  * unaffected downstream entries when an update does not alter the
@@ -168,7 +191,11 @@ import type { SnapshotEntry, SnapshotEntryData } from "./types";
  * - the rendered value of each entry
  * - its visual height
  * - its absolute starting position
+ * - its output stream metadata
  * - the total visual height occupied by the snapshot
+ *
+ * Rendered state may be updated after an entry is registered, while stable
+ * entry metadata remains associated with the entry for its lifetime.
  *
  * Mutations are performed incrementally so that the rendering engine can
  * determine the minimum amount of terminal output that must be rewritten
@@ -281,6 +308,19 @@ class ScreenLayout {
      * entry even after other entries have been inserted or removed.
      *
      * ---------------------------------------------------------------------
+     * 🔷 OUTPUT METADATA
+     * ---------------------------------------------------------------------
+     *
+     * The entry's `isError` property is captured when the entry is registered.
+     *
+     * This metadata remains associated with the snapshot entry for its lifetime
+     * and determines whether the entry's terminal output is written through
+     * stderr instead of stdout.
+     *
+     * The `isError` property is not part of the entry's mutable rendered state
+     * and is therefore not changed by subsequent snapshot updates.
+     *
+     * ---------------------------------------------------------------------
      * 🔷 POSITIONING RULE
      * ---------------------------------------------------------------------
      *
@@ -311,6 +351,7 @@ class ScreenLayout {
      * - total height increases by the new entry's height
      * - ordering is preserved
      * - the entry receives a stable identity
+     * - the entry's output metadata is preserved
      *
      * ---------------------------------------------------------------------
      * 🔷 COMPLEXITY
@@ -322,32 +363,33 @@ class ScreenLayout {
      * O(1)
      * ```
      *
-     * @param entry - Rendered entry snapshot data
+     * @param entry - Rendered entry data and output metadata used to register the
+     * newly created snapshot entry.
      *
-     * @returns Stable unique identifier assigned to the newly registered entry
+     * @returns Stable unique identifier assigned to the newly registered entry.
      *
-     * @throws Error if the cursor position has not been initialized
+     * @throws Error if the cursor position has not been initialized.
      *
      * @since 1.0.0
      */
-    add(entry: SnapshotEntryData): symbol {
-        if (!cursorPosition.initialized) {
-            throw new Error("Invariant violation: Attempted to add layout entry before cursor position has been initialized.");
-        }
-
+    add(entry: SnapshotNewEntryData): symbol {
         const data = this.#_data;
         const id = Symbol();
+        const isError = entry.isError;
 
         this.#_data.push({
             value: entry.value,
             height: entry.height,
-            startsAt: this.#_height + cursorPosition.row - 1,
+            startsAt: this.#_height + cursorInitPosition().row - 1,
             get id() {
                 return id;
             },
             get index() {
                 return data.findIndex(e => e.id === id);
-            }
+            },
+            get isError() {
+                return isError;
+            },
         });
 
         this.#_height += entry.height;
@@ -451,7 +493,7 @@ class ScreenLayout {
      *
      * @since 1.0.0
      */
-    update(index: number, updatedEntry: SnapshotEntryData) {
+    update(index: number, updatedEntry: SnapshotEntryUpdateData) {
         const entry = this.#_data[index];
         if (!entry) { return }
 
@@ -541,7 +583,8 @@ class ScreenLayout {
             get index() { return entry.index; },
             get value() { return entry.value; },
             get height() { return entry.height; },
-            get startsAt() { return entry.startsAt; }
+            get startsAt() { return entry.startsAt; },
+            get isError() { return entry.isError; }
         }
     }
 

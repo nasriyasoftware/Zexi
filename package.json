@@ -40,13 +40,8 @@
   },
   "scripts": {
     "build": "bun run .builder/builder.ts",
-    "build:pending": "rm -rf dist && npm run build:esm && npm run build:cjs && postbuild",
-    "build:esm": "tsc --p tsconfig.esm.json",
-    "build:cjs": "tsc --p tsconfig.cjs.json",
     "build:types": "tsc -p tsconfig.types.json",
-    "test": "jest --detectOpenHandles --runInBand --silent",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test": "bun test --parallel",
     "upgrade": "ncu -u --dep dev,peer"
   },
   "maintainers": [
@@ -71,10 +66,9 @@
   "license": "NPCL-2.0",
   "author": "Nasriya Software",
   "devDependencies": {
+    "@types/bun": "^1.4.2",
     "@types/jest": "^30.0.0",
-    "@types/node": "^25.6.0",
-    "jest": "^30.3.0",
-    "ts-jest": "^29.4.9"
+    "@types/node": "^25.6.0"
   },
   "dependencies": {
     "@nasriya/atomix": "^1.0.25"

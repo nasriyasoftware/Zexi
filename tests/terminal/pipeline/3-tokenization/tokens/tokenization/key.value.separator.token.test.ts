@@ -31,7 +31,7 @@ describe("KeyValueSeparatorToken", () => {
         expect(token.kind).toBe("key-value-separator");
     });
 
-    it("does not allow mutation of internal state via value", () => {
+    it("does not allow mutation of internal state jest. value", () => {
         const token = new KeyValueSeparatorToken("=>");
 
         expect(token.value).toBe("=>");
@@ -40,7 +40,7 @@ describe("KeyValueSeparatorToken", () => {
         expect(token.value).toBe(token.value);
     });
 
-    it("preserves constructor default behavior contract", () => {
+    it("preserves constructor default behajest.r contract", () => {
         const defaultToken = new KeyValueSeparatorToken();
         const explicitToken = new KeyValueSeparatorToken(":");
 

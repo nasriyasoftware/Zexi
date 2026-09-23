@@ -119,9 +119,9 @@ describe("ZexiRenderingContext (spec-complete)", () => {
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 COMMIT BEHAVIOR
+    // 🔷 COMMIT BEHAjest.R
     // ---------------------------------------------------------------------
-    describe("scope commit behavior", () => {
+    describe("scope commit behajest.r", () => {
 
         it("merges scoped output into parent deterministically", () => {
             const ctx = new ZexiRenderingContext([], { spaces: 0 });
@@ -222,7 +222,7 @@ describe("ZexiRenderingContext (spec-complete)", () => {
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 WRITER BEHAVIOR
+    // 🔷 WRITER BEHAjest.R
     // ---------------------------------------------------------------------
     describe("writer continuity", () => {
 
@@ -267,7 +267,7 @@ describe("ZexiRenderingContext (spec-complete)", () => {
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 INTEGRATION BEHAVIOR
+    // 🔷 INTEGRATION BEHAjest.R
     // ---------------------------------------------------------------------
     describe("full system integration", () => {
 

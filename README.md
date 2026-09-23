@@ -25,12 +25,13 @@ It provides a structured terminal environment where applications can:
 * Display passwords and other sensitive input privately.
 * Create dynamic terminal entries that can be updated in place.
 * Build progress indicators and live status output.
-* Clear and manage terminal output through a shared screen engine.
+* Manage dynamic terminal output while preserving the existing cursor position.
+* Safely fall back to an alternate terminal screen when the terminal state cannot be queried.
 * Configure logging behavior independently for different terminal instances.
 * Consume immutable JSON log events from application code.
 * Render terminal output using Zexi's rendering and styling system.
 
-The terminal API is asynchronous and designed around queued screen operations, allowing terminal updates and interactive operations to be coordinated without directly manipulating the underlying terminal screen.
+Interactive input, dynamic entries, and screen operations are asynchronous and designed around queued terminal work, allowing terminal updates and interactive operations to be coordinated without directly manipulating the underlying terminal screen. Log methods are synchronous and return immediately after scheduling their terminal output and emitting the corresponding events.
 
 ## Contents
 
@@ -60,7 +61,7 @@ The terminal API is asynchronous and designed around queued screen operations, a
   * [Creating Isolated Terminal Instances](#creating-isolated-terminal-instances)
 * [Events](#events)
 * [Building CLI Applications](#building-cli-applications)
-* [Testing](#testing)
+* [Development and Testing](#development-and-testing)
 * [License](#license)
 
 > [!IMPORTANT]
@@ -161,7 +162,7 @@ The default exported terminal can be used immediately:
 ```ts
 import terminal from '@nasriya/zexi';
 
-await terminal.info('Server started.');
+terminal.info('Server started.');
 ```
 
 When an application requires different logging policies for different parts of the application, additional terminal instances can be created with `with()`:
@@ -187,21 +188,21 @@ This makes separate instances useful when different components of an application
 Zexi provides structured logging through five severity levels:
 
 ```ts
-await terminal.debug('Detailed diagnostic information.');
+terminal.debug('Detailed diagnostic information.');
 
-await terminal.info('Application started.');
+terminal.info('Application started.');
 
-await terminal.warn('Configuration file was not found.');
+terminal.warn('Configuration file was not found.');
 
-await terminal.error('Unable to connect to the database.');
+terminal.error('Unable to connect to the database.');
 
-await terminal.fatal('Application cannot continue.');
+terminal.fatal('Application cannot continue.');
 ```
 
 All logging methods accept any JavaScript value:
 
 ```ts
-await terminal.info({
+terminal.info({
     message: 'User authenticated.',
     userId: 123,
     method: 'password'
@@ -215,8 +216,12 @@ The log operation produces a structured event containing the original value, ser
 You can also disable **ANSI** escape sequence processing for terminal output:
 
 ```ts
-await terminal.info('Information.', { ansi: false });
+terminal.info('Information.', { ansi: false });
 ```
+
+Log methods are synchronous. They do not need to be awaited, while prompts, confirmations, and dynamic terminal-entry creation remain asynchronous.
+
+The `ansi` option applies only to that terminal operation. It does not disable ANSI processing globally and does not change the structured event emitted by Zexi. Use `ansi: false` when output is being redirected, captured by a test, written to a file, or consumed by a tool that expects plain text.
 
 ---
 
@@ -237,11 +242,11 @@ terminal.logLevel = 'warn';
 With this configuration:
 
 ```ts
-await terminal.debug('Debug message.');
-await terminal.info('Information.');
-await terminal.warn('Warning.');
-await terminal.error('Error.');
-await terminal.fatal('Fatal error.');
+terminal.debug('Debug message.');
+terminal.info('Information.');
+terminal.warn('Warning.');
+terminal.error('Error.');
+terminal.fatal('Fatal error.');
 ```
 
 Only `warn`, `error`, and `fatal` messages are printed by that terminal instance.
@@ -433,7 +438,7 @@ const name = await terminal.prompt({
 });
 
 if (name !== null) {
-    await terminal.info(`Hello, ${name}!`);
+    terminal.info(`Hello, ${name}!`);
 }
 ```
 
@@ -450,11 +455,11 @@ const value = await terminal.prompt({
 });
 
 if (value === null) {
-    await terminal.info('Prompt cancelled.');
+    terminal.info('Prompt cancelled.');
 } else if (value === '') {
-    await terminal.info('An empty value was submitted.');
+    terminal.info('An empty value was submitted.');
 } else {
-    await terminal.info(`Value: ${value}`);
+    terminal.info(`Value: ${value}`);
 }
 ```
 
@@ -630,19 +635,17 @@ Supported behaviors are:
 The terminal can be cleared through the high-level `clear()` API:
 
 ```ts
-await terminal.clear();
+terminal.clear();
 ```
 
 The operation is queued through Zexi's terminal task system rather than directly manipulating the screen immediately.
 
-The returned promise resolves after the screen has been cleared and the corresponding `clear` event has been emitted and processed.
-
-Applications that need to wait for the operation can therefore use:
+`clear()` schedules the screen operation synchronously and returns immediately. The screen mutation and corresponding `clear` event are processed asynchronously through Zexi's terminal task queue. Applications can schedule a following log operation immediately:
 
 ```ts
-await terminal.clear();
+terminal.clear();
 
-await terminal.info('The terminal has been cleared.');
+terminal.info('The terminal has been cleared.');
 ```
 
 The clear operation also emits a `clear` event:
@@ -652,6 +655,20 @@ terminal.events.on('clear', event => {
     console.log('Terminal cleared:', event);
 });
 ```
+
+---
+
+### Terminal Compatibility
+
+Before managing dynamic output or clearing the screen, Zexi initializes the terminal screen and records the current cursor position.
+
+When the terminal supports cursor-position queries, Zexi preserves the existing terminal screen and renders from the position where it began managing output.
+
+If the cursor position cannot be determined safely, Zexi uses an alternate terminal screen to avoid overwriting existing output. The alternate screen is restored when Zexi finishes using it.
+
+Screen-based features require an interactive terminal. In non-interactive environments, such as some redirected or CI output streams, screen initialization may be unavailable. Applications that need portable non-interactive output should prefer ordinary logging and disable ANSI formatting when appropriate.
+
+Zexi coordinates terminal writes, cursor movement, and screen-clearing operations through its terminal task system. Applications should use the Zexi terminal API instead of directly writing cursor-control escape sequences or manipulating the managed screen.
 
 ---
 
@@ -697,7 +714,7 @@ terminalA.events.on('log', event => {
     console.log('Received:', event);
 });
 
-await terminalB.info('Hello from terminal B.');
+terminalB.info('Hello from terminal B.');
 ```
 
 This architecture allows an application to centralize logging and monitoring while allowing individual components to maintain their own terminal configuration.
@@ -711,6 +728,19 @@ console.log(terminal.events.eventNames);
 ```
 
 This list represents currently registered events rather than every event supported by Zexi.
+
+---
+
+## Development and Testing
+
+Install dependencies and run the test suite with Bun:
+
+```bash
+bun install
+bun test --parallel
+```
+
+The repository uses Bun's test runner. Tests include terminal stream mocks for validating output, cursor movement, screen clearing, and interactive-terminal behavior.
 
 ---
 

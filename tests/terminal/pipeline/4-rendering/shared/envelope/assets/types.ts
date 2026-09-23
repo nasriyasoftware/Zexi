@@ -104,7 +104,7 @@ export type DeferredStream = {
  *
  * The purpose is to detect *any* modification to the emitted token
  * stream, whether caused by implementation changes, refactors, layout
- * adjustments, ordering changes, or serializer behavior changes.
+ * adjustments, ordering changes, or serializer behajest.r changes.
  *
  * Contract failures are expected whenever token emission changes.
  * Intentional changes should be accompanied by an update to the

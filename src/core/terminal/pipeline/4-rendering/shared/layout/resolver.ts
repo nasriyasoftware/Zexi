@@ -1,10 +1,9 @@
 import ZexiRenderingContext from "../context/context";
+import TOKENS from "../../../3-tokenization/tokens";
 import { DEFERRED_BODY_ENVELOPES } from "../envelope/consts";
 import { isVisibleToken } from "../helpers";
-import type { GroupStartToken } from "../../../3-tokenization/tokens/tokenization/group";
 import type { Token } from "../../../3-tokenization/types";
 import type { EnvelopeKind } from "../envelope/types";
-import TOKENS from "../../../3-tokenization/tokens";
 
 /**
  * Final layout decision produced by the resolver.
@@ -972,6 +971,33 @@ class LayoutResolver {
             config.inlineSafe,
             config.renderer
         ).resolve();
+    }
+
+    /**
+     * Inspects the configuration captured by a {@link LayoutResolver} instance.
+     *
+     * This method is intended exclusively for testing and exposes the internal
+     * configuration required to verify resolver construction without exposing
+     * the corresponding private fields through the production API.
+     *
+     * @param resolver - The resolver whose configuration should be inspected.
+     *
+     * @returns The configuration captured by the resolver.
+     *
+     * @throws {Error} If called outside of the testing environment.
+     *
+     * @internal
+     */
+    static _inspectConfigs(resolver: LayoutResolver) {
+        if (process.env.ZEXI_ENV !== 'testing') {
+            throw new Error('LayoutResolver._inspectConfigs() is only available in testing mode.');
+        }
+
+        return {
+            ctx: resolver.#_ctx,
+            inlineSafe: resolver.#_inlineSafe,
+            renderer: resolver.#_renderer
+        }
     }
 }
 

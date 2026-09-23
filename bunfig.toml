@@ -1,0 +1,7 @@
+[test]
+root = "./tests"
+preload = ["./tests/setup/tests.context.ts"]
+onlyFailures = true
+concurrent = true
+timeout = 500
+bail = 5

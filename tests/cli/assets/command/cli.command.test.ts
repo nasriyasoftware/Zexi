@@ -86,9 +86,7 @@ describe("CLICommand.execute", () => {
         const cmd = new CLICommand("build", "dynamic");
         const ctx = makeContext(["build"]);
 
-        const action = jest.fn(() => {
-            return "ok";
-        });
+        const action = mock(() => "ok");
 
         cmd.set.handler.onAction(action);
 
@@ -161,7 +159,7 @@ describe("CLICommand.execute", () => {
         const cmd = new CLICommand("seen", "dynamic");
         const ctx = makeContext(["seen"]);
 
-        const seen = jest.fn();
+        const seen = mock();
 
         cmd.set.handler.onSeen(seen);
 

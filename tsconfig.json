@@ -14,7 +14,10 @@
         "esModuleInterop": true,
         "forceConsistentCasingInFileNames": true,
         "declaration": false,
-        "types": ["node", "jest"]
+        "types": [
+            "node",
+            "bun-types"
+        ]
     },
     "include": [
         "src",

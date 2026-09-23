@@ -46,7 +46,7 @@ describe("SetGraphNode", () => {
             expect(node.value.has(c)).toBe(true);
         });
 
-        it("prevents duplicate references (Set behavior)", () => {
+        it("prevents duplicate references (Set behajest.r)", () => {
             const node = new SetGraphNode();
 
             const item = PrimitiveGraphNode.create("dup");

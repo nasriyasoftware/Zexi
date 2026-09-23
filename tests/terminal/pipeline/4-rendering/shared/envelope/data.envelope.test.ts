@@ -154,7 +154,7 @@ describe("DataEnvelope", () => {
     });
 
     describe("serialization", () => {
-        it("serializes correctly via JSON.stringify", () => {
+        it("serializes correctly jest. JSON.stringify", () => {
             const env = new DataEnvelope("regex", {
                 pattern: "abc",
                 flags: "gi"

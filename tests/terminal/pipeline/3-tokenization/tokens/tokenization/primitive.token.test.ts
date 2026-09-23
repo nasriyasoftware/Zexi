@@ -80,7 +80,7 @@ describe("PrimitiveToken (ansi integration)", () => {
         expect(token.ansi).toBeDefined();
     });
 
-    it("allows assigning ANSI color via meta", () => {
+    it("allows assigning ANSI color jest. meta", () => {
         const token = new PrimitiveToken("string", "hello");
 
         token.ansi.assign("color", ANSI.color.fg.normal.red);

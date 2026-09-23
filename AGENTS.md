@@ -1,4 +1,4 @@
-# Zexi AI Agent Guide
+﻿# Zexi AI Agent Guide
 
 ## Purpose
 
@@ -1131,7 +1131,7 @@ Use Zexi terminal methods for user-facing output.
 For example:
 
 ```ts
-await zexi.terminal.info(
+zexi.terminal.info(
     "Building project..."
 );
 ```
@@ -1160,8 +1160,18 @@ Using the terminal API keeps output integrated with Zexi's terminal infrastructu
 To disable ANSI escape sequences from terminal output, add the `ansi: false` option to any logging method:
 
 ```ts
-await zexi.terminal.info("Building project...", { ansi: false });
+zexi.terminal.info("Building project...", { ansi: false });
 ```
+
+The logging methods `debug()`, `info()`, `warn()`, `error()`, and `fatal()` are
+synchronous and return `void`. They process the log event synchronously and
+schedule terminal output through Zexi's terminal queue when printing is
+enabled. Do not use `await` with these methods.
+
+The `ansi` option applies only to that operation's printable output. It does
+not disable ANSI processing globally and does not change the structured event.
+Use `{ ansi: false }` for output redirected to a file, captured by a test, or
+consumed by a tool that expects plain text.
 
 ---
 
@@ -1177,6 +1187,10 @@ Use Zexi's terminal entry functionality when implementing things such as:
 * changing status information
 * live values
 * continuously updated terminal state
+
+Creating an entry is asynchronous and returns a promise. Await it when the
+entry is needed before continuing. Updating an existing entry is performed
+through the returned entry object.
 
 Do not manually implement terminal cursor manipulation with ANSI escape sequences when the desired behavior is already provided by Zexi's dynamic terminal-entry API.
 
@@ -1203,6 +1217,35 @@ Use the actual prompt API exposed by the installed version of Zexi.
 Do not introduce another prompt library when Zexi already provides the required interactive functionality.
 
 Prompts should be used for interactive user input rather than manually reading from standard input.
+
+Prompts and confirmations are asynchronous. Await their results when the
+application needs the entered value or confirmation decision.
+
+---
+
+# Clearing and Screen Behavior
+
+The terminal exposes a high-level `clear()` operation for clearing the region
+managed by Zexi:
+
+```ts
+zexi.terminal.clear();
+```
+
+`clear()` is synchronous to the caller and returns `void`. It schedules the
+screen mutation through the terminal task queue; the actual mutation and the
+corresponding `clear` event are processed asynchronously.
+
+Before screen-based work, Zexi initializes the terminal and records the
+current cursor position when possible. When the position can be queried
+safely, Zexi preserves the existing terminal screen and renders from the
+captured origin. If the position cannot be established, Zexi may use an
+alternate terminal screen to avoid overwriting existing output.
+
+Screen-based behavior is intended for interactive terminals. For redirected,
+captured, or CI output, prefer ordinary logging and use `{ ansi: false }`
+when plain text is required. Do not manually write cursor-control escape
+sequences or manipulate the managed screen.
 
 ---
 
@@ -1766,7 +1809,7 @@ When generating Zexi CLI code, use the terminal API for application-facing outpu
 Prefer:
 
 ```ts
-await zexi.terminal.info(
+zexi.terminal.info(
     "Build completed."
 );
 ```

@@ -88,10 +88,11 @@ describe("FunctionRepresentationNode", () => {
 
         it("handles anonymous functions correctly", () => {
             const fn = function () { return true; };
+            expect(fn.name).toBe('fn'); 
 
             const namedNode = new FunctionRepresentationNode(fn);
             expect(namedNode.value.name).toBe("fn");
-            
+
             const anonymousNode = new FunctionRepresentationNode(() => true);
             expect(anonymousNode.value.name).toBe("");
         });

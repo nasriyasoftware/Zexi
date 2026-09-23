@@ -52,7 +52,7 @@ describe("RegExpToken", () => {
         expect(token.value).toBe(regex);
     });
 
-    it("does not modify regex behavior", () => {
+    it("does not modify regex behajest.r", () => {
         const regex = new RegExp("^test$", "i");
 
         const token = new RegExpToken(regex);

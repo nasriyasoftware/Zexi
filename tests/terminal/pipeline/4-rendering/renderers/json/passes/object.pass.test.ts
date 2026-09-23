@@ -102,7 +102,7 @@ describe("objectPass (integration)", () => {
 
 
     /* -------------------------------------------------------- */
-    /* 5. NORMAL OBJECT BEHAVIOR                               */
+    /* 5. NORMAL OBJECT BEHAjest.R                               */
     /* -------------------------------------------------------- */
 
     it("does not collapse valid objects", () => {

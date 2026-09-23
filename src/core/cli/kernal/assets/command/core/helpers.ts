@@ -3,7 +3,6 @@ import zexiTerminal from "../../../../../terminal/zexi.terminal";
 import type { CommandContext } from "../../runner/context/cmd.context";
 import type { CLICommandHandler, CLICommandMiddlewareHandler, MiddlewareTerminateFunction, MiddlewareTerminateResult } from "../types";
 
-const PRINT_LOGS = process.env['ZEXI_ENV'] === 'testing' ? false : true;
 const hasOwnProp = atomix.dataTypes.record.hasOwnProperty;
 
 /**
@@ -142,15 +141,15 @@ export function compose(middlewares: CLICommandMiddlewareHandler[], action?: CLI
         if (terminated) {
             const res = terminationResult!;
             if (res.ok) {
-                if (res.message) { zexiTerminal.debug(res.message, { print: PRINT_LOGS }); }
+                if (res.message) { zexiTerminal.debug(res.message); }
             } else {
                 if (res.reason === 'error') {
                     throw res.error;
                 }
 
                 if (res.reason === 'user_error') {
-                    zexiTerminal.error(res.message, { print: PRINT_LOGS });
-                    if (res.meta) { zexiTerminal.debug(res.meta, { print: PRINT_LOGS }); }
+                    zexiTerminal.error(res.message);
+                    if (res.meta) { zexiTerminal.debug(res.meta); }
                 }
             }
             return;

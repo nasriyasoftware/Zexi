@@ -59,7 +59,7 @@ describe("RegExpGraphNode", () => {
 
     describe("static factory", () => {
 
-        it("creates equivalent node via create()", () => {
+        it("creates equivalent node jest. create()", () => {
             const regex = /factory/;
 
             const direct = new RegExpGraphNode(regex);
@@ -71,7 +71,7 @@ describe("RegExpGraphNode", () => {
 
     });
 
-    describe("behavior safety", () => {
+    describe("behajest.r safety", () => {
 
         it("does not execute regex", () => {
             const regex = /a+/g;
@@ -81,7 +81,7 @@ describe("RegExpGraphNode", () => {
             expect(node.value.test("aaa")).toBe(true);
         });
 
-        it("does not preserve lastIndex behavior of original instance", () => {
+        it("does not preserve lastIndex behajest.r of original instance", () => {
             const regex = /a/g;
             const node = new RegExpGraphNode(regex);
 

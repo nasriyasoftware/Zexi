@@ -92,7 +92,7 @@ describe("ErrorGraphNode", () => {
 
             expect(data.name).toBe("Error");
 
-            // runtime immutability is expected behavior even if TS doesn't enforce it
+            // runtime immutability is expected behajest.r even if TS doesn't enforce it
             expect(() => {
                 (data as any).name = "mutated";
             }).not.toThrow();

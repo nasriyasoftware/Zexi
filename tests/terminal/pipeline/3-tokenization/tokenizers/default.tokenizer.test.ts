@@ -46,7 +46,7 @@ describe("DefaultTokenizer", () => {
             expect(token.value).toBe(fn);
         });
 
-        describe.each(primitives.map(v => {
+        it.each(primitives.map(v => {
             return [
                 v === null ? 'null' : typeof v,
                 v
@@ -415,7 +415,7 @@ describe("DefaultTokenizer", () => {
                 ])
             });
 
-            it("tokenizes objects preserving insertion order", () => {
+            it("tokenizes objects preserjest.g insertion order", () => {
                 const tokens = tokenize({ z: 1, a: 2, m: 3 });
                 const kinds = _tokenization.extractKinds(tokens);
 

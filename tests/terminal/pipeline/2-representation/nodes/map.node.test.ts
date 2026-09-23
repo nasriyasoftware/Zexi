@@ -34,7 +34,7 @@ describe("MapRepresentationNode", () => {
 
     describe("factory", () => {
 
-        it("creates instance via create()", () => {
+        it("creates instance jest. create()", () => {
             const key = node("a");
             const value = node("b");
 
@@ -71,7 +71,7 @@ describe("MapRepresentationNode", () => {
 
     });
 
-    describe("behavior expectations", () => {
+    describe("behajest.r expectations", () => {
 
         it("does not mutate original map reference", () => {
             const map = new Map();

@@ -43,7 +43,7 @@ describe("ObjectRepresentationNode", () => {
 
     describe("factory", () => {
 
-        it("creates instance via static create()", () => {
+        it("creates instance jest. static create()", () => {
             const key = prop("name");
             const value = node("test");
 
@@ -63,7 +63,7 @@ describe("ObjectRepresentationNode", () => {
 
     });
 
-    describe("entries behavior", () => {
+    describe("entries behajest.r", () => {
 
         it("supports multiple properties", () => {
             const k1 = prop("a");
@@ -88,7 +88,7 @@ describe("ObjectRepresentationNode", () => {
             expect(rep.entries.get(k2)).toBe(v2);
         });
 
-        it("reflects external map mutations (reference behavior)", () => {
+        it("reflects external map mutations (reference behajest.r)", () => {
             const key = prop("x");
             const value = node(10);
 

@@ -164,7 +164,7 @@ describe("ScopesController", () => {
     });
 
     // --------------------------------------------------
-    // Writer behavior
+    // Writer behajest.r
     // --------------------------------------------------
 
     it("creates an isolated writer per scope", () => {
@@ -325,7 +325,7 @@ describe("ScopesController", () => {
     });
 
     // --------------------------------------------------
-    // getInherited behavior
+    // getInherited behajest.r
     // --------------------------------------------------
 
     it("getInherited excludes current scope", () => {

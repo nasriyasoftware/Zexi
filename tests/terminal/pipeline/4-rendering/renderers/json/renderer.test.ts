@@ -29,7 +29,7 @@ function render(value: unknown, options: JsonOptions = {}) {
 }
 
 /* ------------------------------------------------------------------ */
-/* CORE PRIMITIVE BEHAVIOR                                           */
+/* CORE PRIMITIVE BEHAjest.R                                           */
 /* ------------------------------------------------------------------ */
 
 describe("JSONRenderer - primitives", () => {
@@ -37,7 +37,7 @@ describe("JSONRenderer - primitives", () => {
         expect(render(123)).toBe("123");
     });
 
-    it("renders primitive strings (root vs nested behavior)", () => {
+    it("renders primitive strings (root vs nested behajest.r)", () => {
         const root = render("abc");
         expect(root).toBe("abc");
 
@@ -105,7 +105,7 @@ describe("JSONRenderer - structural rendering", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* OBJECT SEMANTICS (PASS BEHAVIOR, NOT JSON.STRINGIFY)              */
+/* OBJECT SEMANTICS (PASS BEHAjest.R, NOT JSON.STRINGIFY)              */
 /* ------------------------------------------------------------------ */
 
 describe("JSONRenderer - object semantics", () => {
@@ -190,7 +190,7 @@ describe("JSONRenderer - function envelopes", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* ERROR ENVELOPE BEHAVIOR                                            */
+/* ERROR ENVELOPE BEHAjest.R                                            */
 /* ------------------------------------------------------------------ */
 
 describe("JSONRenderer - error envelopes", () => {
@@ -219,7 +219,7 @@ describe("JSONRenderer - error envelopes", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* LAYOUT MODE BEHAVIOR                                               */
+/* LAYOUT MODE BEHAjest.R                                               */
 /* ------------------------------------------------------------------ */
 
 describe("JSONRenderer - layout modes", () => {
@@ -484,18 +484,18 @@ describe("JSONRenderer - pretty special values", () => {
             '    "name": "Error",',
             '    "stack": [',
             '      { "column": 28, "functionName": "Object.<anonymous>", "line": 461, "source": "/workspace/tests/terminal/pipeline/4-rendering/renderers/json/renderer.test.ts", "type": "file" },',
-            '      { "column": 28, "functionName": "Promise.finally.completed", "line": 1557, "source": "/workspace/node_modules/jest-circus/build/jestAdapterInit.js", "type": "file" },',
-            '      { "column": 10, "functionName": "callAsyncCircusFn", "line": 1497, "source": "/workspace/node_modules/jest-circus/build/jestAdapterInit.js", "type": "file" },',
-            '      { "column": 40, "functionName": "_callCircusTest", "line": 1007, "source": "/workspace/node_modules/jest-circus/build/jestAdapterInit.js", "type": "file" },',
-            '      { "column": 3, "functionName": "_runTest", "line": 947, "source": "/workspace/node_modules/jest-circus/build/jestAdapterInit.js", "type": "file" },',
-            '      { "column": 7, "line": 849, "source": "/workspace/node_modules/jest-circus/build/jestAdapterInit.js", "type": "file" },',
-            '      { "column": 11, "functionName": "_runTestsForDescribeBlock", "line": 862, "source": "/workspace/node_modules/jest-circus/build/jestAdapterInit.js", "type": "file" },',
-            '      { "column": 11, "functionName": "_runTestsForDescribeBlock", "line": 857, "source": "/workspace/node_modules/jest-circus/build/jestAdapterInit.js", "type": "file" },',
-            '      { "column": 3, "functionName": "run", "line": 761, "source": "/workspace/node_modules/jest-circus/build/jestAdapterInit.js", "type": "file" },',
-            '      { "column": 21, "functionName": "runAndTransformResultsToJestFormat", "line": 1918, "source": "/workspace/node_modules/jest-circus/build/jestAdapterInit.js", "type": "file" },',
-            '      { "column": 19, "functionName": "jestAdapter", "line": 101, "source": "/workspace/node_modules/jest-circus/build/runner.js", "type": "file" },',
-            '      { "column": 16, "functionName": "runTestInternal", "line": 275, "source": "/workspace/node_modules/jest-runner/build/index.js", "type": "file" },',
-            '      { "column": 7, "functionName": "runTest", "line": 343, "source": "/workspace/node_modules/jest-runner/build/index.js", "type": "file" }',
+            '      { "column": 28, "functionName": "Promise.finally.completed", "line": 1557, "source": "/workspace/node_modules/jest.est-circus/build/jest.estAdapterInit.js", "type": "file" },',
+            '      { "column": 10, "functionName": "callAsyncCircusFn", "line": 1497, "source": "/workspace/node_modules/jest.est-circus/build/jest.estAdapterInit.js", "type": "file" },',
+            '      { "column": 40, "functionName": "_callCircusTest", "line": 1007, "source": "/workspace/node_modules/jest.est-circus/build/jest.estAdapterInit.js", "type": "file" },',
+            '      { "column": 3, "functionName": "_runTest", "line": 947, "source": "/workspace/node_modules/jest.est-circus/build/jest.estAdapterInit.js", "type": "file" },',
+            '      { "column": 7, "line": 849, "source": "/workspace/node_modules/jest.est-circus/build/jest.estAdapterInit.js", "type": "file" },',
+            '      { "column": 11, "functionName": "_runTestsForDescribeBlock", "line": 862, "source": "/workspace/node_modules/jest.est-circus/build/jest.estAdapterInit.js", "type": "file" },',
+            '      { "column": 11, "functionName": "_runTestsForDescribeBlock", "line": 857, "source": "/workspace/node_modules/jest.est-circus/build/jest.estAdapterInit.js", "type": "file" },',
+            '      { "column": 3, "functionName": "run", "line": 761, "source": "/workspace/node_modules/jest.est-circus/build/jest.estAdapterInit.js", "type": "file" },',
+            '      { "column": 21, "functionName": "runAndTransformResultsTojest.estFormat", "line": 1918, "source": "/workspace/node_modules/jest.est-circus/build/jest.estAdapterInit.js", "type": "file" },',
+            '      { "column": 19, "functionName": "jest.estAdapter", "line": 101, "source": "/workspace/node_modules/jest.est-circus/build/runner.js", "type": "file" },',
+            '      { "column": 16, "functionName": "runTestInternal", "line": 275, "source": "/workspace/node_modules/jest.est-runner/build/index.js", "type": "file" },',
+            '      { "column": 7, "functionName": "runTest", "line": 343, "source": "/workspace/node_modules/jest.est-runner/build/index.js", "type": "file" }',
             '    ]',
             '  },',
             '}'

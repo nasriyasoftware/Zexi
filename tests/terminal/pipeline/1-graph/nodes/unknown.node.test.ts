@@ -29,7 +29,7 @@ describe("UnknownGraphNode", () => {
 
     describe("static factory", () => {
 
-        it("creates node via factory method", () => {
+        it("creates node jest. factory method", () => {
             const value = new Date();
 
             const node = UnknownGraphNode.create(value);

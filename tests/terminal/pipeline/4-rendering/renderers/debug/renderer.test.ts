@@ -12,7 +12,7 @@ function render(value: unknown, options: DebugOptions = {}) {
 }
 
 /* ------------------------------------------------------------------ */
-/* CORE PRIMITIVE BEHAVIOR                                           */
+/* CORE PRIMITIVE BEHAjest.R                                           */
 /* ------------------------------------------------------------------ */
 
 describe("DebugRenderer - primitives", () => {
@@ -242,7 +242,7 @@ describe("DebugRenderer - special objects", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* ERROR BEHAVIOR                                                     */
+/* ERROR BEHAjest.R                                                     */
 /* ------------------------------------------------------------------ */
 
 describe("DebugRenderer - errors", () => {
@@ -418,7 +418,7 @@ describe("DebugRenderer - circular references", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* LAYOUT MODE BEHAVIOR                                               */
+/* LAYOUT MODE BEHAjest.R                                               */
 /* ------------------------------------------------------------------ */
 
 describe("DebugRenderer - layout modes", () => {

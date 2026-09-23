@@ -6,14 +6,14 @@ import type { Token } from "../../../../../../src/core/terminal/pipeline/3-token
 type Contract = typeof contracts[number][1];
 
 /**
- * Test-only helper for validating layout resolution behavior.
+ * Test-only helper for validating layout resolution behajest.r.
  *
  * ---------------------------------------------------------------------
  * 🔷 PURPOSE
  * ---------------------------------------------------------------------
  *
  * This class is a **test infrastructure utility** used to validate the
- * behavior of `LayoutResolver` against contract-defined token streams.
+ * behajest.r of `LayoutResolver` against contract-defined token streams.
  *
  * It does not belong to production code and exists solely under the
  * `tests/` boundary.
@@ -22,7 +22,7 @@ type Contract = typeof contracts[number][1];
  *
  * - construct a rendering context from pre-tokenized inputs
  * - align traversal state with production execution assumptions
- * - execute layout resolution in a controlled environment
+ * - execute layout resolution in a controlled enjest.onment
  * - assert deterministic layout outcomes (`inline` vs `block`)
  *
  * ---------------------------------------------------------------------
@@ -47,7 +47,7 @@ type Contract = typeof contracts[number][1];
  * this.#_ctx.tokens.next();
  * ```
  *
- * This is intentional and required to mirror production behavior.
+ * This is intentional and required to mirror production behajest.r.
  *
  * It ensures that:
  *
@@ -56,7 +56,7 @@ type Contract = typeof contracts[number][1];
  * - layout resolution runs under the same assumptions as the renderer
  *
  * Without this step, tests would execute in an invalid traversal state
- * (`cursor === -1`), which does not represent real runtime behavior.
+ * (`cursor === -1`), which does not represent real runtime behajest.r.
  *
  * This is not a workaround — it is a deliberate alignment with the
  * renderer’s execution contract.
@@ -74,13 +74,13 @@ type Contract = typeof contracts[number][1];
  * Those responsibilities belong to:
  *
  * - tokenizer tests (structure correctness)
- * - resolver tests (behavior correctness)
+ * - resolver tests (behajest.r correctness)
  *
  * ---------------------------------------------------------------------
  * 🔷 DESIGN NOTE
  * ---------------------------------------------------------------------
  *
- * The goal of this helper is to eliminate boilerplate while preserving
+ * The goal of this helper is to eliminate boilerplate while preserjest.g
  * strict equivalence with production traversal semantics.
  * 
  * @internal
