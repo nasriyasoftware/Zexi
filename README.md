@@ -150,7 +150,7 @@ The `ZexiTerminal` class provides the primary API for logging, terminal events, 
 The package also exports a default terminal instance for applications that do not require separate terminal configurations.
 
 ```ts
-import terminal from '@nasriya/zexi';
+import { terminal } from '@nasriya/zexi';
 ```
 
 ---
@@ -160,7 +160,7 @@ import terminal from '@nasriya/zexi';
 The default exported terminal can be used immediately:
 
 ```ts
-import terminal from '@nasriya/zexi';
+import { terminal } from '@nasriya/zexi';
 
 terminal.info('Server started.');
 ```
