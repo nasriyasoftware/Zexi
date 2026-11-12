@@ -1,6 +1,6 @@
-import DefaultTokenizer from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/default.tokenizer";
-import DebugRenderer from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/debug/renderer";
-import type { DebugOptions } from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/debug/types";
+import DefaultTokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizers/default.tokenizer";
+import DebugRenderer from "@/core/terminal/pipeline/4-rendering/renderers/debug/renderer";
+import type { DebugOptions } from "@/core/terminal/pipeline/4-rendering/renderers/debug/types";
 
 /* ------------------------------------------------------------------ */
 /* TEST UTIL                                                          */
@@ -12,7 +12,7 @@ function render(value: unknown, options: DebugOptions = {}) {
 }
 
 /* ------------------------------------------------------------------ */
-/* CORE PRIMITIVE BEHAjest.R                                           */
+/* CORE PRIMITIVE BEHAVIOUR                                           */
 /* ------------------------------------------------------------------ */
 
 describe("DebugRenderer - primitives", () => {
@@ -242,7 +242,7 @@ describe("DebugRenderer - special objects", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* ERROR BEHAjest.R                                                     */
+/* ERROR BEHAVIOUR                                                     */
 /* ------------------------------------------------------------------ */
 
 describe("DebugRenderer - errors", () => {
@@ -418,7 +418,7 @@ describe("DebugRenderer - circular references", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* LAYOUT MODE BEHAjest.R                                               */
+/* LAYOUT MODE BEHAVIOUR                                               */
 /* ------------------------------------------------------------------ */
 
 describe("DebugRenderer - layout modes", () => {

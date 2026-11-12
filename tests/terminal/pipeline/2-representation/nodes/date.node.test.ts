@@ -1,5 +1,5 @@
-import DateGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/date.node";
-import DateRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/date.node";
+import DateGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/date.node";
+import DateRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/date.node";
 
 describe("DateRepresentationNode", () => {
 

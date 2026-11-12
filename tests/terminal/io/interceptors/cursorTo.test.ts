@@ -1,5 +1,5 @@
-import cursorToInterceptor from "../../../../src/core/terminal/io/interceptors/cursorTo";
-import terminalIO from "../../../../src/core/terminal/io/terminal.io";
+import cursorToInterceptor from "@/core/terminal/io/output/interception/interceptors/cursorTo";
+import terminalIO from "@/core/terminal/io";
 
 describe('cursorToInterceptor()', () => {
     afterEach(() => {
@@ -13,7 +13,7 @@ describe('cursorToInterceptor()', () => {
         'forwards row %i and column %i to terminalIO.cursorTo()',
         (column, row) => {
             const cursorTo = vi
-                .spyOn(terminalIO, 'cursorTo')
+                .spyOn(terminalIO.output, 'cursorTo')
                 .mockReturnValue(true);
 
             expect(cursorToInterceptor(column, row)).toBe(true);
@@ -27,7 +27,7 @@ describe('cursorToInterceptor()', () => {
         const callback = jest.fn();
 
         const cursorTo = vi
-            .spyOn(terminalIO, 'cursorTo')
+            .spyOn(terminalIO.output, 'cursorTo')
             .mockReturnValue(true);
 
         cursorToInterceptor(10, 20, callback);
@@ -38,7 +38,7 @@ describe('cursorToInterceptor()', () => {
 
     it('returns the result from terminalIO.cursorTo()', () => {
         const cursorTo = vi
-            .spyOn(terminalIO, 'cursorTo')
+            .spyOn(terminalIO.output, 'cursorTo')
             .mockReturnValue(false);
 
         expect(cursorToInterceptor(10, 20)).toBe(false);

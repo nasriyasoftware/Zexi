@@ -1,4 +1,4 @@
-import { HardLineToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/line";
+import { HardLineToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/line";
 
 describe("HardLineToken", () => {
     it("creates a token with kind 'hard-line'", () => {

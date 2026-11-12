@@ -1,6 +1,6 @@
-import TraversalDepth from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/traversal/traversal.depth";
-import TokensRuntime from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/tokens/runtime";
-import ZexiRenderingContext from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
+import TraversalDepth from "@/core/terminal/pipeline/4-rendering/shared/context/traversal/traversal.depth";
+import TokensRuntime from "@/core/terminal/pipeline/4-rendering/shared/context/tokens/runtime";
+import ZexiRenderingContext from "@/core/terminal/pipeline/4-rendering/shared/context/context";
 
 
 describe("ZexiRenderingContext (spec-complete)", () => {
@@ -119,9 +119,9 @@ describe("ZexiRenderingContext (spec-complete)", () => {
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 COMMIT BEHAjest.R
+    // 🔷 COMMIT BEHAVIOUR
     // ---------------------------------------------------------------------
-    describe("scope commit behajest.r", () => {
+    describe("scope commit behaviour", () => {
 
         it("merges scoped output into parent deterministically", () => {
             const ctx = new ZexiRenderingContext([], { spaces: 0 });
@@ -222,7 +222,7 @@ describe("ZexiRenderingContext (spec-complete)", () => {
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 WRITER BEHAjest.R
+    // 🔷 WRITER BEHAVIOUR
     // ---------------------------------------------------------------------
     describe("writer continuity", () => {
 
@@ -267,7 +267,7 @@ describe("ZexiRenderingContext (spec-complete)", () => {
     });
 
     // ---------------------------------------------------------------------
-    // 🔷 INTEGRATION BEHAjest.R
+    // 🔷 INTEGRATION BEHAVIOUR
     // ---------------------------------------------------------------------
     describe("full system integration", () => {
 

@@ -1,5 +1,5 @@
-import * as helpers from "../../../../../src/core/terminal/pipeline/4-rendering/shared/helpers";
-import { DEFAULT_OUTPUT_CONFIG } from "../../../../../src/core/terminal/pipeline/4-rendering/types/types";
+import * as helpers from "@/core/terminal/pipeline/4-rendering/shared/helpers";
+import { DEFAULT_OUTPUT_CONFIG } from "@/core/terminal/pipeline/4-rendering/types/types";
 
 describe("resolveRendererConfig (deterministic)", () => {
 

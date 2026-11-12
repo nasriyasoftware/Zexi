@@ -1,4 +1,4 @@
-import { AnchorToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/rendering/anchor.token";
+import { AnchorToken } from "@/core/terminal/pipeline/3-tokenization/tokens/rendering/anchor.token";
 
 describe("AnchorToken", () => {
 

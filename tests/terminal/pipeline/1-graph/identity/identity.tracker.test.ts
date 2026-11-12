@@ -1,5 +1,5 @@
-import GraphIdentityTracker from "../../../../../src/core/terminal/pipeline/1-graphing/identity/identity";
-import GRAPH_NODES from "../../../../../src/core/terminal/pipeline/1-graphing/nodes";
+import GraphIdentityTracker from "@/core/terminal/pipeline/1-graphing/identity/identity";
+import GRAPH_NODES from "@/core/terminal/pipeline/1-graphing/nodes";
 
 /* ------------------------------------------------------------------ */
 /* helpers */
@@ -195,7 +195,7 @@ describe("GraphIdentityTracker (cycle semantics)", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* release behajest.r */
+/* release behaviour */
 /* ------------------------------------------------------------------ */
 
 describe("GraphIdentityTracker (release)", () => {

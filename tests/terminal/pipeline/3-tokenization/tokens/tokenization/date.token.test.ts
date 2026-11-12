@@ -1,4 +1,4 @@
-import { DateToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/date.token";
+import { DateToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/date.token";
 
 describe("DateToken", () => {
     it("stores the provided Date instance correctly", () => {

@@ -1,4 +1,4 @@
-import { parseTokens, constructOptions } from "../../../../../src/core/cli/kernal/assets/runner/helpers";
+import { parseTokens, constructOptions } from "@/core/cli/kernal/assets/runner/helpers";
 
 describe("parseTokens", () => {
     it("collects regular words when no options are present", () => {

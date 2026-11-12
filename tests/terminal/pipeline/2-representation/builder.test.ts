@@ -1,6 +1,6 @@
-import GraphBuilder from "../../../../src/core/terminal/pipeline/1-graphing/builder";
-import RepresentationBuilder from "../../../../src/core/terminal/pipeline/2-representation/builder";
-import REP_NODES from "../../../../src/core/terminal/pipeline/2-representation/nodes";
+import GraphBuilder from "@/core/terminal/pipeline/1-graphing/builder";
+import RepresentationBuilder from "@/core/terminal/pipeline/2-representation/builder";
+import REP_NODES from "@/core/terminal/pipeline/2-representation/nodes";
 
 describe("RepresentationBuilder (integration with GraphBuilder + identity)", () => {
 

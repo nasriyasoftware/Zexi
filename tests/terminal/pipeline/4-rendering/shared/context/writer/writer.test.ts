@@ -1,5 +1,5 @@
-import TraversalDepth from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/traversal/traversal.depth";
-import RenderingWriter from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/writer/writer";
+import TraversalDepth from "@/core/terminal/pipeline/4-rendering/shared/context/traversal/traversal.depth";
+import RenderingWriter from "@/core/terminal/pipeline/4-rendering/shared/context/writer/writer";
 
 /**
  * Utility: build traversal depth safely
@@ -46,7 +46,7 @@ describe("RenderingWriter (deterministic)", () => {
     });
 
     // ---------------------------------------------------------------------
-    // STREAMING BEHAjest.R
+    // STREAMING BEHAVIOUR
     // ---------------------------------------------------------------------
     describe("streaming", () => {
 

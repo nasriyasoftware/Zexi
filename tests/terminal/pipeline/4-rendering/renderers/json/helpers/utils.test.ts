@@ -7,15 +7,15 @@ import {
     ignoreCurrentGroup,
     resolvePrimitiveOverflow,
     restoreDepth
-} from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/utils";
+} from "@/core/terminal/pipeline/4-rendering/shared/utils";
 
-import ZexiRenderingContext from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
-import keys from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/keys";
-import LayoutResolver from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/layout/resolver";
-import DataEnvelope from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
-import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
-import type { JSONPipelineFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import ZexiRenderingContext from "@/core/terminal/pipeline/4-rendering/shared/context/context";
+import keys from "@/core/terminal/pipeline/4-rendering/shared/keys";
+import LayoutResolver from "@/core/terminal/pipeline/4-rendering/shared/layout/resolver";
+import DataEnvelope from "@/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
+import JSONTokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
+import type { JSONPipelineFlags } from "@/core/terminal/pipeline/4-rendering/renderers/json/types";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 
 describe("JSON utils delegation layer", () => {
     beforeEach(() => {

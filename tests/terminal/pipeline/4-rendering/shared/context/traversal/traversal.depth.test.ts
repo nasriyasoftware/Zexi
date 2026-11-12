@@ -1,4 +1,4 @@
-import TraversalDepth from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/traversal/traversal.depth";
+import TraversalDepth from "@/core/terminal/pipeline/4-rendering/shared/context/traversal/traversal.depth";
 
 describe("TraversalDepth (deterministic)", () => {
 
@@ -90,7 +90,7 @@ describe("TraversalDepth (deterministic)", () => {
 
     describe("state consistency", () => {
 
-        it("maintains correct LIFO-style nesting behajest.r", () => {
+        it("maintains correct LIFO-style nesting behaviour", () => {
             const depth = new TraversalDepth();
 
             depth.increase(); // 1

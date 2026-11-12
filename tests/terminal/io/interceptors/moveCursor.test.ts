@@ -1,5 +1,5 @@
-import moveCursorInterceptor from "../../../../src/core/terminal/io/interceptors/moveCursor";
-import terminalIO from "../../../../src/core/terminal/io/terminal.io";
+import moveCursorInterceptor from "@/core/terminal/io/output/interception/interceptors/moveCursor";
+import terminalIO from "@/core/terminal/io";
 
 describe('moveCursorInterceptor()', () => {
     afterEach(() => {
@@ -14,7 +14,7 @@ describe('moveCursorInterceptor()', () => {
         'forwards x %i and y %i to terminalIO.moveCursor()',
         (x, y) => {
             const moveCursor = vi
-                .spyOn(terminalIO, 'moveCursor')
+                .spyOn(terminalIO.output, 'moveCursor')
                 .mockReturnValue(true);
 
             expect(moveCursorInterceptor(x, y)).toBe(true);
@@ -28,7 +28,7 @@ describe('moveCursorInterceptor()', () => {
         const callback = jest.fn();
 
         const moveCursor = vi
-            .spyOn(terminalIO, 'moveCursor')
+            .spyOn(terminalIO.output, 'moveCursor')
             .mockReturnValue(true);
 
         moveCursorInterceptor(10, 20, callback);
@@ -39,7 +39,7 @@ describe('moveCursorInterceptor()', () => {
 
     it('returns the result from terminalIO.moveCursor()', () => {
         const moveCursor = vi
-            .spyOn(terminalIO, 'moveCursor')
+            .spyOn(terminalIO.output, 'moveCursor')
             .mockReturnValue(false);
 
         expect(moveCursorInterceptor(10, 20)).toBe(false);

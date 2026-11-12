@@ -1,6 +1,6 @@
-import PropertyNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/assets/property.node";
-import ObjectGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/object.node";
-import PrimitiveGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/primitive.node";
+import PropertyNode from "@/core/terminal/pipeline/1-graphing/nodes/assets/property.node";
+import ObjectGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/object.node";
+import PrimitiveGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/primitive.node";
 
 describe("ObjectGraphNode", () => {
 

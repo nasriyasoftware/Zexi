@@ -1,4 +1,4 @@
-import { IndentEnd } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/indent";
+import { IndentEnd } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/indent";
 
 describe("IndentEnd", () => {
     it("creates a token with kind 'indent-end'", () => {

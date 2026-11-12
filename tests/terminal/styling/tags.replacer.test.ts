@@ -1,5 +1,5 @@
-import { ANSI } from "../../../src/core/terminal/styling/ansi";
-import TagsReplacer from "../../../src/core/terminal/styling/tags";
+import { ANSI } from "@/core/terminal/styling/ansi";
+import TagsReplacer from "@/core/terminal/styling/tags";
 
 describe("TagsReplacer", () => {
     describe("basic replacements", () => {

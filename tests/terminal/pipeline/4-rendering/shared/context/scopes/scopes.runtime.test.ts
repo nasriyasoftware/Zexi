@@ -1,8 +1,8 @@
-import TraversalDepth from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/traversal/traversal.depth";
-import TokensController from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/tokens/tokens.controller";
-import ScopesController from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/scopes/scopes.controller";
-import ScopesRuntime from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/scopes/runtime";
-import RenderingWriter from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/writer/writer";
+import TraversalDepth from "@/core/terminal/pipeline/4-rendering/shared/context/traversal/traversal.depth";
+import TokensController from "@/core/terminal/pipeline/4-rendering/shared/context/tokens/tokens.controller";
+import ScopesController from "@/core/terminal/pipeline/4-rendering/shared/context/scopes/scopes.controller";
+import ScopesRuntime from "@/core/terminal/pipeline/4-rendering/shared/context/scopes/runtime";
+import RenderingWriter from "@/core/terminal/pipeline/4-rendering/shared/context/writer/writer";
 
 function token(value: string): any {
     return {

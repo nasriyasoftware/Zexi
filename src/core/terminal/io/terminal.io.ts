@@ -1,9 +1,21 @@
 import atomix from "@nasriya/atomix";
 import interceptors from "./interceptors";
+import TerminalQueryManager from "./query/query";
 import ZexiTerminalControllerInstance from "../controller/controller";
-import queryCursorPosition from "./helpers/cursor.position";
+import TerminalSizeDetector from "./helpers/size.detector";
 import { Console } from 'node:console';
-import type { CursorPosition, ProcessStdWriteStream, TerminalBufferEntry, TerminalOriginals, WriteReturnType, } from "./types";
+import { EventEmitter } from "@nasriya/atomix/tools";
+import type {
+    CursorPosition,
+    ProcessStdWriteStream,
+    TerminalBufferEntry,
+    TerminalIOEvents,
+    TerminalIOScreenInitState,
+    TerminalIOScreenMetadata,
+    TerminalIOScreenState,
+    TerminalMethodReferences,
+    WriteReturnType,
+} from "./types";
 
 /**
  * Provides the low-level terminal I/O interface used by Zexi.
@@ -151,52 +163,155 @@ import type { CursorPosition, ProcessStdWriteStream, TerminalBufferEntry, Termin
  * through the captured original writer rather than through the intercepted
  * standard-stream methods.
  *
+ * ---------------------------------------------------------------------
+ * 🔷 TERMINAL STATE
+ * ---------------------------------------------------------------------
+ *
+ * The terminal I/O interface exposes information about the process terminal
+ * through {@link initialCursor}, {@link width}, {@link height}, and
+ * {@link isTTY}.
+ *
+ * The initial cursor position is queried from the process terminal during
+ * initialization. It records the cursor position observed at startup and
+ * is not intended to represent the cursor's continuously changing position.
+ *
+ * Terminal dimensions are maintained by {@link TerminalSizeDetector} and
+ * exposed through {@link width} and {@link height}. These values describe
+ * the detected terminal dimensions rather than the dimensions of any
+ * individual rendered entry.
+ *
+ * The {@link isTTY} property indicates whether both currently configured
+ * output streams, stdout and stderr, identify themselves as TTYs.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 TERMINAL QUERIES AND EVENTS
+ * ---------------------------------------------------------------------
+ *
+ * The {@link query} manager provides serialized access to terminal queries.
+ * Serializing queries prevents concurrent requests from competing for
+ * responses received through the process terminal input stream.
+ *
+ * The {@link events} emitter provides the typed event interface associated
+ * with terminal I/O. Its available events and payloads are defined by
+ * {@link TerminalIOEvents}.
+ *
+ * ---------------------------------------------------------------------
+ * 🔷 INITIALIZATION AND READINESS
+ * ---------------------------------------------------------------------
+ *
+ * Construction captures the original stream operations and enables
+ * interception. Terminal setup is performed later by {@link initialize},
+ * which is normally queued by the owning ZexiTerminal before a screen
+ * operation.
+ *
+ * Initialization first establishes the screen policy. Its screen probe
+ * queries the current cursor position to decide whether the existing screen
+ * can be used or whether the alternate-screen path should be requested.
+ * Initialization then performs a separate best-effort cursor query to retain
+ * the initial cursor position exposed by {@link initialCursor}. A failure of
+ * this second query preserves the default row-one, column-one position.
+ * Terminal-size polling starts after cursor tracking and before readiness is
+ * signalled.
+ *
+ * Intercepted writes received before readiness are retained in an internal
+ * buffer in arrival order. The private {@link #_onReady} hook drains that
+ * buffer, ensures interception is active, and marks the terminal ready; it
+ * does not perform the screen probe, cursor query, or size-detector startup.
+ *
+ * The {@link ready} property remains false while buffered writes are being
+ * flushed and becomes true only after the drain completes. Calls to
+ * {@link queue} made before readiness are buffered; calls made afterward
+ * write immediately through the captured original stream operation.
+ *
+ * The {@link initialized} flag records that the one-time initialization
+ * phase has started. It is set before the best-effort cursor query and size
+ * detector startup, so it can be true even if one of those later operations
+ * rejects; it is distinct from {@link ready}.
+ *
  * @since 1.0.0
  */
 export class ZexiTerminalIO {
     /**
-     * The standard streams currently managed by Zexi for terminal I/O.
+     * Detects and maintains the dimensions of the process terminal.
      *
-     * These streams represent the standard input and output streams used by Zexi's
-     * terminal I/O system. They default to the process standard input, output,
-     * and error streams of the environment in which ZexiTerminalIO is initialized.
+     * The detector is started by {@link initialize} before the readiness
+     * hook flushes buffered writes.
+     * Its current dimensions are exposed through {@link width} and
+     * {@link height}.
      *
-     * The streams must not be replaced directly. Use {@link replaceStreams} to
-     * replace the managed streams, as it also invalidates the existing stream
-     * bindings and captures the original operations of the new streams before
-     * interception is resumed.
-     *
-     * Directly replacing any stream bypasses this rebinding lifecycle and may
-     * leave the captured original operations associated with a different stream
-     * configuration.
+     * This detector describes the process terminal's dimensions; it does
+     * not track the dimensions or layout of individual terminal entries.
      *
      * @since 1.0.0
      */
-    static readonly streams = {
-        stdout: process.stdout,
-        stderr: process.stderr,
-        stdin: process.stdin
+    readonly #_resizeDetector = new TerminalSizeDetector();
+
+    /**
+     * Stores the initial cursor position observed from the process terminal.
+     *
+     * The position defaults to row 1, column 1 until the initial cursor
+     * query succeeds. During initialization, {@link query} is used to
+     * retrieve the terminal's reported cursor position.
+     *
+     * The stored position represents the initial observation. It is not
+     * automatically updated whenever subsequent terminal output moves
+     * the cursor.
+     *
+     * @since 1.0.0
+     */
+    readonly #_initialCursor = {
+        /**
+         * The cursor position captured during terminal initialization.
+         *
+         * Defaults to row 1, column 1 and is updated when the initial cursor
+         * position query succeeds. If the query fails, the default position
+         * is retained.
+         *
+         * @since 1.0.0
+         */
+        position: { row: 1, column: 1 } as CursorPosition,
+
+        /**
+         * Queries the terminal for its current cursor position and updates
+         * {@link position} with the returned coordinates.
+         *
+         * If the query fails, the error is wrapped in a new `Error` with
+         * the original error preserved as its cause.
+         *
+         * @throws {Error} If the cursor-position query fails.
+         *
+         * @since 1.0.0
+         */
+        update: async () => {
+            try {
+                const p = await this.query.cursorPosition();
+                this.#_initialCursor.position = p;
+            } catch (e) {
+                throw new Error(`Failed to query cursor position: ${e}`, { cause: e });
+            }
+        }
     };
 
     /**
-     * Stores the original standard-stream operations and global console instance
-     * captured from the currently configured terminal streams before Zexi installs
-     * its interceptors.
+     * Stores the original standard-stream method references and global console
+     * instance captured before Zexi installs its interceptors.
      *
-     * The original stream operations are captured by {@link #_bind} and bound to
-     * their respective streams so they remain valid when invoked independently of
-     * the streams' current methods.
+     * Available stream methods are retained as their original function
+     * references without binding or modifying them. When Zexi invokes a
+     * captured method, it supplies the corresponding configured stream as
+     * the method's `this` context.
      *
-     * Stream operations that are unavailable on the original streams are omitted.
-     * This allows Zexi to operate with non-TTY or otherwise limited streams while
-     * retaining every physical terminal capability provided by the environment.
+     * Methods that were unavailable on the original streams remain absent
+     * from their respective reference objects. This allows Zexi to preserve
+     * the original capabilities of each stream while providing its own
+     * terminal-control operations.
      *
-     * The captured console instance is preserved so the global console can be
-     * completely restored when the interceptors are uninstalled.
+     * The captured console instance is retained so it can be restored when
+     * the terminal interceptors are uninstalled.
      *
      * @since 1.0.0
      */
-    #_originals!: TerminalOriginals;
+    #_methodReferences!: TerminalMethodReferences;
 
     /**
      * Tracks the binding, installation, readiness, and activation state of terminal
@@ -226,6 +341,7 @@ export class ZexiTerminalIO {
      * @since 1.0.0
      */
     readonly #_flags = Object.seal({
+        initialized: false,
         intercepting: false,
         installed: false,
         ready: false,
@@ -264,7 +380,7 @@ export class ZexiTerminalIO {
          *
          * @since 1.0.0
          */
-        drainHandler: undefined as undefined | ((code: number) => Promise<void>),
+        drainHandler: undefined as undefined | ((signal: string) => Promise<void>),
 
         /**
          * Installs Zexi's terminal interceptors on the configured standard streams and
@@ -349,7 +465,7 @@ export class ZexiTerminalIO {
          */
         uninstall: () => {
             if (!this.#_flags.installed) { return; }
-            const originals = this.#_originals;
+            const originals = this.#_methodReferences;
 
             for (const _target of ['stdout', 'stderr'] as const) {
                 const target = originals[_target];
@@ -407,9 +523,18 @@ export class ZexiTerminalIO {
             try {
                 if (this.#_flags.intercepting) { return; }
 
-                interception.drainHandler = atomix.utils.once(async (code: number) => {
+                interception.drainHandler = atomix.utils.once(async (signal: string) => {
                     const ct = ZexiTerminalControllerInstance;
                     await ct.queue.untilComplete();
+
+                    const code = (() => {
+                        switch (signal) {
+                            case 'SIGINT': return 130;
+                            case 'SIGTERM': return 143;
+                            default: return 1;
+                        }
+                    })();
+
                     process.exit(code);
                 });
 
@@ -465,30 +590,53 @@ export class ZexiTerminalIO {
     readonly #_buffer: TerminalBufferEntry[] = [];
 
     /**
-     * Completes the terminal readiness transition.
+     * Flushes buffered writes and completes terminal readiness.
      *
-     * Interception is enabled before the buffered requests are flushed so that
-     * incoming writes continue to be captured while the buffer is being drained.
+     * The screen probe, initial-cursor capture, and terminal-size detector are
+     * performed by {@link initialize} before this hook is called. This method
+     * drains only the intercepted-write buffer, in FIFO order, using the
+     * captured original writers. It then ensures interception is enabled and
+     * changes the readiness flag to true.
      *
-     * Buffered requests are written directly to the original process streams in
-     * their arrival order. The terminal is marked as ready only after the entire
-     * buffer has been flushed so that writes received during the flush are also
-     * retained and written in order.
+     * Readiness remains false for the whole drain. If a buffered write throws,
+     * the drain stops before interception is re-enabled and the ready flag is
+     * not set. Calls to {@link queue} made after readiness write immediately.
      *
-     * This handler can only execute once.
+     * The hook is wrapped with atomix.utils.once; only its first invocation
+     * runs the drain. It is a completion signal, not the terminal initializer.
      *
      * @since 1.0.0
      */
     readonly #_onReady = atomix.utils.once(() => {
-        this.#_interception.enable();
-
         while (this.#_buffer.length > 0) {
             const entry = this.#_buffer.shift()!;
             this.#_writeEntry(entry);
         }
 
+        this.#_interception.enable();
         this.#_flags.ready = true;
     });
+
+    /**
+     * Manages terminal queries and serializes their execution.
+     *
+     * Queries are coordinated through {@link TerminalQueryManager} so that
+     * multiple requests do not execute concurrently against the same
+     * terminal input stream.
+     *
+     * @since 1.0.0
+     */
+    readonly query = new TerminalQueryManager();
+
+    /**
+     * Emits typed events associated with terminal I/O.
+     *
+     * The available event names and payload types are defined by
+     * {@link TerminalIOEvents}.
+     *
+     * @since 1.0.0
+     */
+    readonly events = new EventEmitter<TerminalIOEvents>();
 
     /**
      * Writes a buffered terminal entry directly to its original process stream.
@@ -517,7 +665,7 @@ export class ZexiTerminalIO {
      */
     #_writeEntry(entry: TerminalBufferEntry): boolean {
         const { isError, output, encoding, callback } = entry;
-        const writer = this.#_originals[isError ? 'stderr' : 'stdout'];
+        const writer = this.#_methodReferences[isError ? 'stderr' : 'stdout'];
         const stream = ZexiTerminalIO.streams[isError ? 'stderr' : 'stdout'];
 
         if (!writer.write) {
@@ -527,15 +675,26 @@ export class ZexiTerminalIO {
         }
 
         const result = (() => {
-            if (!callback && !encoding) {
-                return writer.write.call(stream, output);
+            if (typeof output === 'string') {
+                if (!callback && !encoding) {
+                    return writer.write.call(stream, output);
+                }
+
+                if (callback && !encoding) {
+                    return writer.write.call(stream, output, callback as any);
+                }
+
+                return writer.write.call(stream, output, encoding, callback);
             }
 
-            if (callback && !encoding) {
-                return writer.write.call(stream, output, callback as any);
+            // handle buffer case
+            if (callback) {
+                // @ts-ignore
+                return writer.write.call(stream, output, callback);
             }
 
-            return writer.write.call(stream, output, encoding, callback);
+            return writer.write.call(stream, output);
+
         })();
 
         return result;
@@ -583,7 +742,7 @@ export class ZexiTerminalIO {
         capture(streams.stdout, stdout);
         capture(streams.stderr, stderr);
 
-        this.#_originals = Object.seal({
+        this.#_methodReferences = Object.seal({
             stdout: Object.freeze(stdout),
             stderr: Object.freeze(stderr),
             console: globalThis.console
@@ -605,7 +764,8 @@ export class ZexiTerminalIO {
      * terminal pipeline.
      *
      * Until terminal initialization completes, intercepted writes are retained by
-     * {@link queue} and flushed when {@link onReady} is invoked.
+     * {@link queue} and flushed by the private readiness hook at the end of
+     * {@link initialize}.
      *
      * @since 1.0.0
      */
@@ -615,17 +775,61 @@ export class ZexiTerminalIO {
     }
 
     /**
-     * Provides the handler used to signal that terminal initialization has
-     * completed.
+     * Gets the currently selected terminal screen state.
      *
-     * Invoking the handler flushes all intercepted writes that were received
-     * before the terminal became ready and then marks the terminal as ready.
+     * The value is shared by every terminal I/O consumer because screen
+     * selection belongs to the process-wide terminal controller. It reports
+     * Disabled when either configured output stream is not a TTY, even if
+     * the stored screen metadata previously recorded another state.
      *
-     * @returns The terminal readiness handler.
+     * @returns The effective state of the managed terminal screen.
      *
      * @since 1.0.0
      */
-    get onReady() { return this.#_onReady; }
+    get screenState(): TerminalIOScreenState { return ZexiTerminalIO.state; }
+
+    /**
+     * Gets the initial cursor position observed during terminal initialization.
+     *
+     * The returned position is the stored initial observation, not a live
+     * cursor-position query. It defaults to row 1, column 1 until the
+     * initial cursor query succeeds.
+     *
+     * @returns The stored initial cursor position.
+     *
+     * @since 1.0.0
+     */
+    get initialCursor() { return this.#_initialCursor.position; }
+
+    /**
+     * Gets the detected width of the process terminal in columns.
+     *
+     * @returns The detected terminal width.
+     *
+     * @since 1.0.0
+     */
+    get width() { return this.#_resizeDetector.width; }
+
+    /**
+     * Gets the detected height of the process terminal in rows.
+     *
+     * @returns The detected terminal height.
+     *
+     * @since 1.0.0
+     */
+    get height() { return this.#_resizeDetector.height; }
+
+    /**
+     * Indicates whether the configured stdout stream is a TTY.
+     *
+     * Returns false when the stream does not expose an `isTTY` value
+     * indicating that it is a TTY.
+     *
+     * @returns `true` when stdout is a TTY; otherwise, `false`.
+     *
+     * @since 1.0.0
+     */
+    get isTTY() { return ZexiTerminalIO.isTTY; }
 
     /**
      * Indicates whether the terminal has completed initialization and flushed all
@@ -695,6 +899,87 @@ export class ZexiTerminalIO {
             this.#_interception.disable();
         }
     }
+
+    /**
+     * Indicates whether the one-time initialization phase has been entered.
+     *
+     * This flag is set after the screen policy is established and before the
+     * initial-cursor refresh and size-detector startup. It can therefore be
+     * true while {@link ready} is still false, and it remains true if a later
+     * initialization step rejects. It is not a guarantee that buffered writes
+     * have been flushed.
+     *
+     * @returns Whether initialization has entered its one-time phase.
+     *
+     * @since 1.0.0
+     */
+    get initialized() { return this.#_flags.initialized; }
+
+    /**
+     * Initializes terminal screen state, cursor tracking, size detection, and
+     * buffered-write readiness in that order.
+     *
+     * The screen metadata is initialized first when it is still in STANDBY.
+     * That phase requires stdout and stderr to be TTYs and uses a cursor-
+     * position response to choose the screen policy. The initial cursor
+     * exposed by {@link initialCursor} is then refreshed by a second query;
+     * that query is best-effort, and failure leaves its default position in
+     * place. The size detector is started and awaited next. Finally, the
+     * one-shot private {@link #_onReady} hook drains intercepted writes and
+     * marks the terminal ready.
+     *
+     * The screen probe and initial-cursor refresh are distinct queries. The
+     * former selects a screen policy; the latter stores the coordinate used by
+     * TOM as its initial viewport origin.
+     *
+     * Repeated calls return once the initialization flag is already set.
+     * The flag is set before cursor refresh and size detection, so a failure
+     * in either later step rejects this call but does not make a subsequent
+     * call retry those steps.
+     *
+     * @returns A promise that fulfills after the private readiness hook completes.
+     * @throws Error if screen initialization, size-detector startup, or
+     * buffered-write flushing fails. Failure of the initial-cursor refresh is
+     * suppressed and does not reject initialization.
+     *
+     * @since 1.0.0
+     */
+    async initialize() {
+        const screen = ZexiTerminalIO.#_screen;
+
+        if (screen.initState === 'STANDBY') {
+            await screen.initialize();
+        }
+
+        if (this.#_flags.initialized) { return; }
+        this.#_flags.initialized = true;
+
+        try {
+            await terminalIO.#_initialCursor.update();
+        } catch (error) {
+            // Cursor tracking failed; continue initialization.
+        }
+
+        await terminalIO.#_resizeDetector.run();
+
+        terminalIO.#_onReady();
+    }
+
+    /**
+     * Switches between the original and alternate terminal screens.
+     *
+     * The operation is delegated to the process-wide screen metadata. It is a
+     * no-op when stdout or stderr is not a TTY, or when no screen is currently
+     * selected. Entering the alternate screen registers a one-shot cleanup
+     * handler for process exit and termination signals; returning to the
+     * original screen removes those handlers and invokes the cleanup.
+     *
+     * @throws Error if the metadata says the alternate screen is active but
+     * its cleanup handler is missing.
+     *
+     * @since 1.0.0
+     */
+    switchScreen() { ZexiTerminalIO.#_screen.switch(); }
 
     /**
      * Replaces the terminal streams managed by Zexi and rebinds the terminal I/O
@@ -779,7 +1064,7 @@ export class ZexiTerminalIO {
      *
      * When the terminal is already ready, the write is forwarded immediately to
      * {@link write}. Otherwise, the request is added to the internal buffer and
-     * retained until {@link onReady} is invoked.
+     * retained until {@link initialize} reaches its readiness step.
      *
      * Buffered requests are flushed in the order in which they were received.
      * The terminal remains not ready while the buffer is being flushed so that
@@ -1001,29 +1286,158 @@ export class ZexiTerminalIO {
 
         return this.write(sequence, { callback });
     }
-
+    // Static content
+    // ======================================================================
+    // ======================================================================
     /**
-     * Queries the terminal for its current cursor position.
+     * The standard streams currently managed by Zexi for terminal I/O.
      *
-     * The query is delegated to the low-level cursor-position helper, which
-     * communicates with the terminal using the ANSI Device Status Report
-     * sequence.
+     * These streams represent the standard input and output streams used by Zexi's
+     * terminal I/O system. They default to the process standard input, output,
+     * and error streams of the environment in which ZexiTerminalIO is initialized.
      *
-     * This method provides the terminal I/O boundary for cursor-position queries
-     * performed by Zexi. The underlying input handling and ANSI response parsing
-     * remain encapsulated by the helper.
+     * The streams must not be replaced directly. Use {@link replaceStreams} to
+     * replace the managed streams, as it also invalidates the existing stream
+     * bindings and captures the original operations of the new streams before
+     * interception is resumed.
      *
-     * The returned coordinates are one-based and represent the cursor position
-     * reported by the terminal.
-     *
-     * @returns Promise resolving to the current terminal cursor position.
-     *
-     * @throws Error if the cursor-position query cannot be completed.
+     * Directly replacing any stream bypasses this rebinding lifecycle and may
+     * leave the captured original operations associated with a different stream
+     * configuration.
      *
      * @since 1.0.0
      */
-    queryCursorPosition(): Promise<CursorPosition> {
-        return queryCursorPosition();
+    static readonly streams = {
+        stdout: process.stdout,
+        stderr: process.stderr,
+        stdin: process.stdin
+    };
+
+    /**
+     * Process-wide state and operations for terminal screen selection.
+     *
+     * Initialization queries the cursor and records the original screen when
+     * the query succeeds. When it fails, initialization requests a switch to
+     * the alternate screen and then marks the lifecycle ready. The switch
+     * operation itself ignores the Disabled state; because this metadata
+     * starts as Disabled, that failure path currently leaves the effective
+     * screen state disabled even though the initialization lifecycle reaches
+     * READY. This distinction is exposed by {@link state} and {@link initState}.
+     *
+     * The state is static because there is one physical terminal screen shared
+     * by all ZexiTerminalIO consumers.
+     *
+     * @since 1.0.0
+     */
+    static #_screen: TerminalIOScreenMetadata = {
+        state: 'Disabled',
+        initState: 'STANDBY',
+        initialize: async () => {
+            const screen = this.#_screen;
+
+            if (screen.initState !== 'STANDBY') {
+                throw new Error(`Invariant violation: Screen initialization must begin in STANDBY state, but was ${screen.initState}.`);
+            }
+
+            screen.initState = 'INITIALIZING';
+
+            if (!this.isTTY) {
+                screen.initState = 'FAILED';
+                return;
+            }
+
+            let queryPassed = false;
+            await terminalIO.query.cursorPosition().then(() => queryPassed = true).catch(() => { });
+
+            if (queryPassed) {
+                screen.state = 'Original';
+            } else {
+                // Query failed, switch to alternate screen and update state
+                screen.switch();
+            }
+
+            screen.initState = 'READY';
+        },
+        switch: () => {
+            const screen = this.#_screen;
+
+            if (!this.isTTY || screen.state === 'Disabled') { return; }
+
+            if (screen.state === 'Original' || screen.initState === 'INITIALIZING') {
+                // Switch to alternate screen
+                terminalIO.write('[Zexi] Switching to alternate terminal screen...\r\n');
+                terminalIO.write('\x1b[?1049h\x1b[2J\x1b[H');
+
+                const leaveScreen = screen.cleanupHandler = atomix.utils.once(() => {
+                    terminalIO.write('\x1b[?1049l');
+                    terminalIO.write('[Zexi] Restored original terminal screen.\r\n');
+                });
+
+                process.on('exit', leaveScreen);
+                process.on('SIGINT', leaveScreen);
+                process.on('SIGTERM', leaveScreen);
+
+                screen.state = 'Alternate';
+            } else {
+                // Switch to original screen
+                if (!screen.cleanupHandler) {
+                    throw new Error('Invariant violation: alternate screen cleanup handler not found.');
+                }
+
+                process.removeListener('exit', screen.cleanupHandler);
+                process.removeListener('SIGINT', screen.cleanupHandler);
+                process.removeListener('SIGTERM', screen.cleanupHandler);
+
+                screen.cleanupHandler();
+
+                screen.state = 'Original';
+            }
+        }
+    }
+
+    /**
+     * Indicates whether both configured output streams are interactive TTYs.
+     *
+     * Screen initialization requires stdout and stderr to report
+     * isTTY === true; stdin is not part of this check.
+     *
+     * @returns Whether both output streams are TTYs.
+     *
+     * @since 1.0.0
+     */
+    static get isTTY() {
+        return (
+            this.streams.stdout.isTTY === true &&
+            this.streams.stderr.isTTY === true
+        );
+    }
+
+    /**
+     * Gets the effective process-wide terminal screen state.
+     *
+     * Returns Disabled whenever the stored state is disabled or the
+     * configured output streams are no longer both TTYs.
+     *
+     * @returns The effective managed-screen state.
+     *
+     * @since 1.0.0
+     */
+    static get state(): TerminalIOScreenState {
+        return (this.#_screen.state === 'Disabled' || !this.isTTY) ? 'Disabled' : this.#_screen.state;
+    }
+
+    /**
+     * Gets the process-wide terminal screen initialization lifecycle state.
+     *
+     * Unlike {@link state}, this reports the stored lifecycle value directly
+     * and is not rewritten when the streams stop being TTYs.
+     *
+     * @returns The current screen initialization phase.
+     *
+     * @since 1.0.0
+     */
+    static get initState(): TerminalIOScreenInitState {
+        return this.#_screen.initState;
     }
 }
 

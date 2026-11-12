@@ -1,24 +1,18 @@
-import GraphBuilder from "../../../../../src/core/terminal/pipeline/1-graphing/builder";
-import RepresentationBuilder from "../../../../../src/core/terminal/pipeline/2-representation/builder";
+import GRAPH_NODES from "@/core/terminal/pipeline/1-graphing/nodes";
+import REP_NODES from "@/core/terminal/pipeline/2-representation/nodes";
+import GraphBuilder from "@/core/terminal/pipeline/1-graphing/builder";
+import RepresentationBuilder from "@/core/terminal/pipeline/2-representation/builder";
+import CircularReferenceError from "@/core/terminal/pipeline/1-graphing/identity/circular.error";
 
-import REP_NODES from "../../../../../src/core/terminal/pipeline/2-representation/nodes";
-import CircularReferenceError from "../../../../../src/core/terminal/pipeline/1-graphing/identity/circular.error";
-
-import type { ErrorGraphNodeData } from "../../../../../src/core/terminal/pipeline/1-graphing/types";
-import GRAPH_NODES from "../../../../../src/core/terminal/pipeline/1-graphing/nodes";
-
-describe("ErrorRepresentationNode (integration jest. pipeline)", () => {
+describe("ErrorRepresentationNode (integration with pipeline)", () => {
 
     const buildGraph = (value: unknown) => {
-        return GraphBuilder.build(value, {
-            cycles: "throw",
-            references: "inline"
-        });
+        return GraphBuilder.build(value, { cycles: "throw" });
     }
 
     const buildRep = (value: unknown) => RepresentationBuilder.build(buildGraph(value));
 
-    describe("construction jest. graph → representation pipeline", () => {
+    describe("construction with graph → representation pipeline", () => {
 
         it("stores error data correctly", () => {
             const error = new Error("Something went wrong");
@@ -45,9 +39,9 @@ describe("ErrorRepresentationNode (integration jest. pipeline)", () => {
 
     });
 
-    describe("from() behajest.r", () => {
+    describe("from() behaviour", () => {
 
-        it("builds representation from GraphErrorNode jest. pipeline", () => {
+        it("builds representation from GraphErrorNode with pipeline", () => {
             const error = new Error("Graph failure");
 
             const graph = buildGraph(error);
@@ -187,7 +181,7 @@ describe("ErrorRepresentationNode (integration jest. pipeline)", () => {
 
             const child = new Error("child");
 
-            // introduce circular structure jest. cause
+            // introduce circular structure with cause
             error.cause = child;
             child.cause = error;
 

@@ -1,30 +1,28 @@
 import atomix from "@nasriya/atomix";
-import buildStack from "./pipeline/1-graphing/helpers/build.stack";
 import consoleStyler from "./styling/styler";
+import TerminalLogService from "./logging/log.service";
 
-import TerminalEntry from "./screen/terminal-cell";
-import TOKENS from "./pipeline/3-tokenization/tokens";
-import StdinCapture from "./input/stdin/stdin.capture";
 import ZexiTerminalControllerInstance from "./controller/controller";
-import JSONRenderer from "./pipeline/4-rendering/renderers/json/renderer";
-import DefaultRenderer from './pipeline/4-rendering/renderers/debug/renderer';
-import JSONTokenizer from "./pipeline/3-tokenization/tokenizers/json.tokenizer";
-import DefaultTokenizer from "./pipeline/3-tokenization/tokenizers/default.tokenizer";
 
 import { ZEXI_LOG_LEVELS } from "./types";
-import type { JsonOptions } from "./pipeline/4-rendering/renderers/json/types";
-import type { DebugOptions } from "./pipeline/4-rendering/renderers/debug/types";
-import type { TerminalEventName, TerminalEvents, TerminalLogEvent, UnsubscribeHandler } from "./events/types";
-import type { TerminalCellOptions, TerminalEntryCellTask, TerminalEntryLogOptions, TerminalEntryUpdateLogger } from "./screen/types";
-import type { TerminalConfirmOptions, TerminalLogOptions, TerminalPromptOptions, ZexiLogLevel, ZexiTerminalOptions } from "./types";
+import type { TerminalEventName, TerminalEvents, UnsubscribeHandler } from "./events/types";
+import type {
+    TerminalCellLogOptions,
+    TerminalCellOptions,
+    TerminalCellTask,
+    TerminalCellUpdateLogger
+} from "./screen/tom/types";
+import type { TerminalConfirmOptions, TerminalLogOptions, TerminalPromptOptions, ZexiLogLevel, ZexiTerminalConfigs, ZexiTerminalOptions } from "./types";
+import TerminalCell from "./screen/tom/cells/terminal.cell";
+import terminalIO from "./io";
 
 /**
- * Stable queue task identifier used for terminal cursor-position
- * initialization.
+ * Stable queue task identifier used for one-time terminal I/O initialization.
  *
- * The identifier allows the terminal task queue to recognize an existing
- * cursor-position initialization task and prevent duplicate initialization
- * tasks from being scheduled concurrently.
+ * Synchronous terminal methods use this identifier to avoid adding more than
+ * one pending initialization task to the shared terminal queue. The task
+ * initializes terminal I/O as a whole: screen policy, initial cursor
+ * tracking, terminal-size polling, and readiness for buffered output.
  *
  * @since 1.0.0
  */
@@ -134,90 +132,6 @@ export class ZexiTerminal {
     static readonly #_ct = ZexiTerminalControllerInstance;
 
     /**
-     * Stateless utilities shared by all terminal instances.
-     *
-     * These utilities are kept separate from instance helpers because they do
-     * not depend on a terminal instance's configuration or state.
-     *
-     * @internal
-     */
-    static #_utils = {
-        /**
-         * Generates a stack trace representing the caller of a terminal
-         * operation.
-         *
-         * @returns The normalized stack trace.
-         *
-         * @internal
-         * @since 1.0.0
-         */
-        generateStack: () => buildStack(new Error().stack ?? ''),
-
-        /**
-         * Determines whether a value is a JavaScript primitive.
-         *
-         * Functions and objects are considered non-primitive. `null` and
-         * `undefined` are considered primitive for terminal formatting
-         * purposes.
-         *
-         * @param value Value to classify.
-         * @returns `true` when the value is primitive; otherwise `false`.
-         *
-         * @internal
-         * @since 1.0.0
-         */
-        isPrimitive: (value: unknown): boolean => {
-            return (
-                value === null ||
-                value === undefined ||
-                typeof value !== 'object' &&
-                typeof value !== 'function'
-            );
-        },
-
-        /**
-         * Internal rendering operations used to produce terminal output.
-         *
-         * These renderers are intentionally kept behind the terminal API so
-         * callers do not need to interact with the rendering pipeline directly.
-         *
-         * @internal
-         * @since 1.0.0
-         */
-        render: {
-            /**
-             * Renders a value using the canonical JSON renderer.
-             *
-             * @param value Value to render.
-             * @param options JSON renderer options.
-             * @returns The rendered JSON representation.
-             *
-             * @internal
-             * @since 1.0.0
-             */
-            json: (value: unknown, options?: JsonOptions) => {
-                const tokens = JSONTokenizer(value);
-                return JSONRenderer.render(tokens, options ?? {});
-            },
-
-            /**
-             * Renders a value using the debug renderer.
-             *
-             * @param value Value to render.
-             * @param options Debug renderer options.
-             * @returns The rendered debug representation.
-             *
-             * @internal
-             * @since 1.0.0
-             */
-            debug: (value: unknown, options?: DebugOptions) => {
-                const tokens = DefaultTokenizer(value, options?.cycles ?? 'mark');
-                return DefaultRenderer.render(tokens, options ?? {});
-            }
-        }
-    }
-
-    /**
      * Configuration local to this terminal instance.
      *
      * These values affect how this particular instance prints events. They do
@@ -226,10 +140,18 @@ export class ZexiTerminal {
      * @internal
      * @since 1.0.0
      */
-    readonly #_configs = {
-        logLevel: 'debug' as ZexiLogLevel,
-        includeMetadata: false
-    }
+    readonly #_configs: ZexiTerminalConfigs;
+
+    /**
+     * Logging collaborator responsible for log event creation, rendering, and
+     * queued output. It receives this terminal's mutable configuration object
+     * and the screen-initialization hook so logging stays coordinated with the
+     * terminal without making `ZexiTerminal` inherit from the logging service.
+     *
+     * @internal
+     * @since 1.0.0
+     */
+    readonly #_logService: TerminalLogService;
 
     /**
      * Handles log requests produced by dynamic terminal entry updates.
@@ -247,9 +169,9 @@ export class ZexiTerminal {
      * @internal
      * @since 1.0.0
      */
-    readonly #_entriesLogger: TerminalEntryUpdateLogger = (value, configs) => {
+    readonly #_cellsLogger: TerminalCellUpdateLogger = (value, configs) => {
         if (configs.log !== true) { return }
-        this.#_helpers.logging.logEntry(configs.level, value);
+        this.#_logService.logEntry(configs.level, value);
     }
 
     /**
@@ -267,6 +189,17 @@ export class ZexiTerminal {
      * @since 1.0.0
      */
     constructor(options?: ZexiTerminalOptions) {
+        const configs: ZexiTerminalConfigs = {
+            logLevel: 'debug',
+            includeMetadata: false
+        }
+
+        this.#_configs = configs;
+        this.#_logService = new TerminalLogService(
+            configs,
+            () => this.#_helpers.ensureScreenInitialized()
+        );
+
         if (options !== undefined) {
             if (!atomix.valueIs.record(options)) {
                 throw new TypeError(`Expected \`options\` to be an object, received \`${typeof options}\``);
@@ -283,377 +216,91 @@ export class ZexiTerminal {
     }
 
     /**
-     * Instance-bound operations used to process terminal logging.
+     * Instance-bound screen lifecycle operations used by terminal methods and
+     * the logging collaborator.
      *
-     * Unlike the static utilities, these helpers operate in the context of a
-     * specific terminal instance and may therefore depend on its configuration,
-     * such as the configured log level and metadata settings.
+     * Logging itself is delegated to {@link #_logService}; this helper remains on
+     * `ZexiTerminal` because screen initialization belongs to the terminal's
+     * screen lifecycle, not to the log service.
      *
      * @internal
+     * @since 1.0.0
      */
     readonly #_helpers = {
         /**
-         * Internal logging operations.
+         * Ensures that terminal I/O initialization is queued before a screen
+         * operation is queued.
          *
-         * @internal
-         * @since 1.0.0
-         */
-        logging: {
-            /**
-             * Creates and emits a log event from an already-rendered terminal value.
-             *
-             * This method is intended for values that have already been converted into
-             * their final terminal representation, such as values produced by dynamic
-             * terminal entries. The supplied value is therefore used directly as the
-             * original, serialized, and printable representation of the event.
-             *
-             * Unlike {@link logLevel}, this method does not serialize, render, or
-             * otherwise transform the supplied value.
-             *
-             * The resulting event is emitted through both:
-             *
-             * - the level-specific `log.<level>` event
-             * - the general `log` event
-             *
-             * Event emission is initiated synchronously. Any asynchronous work performed
-             * by event listeners is not awaited by this method.
-             *
-             * @param level - Severity level of the log event.
-             * @param value - Already-rendered terminal value.
-             *
-             * @throws TypeError if `value` is not a string.
-             *
-             * @internal
-             * @since 1.0.0
-             */
-            logEntry: (level: ZexiLogLevel, value: string): void => {
-                if (typeof value !== 'string') {
-                    throw new TypeError(`Expected \`value\` to be a string, received \`${typeof value}\``);
-                }
-
-                const draft: TerminalLogEvent = {
-                    id: crypto.randomUUID(),
-                    time: new Date().toISOString(),
-                    name: `log.${level}`,
-                    level: level,
-                    value: {
-                        original: value,
-                        serialized: consoleStyler.strip(value),
-                        printable: value
-                    }
-                }
-
-                void this.#_helpers.logging.logEvent(draft);
-            },
-
-            /**
-             * Freezes and asynchronously emits a completed terminal log event.
-             *
-             * The event is emitted through both:
-             *
-             * - the level-specific `log.<level>` event
-             * - the general `log` event
-             *
-             * Both events receive the same immutable event object.
-             *
-             * The level-specific event is fully emitted before the general `log` event
-             * is emitted. The returned promise resolves only after both event emissions
-             * and their asynchronous listeners have completed.
-             *
-             * This helper performs event emission only. It does not serialize, render,
-             * capture stack traces, or print the event.
-             *
-             * @param event - Completed terminal log event to emit.
-             *
-             * @returns A promise that resolves after both log events have been emitted.
-             *
-             * @internal
-             * @since 1.0.0
-             */
-            logEvent: async (event: TerminalLogEvent): Promise<void> => {
-                const e = atomix.dataTypes.object.deepFreeze(event);
-
-                // Emit the specific log-level event
-                await ZexiTerminal.#_ct.events.emit<TerminalEventName>(`log.${e.level}`, e);
-
-                // Emit the general log event
-                await ZexiTerminal.#_ct.events.emit('log', e);
-            },
-
-            /**
-             * Creates, emits, and optionally schedules a log event for terminal
-             * rendering at the specified severity level.
-             *
-             * This method processes the supplied value through the terminal's normal
-             * serialization and rendering pipeline before creating the log event.
-             *
-             * The operation:
-             *
-             * 1. Resolves the logging and rendering options.
-             * 2. Produces the canonical JSON representation.
-             * 3. Produces the printable representation.
-             * 4. Creates the terminal log event.
-             * 5. Optionally captures the caller stack.
-             * 6. Emits the completed event through {@link logEvent}.
-             * 7. Optionally schedules the event for terminal rendering.
-             *
-             * The configured terminal log level affects printing only. It does not
-             * prevent the event from being emitted.
-             *
-             * Unlike {@link logEntry}, this method accepts an arbitrary value and
-             * processes it through the terminal's serialization and rendering pipeline
-             * before creating the event.
-             *
-             * All serialization, rendering, event creation, and event emission performed
-             * by this method are initiated synchronously. Terminal rendering itself is
-             * deferred to the shared screen task queue and is therefore performed
-             * asynchronously after this method returns.
-             *
-             * @param level - Severity level of the log.
-             * @param value - Value to log.
-             * @param options - Logging and rendering options.
-             *
-             * @internal
-             * @since 1.0.0
-             */
-            logLevel: (
-                level: ZexiLogLevel,
-                value: unknown,
-                options?: TerminalLogOptions
-            ): void => {
-                const ansiEnabled = options?.ansi ?? (
-                    level === 'debug' ||
-                    level === 'info' ||
-                    !ZexiTerminal.#_utils.isPrimitive(value)
-                );
-
-                const target = options?.target ?? (level === 'debug' ? 'debug' : 'json');
-                const mode = 'pretty' as const;
-                const trace = options?.trace === true;
-                const print = options?.print === false ? false : true;
-
-                const baseConfigs = { mode, ansiEnabled }
-
-                const json = ZexiTerminal.#_utils.render.json(value, baseConfigs);
-                const serialized = (ansiEnabled ? consoleStyler.strip(json) : json).replace(/\s+/g, '');;
-
-                const draft: TerminalLogEvent = {
-                    id: crypto.randomUUID(),
-                    time: new Date().toISOString(),
-                    name: `log.${level}`,
-                    level: level,
-                    value: {
-                        original: value,
-                        serialized,
-                        printable: target === 'debug' ? ZexiTerminal.#_utils.render.debug(value, baseConfigs) : json
-                    }
-                }
-
-                if (trace) {
-                    const stack = ZexiTerminal.#_utils.generateStack();
-                    const printable = DefaultRenderer.render(
-                        [new TOKENS.StackTrace(stack)],
-                        { mode: 'compact', ansiEnabled: true }
-                    );
-
-                    draft.trace = { original: stack, printable };
-                }
-
-                void this.#_helpers.logging.logEvent(draft);
-
-                if (print) {
-                    // Print to the console if the log level is high enough
-                    this.#_helpers.printEvent(draft);
-                }
-            },
-        },
-
-        /**
-         * Schedules a log event for rendering through the shared screen engine when
-         * the event's severity meets this terminal instance's configured log level.
-         *
-         * The printable message is constructed synchronously from the already-rendered
-         * event value. No serialization or rendering is performed by this method.
-         *
-         * Events whose severity is below this terminal instance's configured
-         * {@link ZexiTerminal.logLevel} are ignored and are not added to the queue.
-         *
-         * The resulting screen mutation is deferred to the shared terminal task queue.
-         * Before the task is queued, cursor-position initialization is ensured so that
-         * the queued operation executes against an initialized terminal screen.
-         *
-         * The queued task creates the corresponding screen cell using the message
-         * constructed by this method.
-         *
-         * This method does not emit log events. Event emission is performed when the
-         * log event is created, before this method is invoked.
-         *
-         * The method is synchronous. It schedules the screen operation and returns
-         * without waiting for the queued operation to execute.
-         *
-         * @param event - Log event to print.
-         *
-         * @internal
-         * @since 1.0.0
-         */
-        printEvent: (event: TerminalLogEvent): void => {
-            if (ZEXI_LOG_LEVELS.indexOf(this.#_configs.logLevel) > ZEXI_LOG_LEVELS.indexOf(event.level)) {
-                return;
-            }
-
-            const color = (() => {
-                switch (event.level) {
-                    case 'fatal':
-                    case 'error':
-                        return 'red';
-                    case 'warn':
-                        return 'yellow';
-                    default:
-                        return 'white';
-                }
-            })();
-
-            const parts: string[] = [];
-
-            if (this.#_configs.includeMetadata) {
-                const tag = `[${event.time}][${event.level.toUpperCase()}]`.padEnd(33);
-                parts.push(consoleStyler.color(tag, color));
-            }
-
-            if (ZexiTerminal.#_utils.isPrimitive(event.value.original)) {
-                parts.push(consoleStyler.color(event.value.printable, color));
-            } else {
-                parts.push(event.value.printable);
-            }
-
-            if (event.trace) {
-                parts.push(`${event.trace.printable}\n`);
-            }
-
-            const message = parts.join(' ');
-
-            this.#_helpers.ensureScreenInitialized();
-
-            // Queue the screen operation
-            ZexiTerminal.#_ct.queue.addTask({
-                priority: 1,
-                type: 'logging',
-                action: () => {
-                    ZexiTerminal.#_ct.screenEngine.create({
-                        value: message,
-                        final: true
-                    });
-                }
-            });
-        },
-
-        /**
-         * Ensures that terminal screen initialization is scheduled before any screen
-         * operation is executed.
-         *
-         * Terminal screen initialization may require asynchronous communication with
-         * the terminal. Since the public terminal API remains synchronous,
-         * initialization is delegated to the shared task queue rather than awaited
-         * directly by the caller.
+         * The public logging, clearing, and entry-creation methods remain
+         * synchronous at their call boundary, while initialization performs
+         * asynchronous terminal queries. This helper therefore inserts an
+         * initialization task into the shared controller queue instead of
+         * awaiting it in the caller.
          *
          * ---------------------------------------------------------------------
-         * 🔷 INITIALIZATION
+         * 🔷 INITIALIZATION OWNERSHIP
          * ---------------------------------------------------------------------
          *
-         * If terminal screen initialization has not yet started, an initialization
-         * task is added to the terminal queue.
-         *
-         * The initialization task delegates to the screen engine's
-         * {@link ScreenInitializer}, which establishes the terminal screen state and
-         * determines the initial cursor position used as the rendering origin.
-         *
-         * The initializer normally operates on the existing terminal screen. If the
-         * initial cursor position cannot be queried, it falls back to the alternate
-         * terminal screen so that Zexi can operate from a known terminal state.
+         * The queued action calls {@link terminalIO.initialize}. Terminal I/O
+         * owns screen selection, the initial cursor query, terminal-size
+         * detection, and the readiness signal that flushes intercepted writes.
+         * The screen engine and TOM consume that initialized state; they do not
+         * initialize it themselves.
          *
          * ---------------------------------------------------------------------
          * 🔷 DUPLICATE PREVENTION
          * ---------------------------------------------------------------------
          *
-         * Multiple terminal operations may request screen initialization before the
-         * queue has had an opportunity to execute the initialization task.
+         * The helper returns without adding work when the queue already has
+         * this initialization task or when the process-wide screen lifecycle
+         * has left STANDBY. The stable task identifier covers the interval
+         * before the queued action begins; the lifecycle check covers an
+         * initialization that is already running, completed, or failed.
          *
-         * The initialization task is assigned a stable identifier and checked using
-         * {@link TasksQueue.hasTask} before being added.
-         *
-         * Initialization is also skipped when the screen initializer has already
-         * progressed beyond the `STANDBY` state. This prevents initialization from
-         * being scheduled more than once.
-         *
-         * These checks ensure that synchronous terminal operations cannot enqueue
-         * duplicate initialization tasks.
+         * Since the screen lifecycle is shared, initialization is scheduled
+         * only once across all ZexiTerminal instances.
          *
          * ---------------------------------------------------------------------
          * 🔷 EXECUTION ORDER
          * ---------------------------------------------------------------------
          *
-         * Screen initialization is scheduled with priority `0`, ensuring it executes
-         * before queued screen operations that depend on an initialized screen and
-         * cursor origin.
+         * The task uses priority 0 so it runs before screen-dependent tasks
+         * added by the same terminal API operation. This is a queue-ordering
+         * guarantee; the helper itself does not wait for the task to complete.
          *
          * ---------------------------------------------------------------------
-         * 🔷 INITIALIZATION OUTCOMES
+         * 🔷 REJECTION HANDLING
          * ---------------------------------------------------------------------
          *
-         * The initialization task delegates screen selection and cursor-position
-         * establishment to {@link ScreenInitializer}.
+         * If the queued initialization action rejects, its rejection handler
+         * creates a fatal log event with printing disabled and writes the
+         * formatted diagnostic through process.stderr. This helper does not
+         * synchronously throw that asynchronous failure and does not disable
+         * queue execution.
          *
-         * Initialization can complete in either of the following states:
-         *
-         * - `READY` with the original terminal screen when the cursor position is
-         *   successfully queried
-         * - `READY` with the alternate terminal screen when the cursor position cannot
-         *   be queried safely
-         *
-         * Initialization transitions to `FAILED` when no interactive terminal is
-         * available.
-         *
-         * Cursor-position query failure is therefore not treated as a task rejection;
-         * it is handled by the screen initializer through alternate-screen fallback.
+         * The lifecycle check prevents this helper from scheduling a retry
+         * after screen initialization has moved out of STANDBY, including
+         * after a failed attempt.
          *
          * ---------------------------------------------------------------------
-         * 🔷 ERROR HANDLING
+         * 🔷 SYNCHRONOUS CONTRACT
          * ---------------------------------------------------------------------
          *
-         * If the initialization task itself rejects, automatic task-queue execution
-         * is disabled and the failure is reported through the terminal's fatal
-         * logging pipeline.
-         *
-         * Automatic queue execution is disabled because subsequent terminal
-         * operations depend on successful screen initialization. Allowing dependent
-         * screen operations to continue after initialization has failed could result
-         * in an invalid terminal state or incorrect screen positioning.
-         *
-         * Initialization errors are handled asynchronously by the task queue and are
-         * not thrown synchronously from this method.
-         *
-         * ---------------------------------------------------------------------
-         * 🔷 SYNCHRONOUS API
-         * ---------------------------------------------------------------------
-         *
-         * This method does not wait for initialization to complete and does not return
-         * a promise.
-         *
-         * It only ensures that the required initialization task exists in the queue.
-         * The queue is responsible for executing the asynchronous initialization
-         * before subsequent screen operations.
+         * This function returns void immediately. It only ensures that the
+         * one-time task is present or that initialization has already begun;
+         * the task queue performs the asynchronous work before dependent
+         * screen operations.
          *
          * @since 1.0.0
          */
         ensureScreenInitialized: () => {
             const ct = ZexiTerminal.#_ct;
-            const init = ct.screenEngine.initializer;
 
             if (
                 ct.queue.hasTask(CURSOR_INITIALIZATION_ID) ||
-                init.initState !== 'STANDBY'
+                terminalIO.initState !== 'STANDBY'
             ) {
-                return
+                return;
             }
 
             ct.queue.addTask({
@@ -661,7 +308,7 @@ export class ZexiTerminal {
                 priority: 0,
                 type: 'initialization',
                 action: async () => {
-                    await init.initialize();
+                    await terminalIO.initialize();
                 },
                 onReject: (err: Error) => {
                     const red = (text: string) => consoleStyler.format(text, { color: 'red' });
@@ -677,7 +324,7 @@ export class ZexiTerminal {
                         String(err)
                     ].join('\n');
 
-                    this.#_helpers.logging.logLevel('fatal', { message: errMsg, error: err }, { print: false });
+                    this.#_logService.fatal({ message: errMsg, error: err }, { print: false });
                     process.stderr.write(errMsg);
                 }
             });
@@ -690,7 +337,7 @@ export class ZexiTerminal {
      * Event subscriptions are backed by the shared terminal event system,
      * meaning listeners registered through one `ZexiTerminal` instance can
      * receive events emitted through another instance.
-     * 
+     *
      * @since 1.0.0
      */
     readonly events = {
@@ -902,9 +549,11 @@ export class ZexiTerminal {
      * The clear operation is added to the terminal task queue so that it is
      * serialized with other screen-engine operations.
      *
-     * Before scheduling the operation, cursor-position initialization is ensured.
-     * This allows the screen engine to restore and clear the terminal relative to
-     * the position captured before Zexi began managing terminal output.
+     * Before scheduling the operation, terminal I/O initialization is ensured
+     * through the shared queue. The screen engine then moves to row zero,
+     * column zero and clears that line and all rows below it before resetting
+     * its terminal object model. This erases the active screen from its
+     * origin; it is not limited to output previously written by Zexi.
      *
      * ---------------------------------------------------------------------
      * 🔷 QUEUED EXECUTION
@@ -914,9 +563,10 @@ export class ZexiTerminal {
      *
      * Instead:
      *
-     * - cursor-position initialization is ensured
+     * - terminal I/O initialization is ensured
      * - a clear task is added to the shared terminal queue
-     * - the queued task clears the screen through the screen engine
+     * - the queued task clears the active screen from its origin and resets
+     *   the screen engine's managed entries
      * - a `clear` event is emitted after the screen has been cleared
      *
      * The clear task is executed with priority `3`.
@@ -979,7 +629,7 @@ export class ZexiTerminal {
      * @since 1.0.0
      */
     fatal(value: unknown, options?: TerminalLogOptions): void {
-        return this.#_helpers.logging.logLevel('fatal', value, options);
+        return this.#_logService.fatal(value, options);
     }
 
     /**
@@ -998,7 +648,7 @@ export class ZexiTerminal {
      * @since 1.0.0
      */
     error(value: unknown, options?: TerminalLogOptions): void {
-        return this.#_helpers.logging.logLevel('error', value, options);
+        return this.#_logService.error(value, options);
     }
 
     /**
@@ -1017,7 +667,7 @@ export class ZexiTerminal {
      * @since 1.0.0
      */
     warn(value: unknown, options?: TerminalLogOptions): void {
-        return this.#_helpers.logging.logLevel('warn', value, options);
+        return this.#_logService.warn(value, options);
     }
 
     /**
@@ -1035,7 +685,7 @@ export class ZexiTerminal {
      * @since 1.0.0
      */
     info(value: unknown, options?: TerminalLogOptions): void {
-        return this.#_helpers.logging.logLevel('info', value, options);
+        return this.#_logService.info(value, options);
     }
 
     /**
@@ -1053,7 +703,7 @@ export class ZexiTerminal {
      * @since 1.0.0
      */
     debug(value: unknown, options?: TerminalLogOptions): void {
-        return this.#_helpers.logging.logLevel('debug', value, options);
+        return this.#_logService.debug(value, options);
     }
 
     /**
@@ -1172,12 +822,12 @@ export class ZexiTerminal {
      */
     createEntry(
         entryOptions: TerminalCellOptions,
-        logOptions?: TerminalEntryLogOptions
-    ): Promise<TerminalEntry> {
+        logOptions?: TerminalCellLogOptions
+    ): Promise<TerminalCell> {
         this.#_helpers.ensureScreenInitialized();
 
-        return new Promise<TerminalEntry>((resolve, reject) => {
-            const task: TerminalEntryCellTask = {
+        return new Promise<TerminalCell>((resolve, reject) => {
+            const task: TerminalCellTask = {
                 priority: 1,
                 type: 'logging',
                 action: () => {
@@ -1186,10 +836,10 @@ export class ZexiTerminal {
                 onResolve: (entry) => {
                     if (logOptions?.log === true) {
                         const level = logOptions.level ?? 'info';
-                        this.#_entriesLogger(entry.value, { log: true, level });
+                        this.#_cellsLogger(entry.value, { log: true, level });
                     }
 
-                    TerminalEntry.attachLogger(entry, this.#_entriesLogger);
+                    TerminalCell.attachLogger(entry, this.#_cellsLogger);
                     resolve(entry)
                 },
                 onReject: reject
@@ -1203,7 +853,7 @@ export class ZexiTerminal {
      * Prompts the user for interactive terminal input and resolves with the
      * captured value.
      *
-     * The prompt creates or reuses a {@link TerminalEntry} to display the
+     * The prompt creates or reuses a {@link TerminalCell} to display the
      * interaction and internally uses the STDIN capture system to collect the
      * user's input.
      *
@@ -1221,7 +871,7 @@ export class ZexiTerminal {
      * The `${input}` parameter is updated as the user types. Once the prompt
      * completes, the entry created by this method is automatically finalized.
      *
-     * When an existing {@link TerminalEntry} is supplied through `entry`, that
+     * When an existing {@link TerminalCell} is supplied through `entry`, that
      * entry is reused instead. The supplied entry is **not** finalized by
      * `prompt()`, allowing the caller to update or finalize it after the prompt
      * completes.
@@ -1479,7 +1129,7 @@ export class ZexiTerminal {
      * input is captured.
      *
      * @param prompt.entry
-     * An existing {@link TerminalEntry} to use for displaying the prompt.
+     * An existing {@link TerminalCell} to use for displaying the prompt.
      *
      * The entry must contain an `input` parameter. That parameter is updated as
      * the user types.
@@ -1546,11 +1196,13 @@ export class ZexiTerminal {
      * if (value !== null) {
      *     terminal.info(`You entered: ${value}`);
      * }
+     *
+     * @since 1.0.0
      */
     async prompt(
         prompt?: TerminalPromptOptions
     ): Promise<string | null> {
-        const isExternalEntry = prompt?.entry instanceof TerminalEntry;
+        const isExternalEntry = prompt?.entry instanceof TerminalCell;
 
         const entry = await (() => {
             if (isExternalEntry) {
@@ -1574,12 +1226,13 @@ export class ZexiTerminal {
             });
         })();
 
-        const value = await new StdinCapture(entry, {
+
+        const value = await terminalIO.input.capture(entry, {
             privacy: prompt?.privacy,
             escapeBehavior: prompt?.escapeBehavior,
             timeoutAfter: prompt?.timeoutAfter,
             onCustomValidation: prompt?.onCustomValidation
-        }).capture();
+        });
 
         if (!isExternalEntry) {
             entry.finalize();
@@ -1654,7 +1307,7 @@ export class ZexiTerminal {
      * 🔷 TERMINAL ENTRY
      * ---------------------------------------------------------------------
      *
-     * When `options.entry` is provided with a {@link TerminalEntry}, the existing
+     * When `options.entry` is provided with a {@link TerminalCell}, the existing
      * entry is used to display and update the confirmation. The caller remains
      * responsible for managing the lifecycle of that entry.
      *
@@ -1795,7 +1448,7 @@ export class ZexiTerminal {
      *
      * @throws {SyntaxError}
      * Thrown when `message` is an empty or whitespace-only string.
-     * 
+     *
      * @since 1.0.0
      */
     async confirm(
@@ -1826,7 +1479,7 @@ export class ZexiTerminal {
             }
         });
 
-        const isExternalEntry = options?.entry instanceof TerminalEntry;
+        const isExternalEntry = options?.entry instanceof TerminalCell;
         const template = `${message} [${choiceLabels.yes.styled}/${choiceLabels.no.styled}]: ` + '${input}';
         const entry = await (() => {
             if (isExternalEntry) {
@@ -1842,7 +1495,7 @@ export class ZexiTerminal {
             });
         })();
 
-        const answer = await new StdinCapture(entry, {
+        const answer = await terminalIO.input.capture(entry, {
             escapeBehavior: 'ignore',
             timeoutAfter: options?.timeoutAfter,
             onCustomValidation: (value, reject) => {
@@ -1887,7 +1540,7 @@ export class ZexiTerminal {
 
                 reject(`Please enter '${choiceLabels.yes.value}' to accept or '${choiceLabels.no.value}' to reject.`);
             }
-        }).capture();
+        });
 
         try {
             if (answer === null) {
@@ -1915,5 +1568,19 @@ export class ZexiTerminal {
     }
 }
 
+/**
+ * The process-wide Zexi terminal instance.
+ *
+ * This singleton is the package's primary terminal API for logging, events,
+ * prompts, confirmations, and managed screen operations. It shares the
+ * terminal controller, screen engine, event system, and terminal I/O
+ * coordinator with any additional {@link ZexiTerminal} instances.
+ *
+ * Use this instance for ordinary terminal operations. Create a
+ * {@link ZexiTerminal} explicitly only when per-instance terminal
+ * configuration, such as a separate log level, is needed.
+ *
+ * @since 1.0.0
+ */
 const zexiTerminal = new ZexiTerminal();
 export default zexiTerminal;

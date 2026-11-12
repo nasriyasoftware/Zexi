@@ -1,5 +1,5 @@
-import type { PropertyToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/property.token";
-import ObjectCache from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/assets/object.cache";
+import type { PropertyToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/property.token";
+import ObjectCache from "@/core/terminal/pipeline/4-rendering/renderers/json/assets/object.cache";
 
 describe("ObjectCache", () => {
 

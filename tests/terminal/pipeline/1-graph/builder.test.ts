@@ -1,7 +1,7 @@
-import GraphBuilder from "../../../../src/core/terminal/pipeline/1-graphing/builder";
-import GRAPH_NODES from "../../../../src/core/terminal/pipeline/1-graphing/nodes";
+import GraphBuilder from "@/core/terminal/pipeline/1-graphing/builder";
+import GRAPH_NODES from "@/core/terminal/pipeline/1-graphing/nodes";
 
-import CircularReferenceError from "../../../../src/core/terminal/pipeline/1-graphing/identity/circular.error";
+import CircularReferenceError from "@/core/terminal/pipeline/1-graphing/identity/circular.error";
 
 const throwConfig = {
     cycles: 'throw' as const,

@@ -1,4 +1,4 @@
-import { PropertyToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/property.token";
+import { PropertyToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/property.token";
 
 describe("PropertyToken", () => {
     it("stores property name correctly", () => {

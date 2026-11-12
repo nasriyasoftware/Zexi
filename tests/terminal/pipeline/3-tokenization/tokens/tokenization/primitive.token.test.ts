@@ -1,5 +1,5 @@
-import { PrimitiveToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/primitive.token";
-import { ANSI } from "../../../../../../src/core/terminal/styling/ansi";
+import { PrimitiveToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/primitive.token";
+import { ANSI } from "@/core/terminal/styling/ansi";
 
 describe("PrimitiveToken (semantic)", () => {
 
@@ -48,7 +48,7 @@ describe("PrimitiveToken (semantic)", () => {
 
         const token = new PrimitiveToken("object" as any, obj as any);
 
-        expect(token.value).toBe(obj);
+        expect(token.value).toBe(obj as any);
     });
 
     it("from() correctly bridges representation node to token", () => {
@@ -80,7 +80,7 @@ describe("PrimitiveToken (ansi integration)", () => {
         expect(token.ansi).toBeDefined();
     });
 
-    it("allows assigning ANSI color jest. meta", () => {
+    it("allows assigning ANSI color with meta", () => {
         const token = new PrimitiveToken("string", "hello");
 
         token.ansi.assign("color", ANSI.color.fg.normal.red);

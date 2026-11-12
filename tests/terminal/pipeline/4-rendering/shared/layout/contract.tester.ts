@@ -1,19 +1,19 @@
-import ZexiRenderingContext from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
-import LayoutResolver from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/layout/resolver";
+import ZexiRenderingContext from "@/core/terminal/pipeline/4-rendering/shared/context/context";
+import LayoutResolver from "@/core/terminal/pipeline/4-rendering/shared/layout/resolver";
 import type contracts from "./contracts";
-import type { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 
 type Contract = typeof contracts[number][1];
 
 /**
- * Test-only helper for validating layout resolution behajest.r.
+ * Test-only helper for validating layout resolution behaviour.
  *
  * ---------------------------------------------------------------------
  * 🔷 PURPOSE
  * ---------------------------------------------------------------------
  *
  * This class is a **test infrastructure utility** used to validate the
- * behajest.r of `LayoutResolver` against contract-defined token streams.
+ * behaviour of `LayoutResolver` against contract-defined token streams.
  *
  * It does not belong to production code and exists solely under the
  * `tests/` boundary.
@@ -22,7 +22,7 @@ type Contract = typeof contracts[number][1];
  *
  * - construct a rendering context from pre-tokenized inputs
  * - align traversal state with production execution assumptions
- * - execute layout resolution in a controlled enjest.onment
+ * - execute layout resolution in a controlled environment
  * - assert deterministic layout outcomes (`inline` vs `block`)
  *
  * ---------------------------------------------------------------------
@@ -47,7 +47,7 @@ type Contract = typeof contracts[number][1];
  * this.#_ctx.tokens.next();
  * ```
  *
- * This is intentional and required to mirror production behajest.r.
+ * This is intentional and required to mirror production behaviour.
  *
  * It ensures that:
  *
@@ -56,7 +56,7 @@ type Contract = typeof contracts[number][1];
  * - layout resolution runs under the same assumptions as the renderer
  *
  * Without this step, tests would execute in an invalid traversal state
- * (`cursor === -1`), which does not represent real runtime behajest.r.
+ * (`cursor === -1`), which does not represent real runtime behaviour.
  *
  * This is not a workaround — it is a deliberate alignment with the
  * renderer’s execution contract.
@@ -74,13 +74,13 @@ type Contract = typeof contracts[number][1];
  * Those responsibilities belong to:
  *
  * - tokenizer tests (structure correctness)
- * - resolver tests (behajest.r correctness)
+ * - resolver tests (behaviour correctness)
  *
  * ---------------------------------------------------------------------
  * 🔷 DESIGN NOTE
  * ---------------------------------------------------------------------
  *
- * The goal of this helper is to eliminate boilerplate while preserjest.g
+ * The goal of this helper is to eliminate boilerplate while preserving
  * strict equivalence with production traversal semantics.
  * 
  * @internal

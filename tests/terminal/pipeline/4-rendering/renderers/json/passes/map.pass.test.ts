@@ -1,9 +1,9 @@
-import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
-import JSONHelpers from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/helpers";
-import ZexiRenderingContext from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
+import JSONTokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
+import JSONHelpers from "@/core/terminal/pipeline/4-rendering/renderers/json/helpers/helpers";
+import ZexiRenderingContext from "@/core/terminal/pipeline/4-rendering/shared/context/context";
 
-import type { JSONPipelineFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import type { JSONPipelineFlags } from "@/core/terminal/pipeline/4-rendering/renderers/json/types";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 
 describe("mapPass (integration)", () => {
 

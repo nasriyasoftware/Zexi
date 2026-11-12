@@ -1,5 +1,5 @@
-import MapGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/map.node";
-import PrimitiveGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/primitive.node";
+import MapGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/map.node";
+import PrimitiveGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/primitive.node";
 
 describe("MapGraphNode", () => {
 

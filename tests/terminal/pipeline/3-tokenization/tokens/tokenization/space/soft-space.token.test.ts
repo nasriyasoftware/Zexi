@@ -1,4 +1,4 @@
-import { SoftSpaceToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/space";
+import { SoftSpaceToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/space";
 
 describe("SoftSpaceToken", () => {
     it("creates a token with kind 'soft-space'", () => {

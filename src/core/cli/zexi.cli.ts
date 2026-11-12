@@ -97,5 +97,14 @@ class ZexiCLI {
     }
 }
 
+/**
+ * The process-wide factory for creating Zexi CLI applications and commands.
+ *
+ * Access it through the package's `cli` API to create root applications,
+ * static commands, dynamic commands, and delegator commands. The factory
+ * itself retains no per-application runtime state.
+ *
+ * @since 1.0.0
+ */
 const zexiCLI = new ZexiCLI();
 export default zexiCLI;

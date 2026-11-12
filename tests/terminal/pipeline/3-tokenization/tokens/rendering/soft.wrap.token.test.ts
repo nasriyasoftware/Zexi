@@ -1,4 +1,4 @@
-import { SoftWrapToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/rendering/soft.wrap.token";
+import { SoftWrapToken } from "@/core/terminal/pipeline/3-tokenization/tokens/rendering/soft.wrap.token";
 
 describe("SoftWrapToken", () => {
     it("creates a soft-wrap token with correct name", () => {

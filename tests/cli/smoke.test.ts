@@ -1,5 +1,5 @@
 import zexi from "../../src";
-import terminalIO from "../../src/core/terminal/io/terminal.io";
+import terminalIO from "@/core/terminal/io";
 import StdMocks from "../mocks/std";
 
 describe("Zexi CLI Smoke Tests", () => {
@@ -10,8 +10,8 @@ describe("Zexi CLI Smoke Tests", () => {
     afterEach(() => {
         mock.restore();
 
-        if (!terminalIO.intercepting) {
-            terminalIO.intercepting = true;
+        if (!terminalIO.output.interception.intercepting) {
+            terminalIO.output.interception.intercepting = true;
         }
     });
 

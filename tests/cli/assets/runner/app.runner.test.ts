@@ -1,10 +1,10 @@
 import zexi from "../../../../src";
-import CLICommand from "../../../../src/core/cli/kernal/assets/command/core/cli.command";
-import CLIOption from "../../../../src/core/cli/kernal/assets/option/option";
-import AppRunner from "../../../../src/core/cli/kernal/assets/runner/app.runner";
-import ZexiApp from "../../../../src/core/cli/kernal/assets/app/app";
-import { ZexiCommandSymbol } from "../../../../src/core/cli/kernal/assets/keys";
-import type { CommandContext } from "../../../../src/core/cli/kernal/assets/runner/context/cmd.context";
+import CLICommand from "@/core/cli/kernal/assets/command/core/cli.command";
+import CLIOption from "@/core/cli/kernal/assets/option/option";
+import AppRunner from "@/core/cli/kernal/assets/runner/app.runner";
+import ZexiApp from "@/core/cli/kernal/assets/app/app";
+import { ZexiCommandSymbol } from "@/core/cli/kernal/assets/keys";
+import type { CommandContext } from "@/core/cli/kernal/assets/runner/context/cmd.context";
 
 const makeArgv = (args: string[]) => {
     process.argv = ["node", "test", ...args];

@@ -1,4 +1,4 @@
-import consoleStyler from "../../../src/core/terminal/styling/styler";
+import consoleStyler from "@/core/terminal/styling/styler";
 import StdInputMock from "./std.input";
 import StdOutputMock from "./std.output";
 import type { ExpectPublicOptions, InputCMDs, MockedCall, OutputCMDs, StdInput, StdOutput } from "./types";
@@ -21,17 +21,15 @@ class StdController {
                         `\x1b[${CURSOR_POSITION_RESPONSE.row};${CURSOR_POSITION_RESPONSE.column}R`
                     );
                 }, 100);
+            },
+            terminalSizeQuery: () => {
+                setTimeout(() => {
+                    this.#_helpers.emitToStdin('\x1b[8;24;80t');
+                }, 0);
             }
         },
         emitToStdin: (data: string) => {
-            this.getCalls(call =>
-                call.source === 'stdin' &&
-                (call.command === 'on' || call.command === 'once') &&
-                call.args[0] === 'data'
-            ).forEach(call => {
-                const [, listener] = call.args;
-                listener?.(Buffer.isBuffer(data) ? data : Buffer.from(data));
-            });
+            this.#_stds.in.emit('data', Buffer.from(data));
         }
     }
 
@@ -46,18 +44,19 @@ class StdController {
         this.#_calls.push(call);
 
         if (
-            call.command === 'emit' &&
-            call.source === 'stdin'
-        ) {
-            this.#_helpers.emitToStdin(call.args[1]);
-        }
-
-        if (
             call.command === 'write' &&
             call.source === 'stdout' &&
             call.args[0] === '\x1b[6n'
         ) {
             this.#_helpers.respondTo.cursorPositionQuery();
+        }
+
+        if (
+            call.command === 'write' &&
+            call.source === 'stdout' &&
+            call.args[0] === '\x1b[18t'
+        ) {
+            this.#_helpers.respondTo.terminalSizeQuery();
         }
     }
 

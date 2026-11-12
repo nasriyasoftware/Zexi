@@ -65,11 +65,11 @@
   "license": "NPCL-2.0",
   "author": "Nasriya Software",
   "devDependencies": {
-    "@types/bun": "^1.4.2",
+    "@types/bun": "^1.4.4",
     "@types/jest": "^30.0.0",
-    "@types/node": "^25.6.0"
+    "@types/node": "^26.6.5"
   },
   "dependencies": {
-    "@nasriya/atomix": "^1.0.25"
+    "@nasriya/atomix": "^1.0.27"
   }
 }

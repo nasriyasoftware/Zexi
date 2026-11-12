@@ -1,8 +1,8 @@
-import ZexiApp from "../../../../src/core/cli/kernal/assets/app/app";
-import CLICommand from "../../../../src/core/cli/kernal/assets/command/core/cli.command";
-import CLIOption from "../../../../src/core/cli/kernal/assets/option/option";
-import CommandContext from "../../../../src/core/cli/kernal/assets/runner/context/cmd.context";
-import { ZexiCommandSymbol } from "../../../../src/core/cli/kernal/assets/keys";
+import ZexiApp from "@/core/cli/kernal/assets/app/app";
+import CLICommand from "@/core/cli/kernal/assets/command/core/cli.command";
+import CLIOption from "@/core/cli/kernal/assets/option/option";
+import CommandContext from "@/core/cli/kernal/assets/runner/context/cmd.context";
+import { ZexiCommandSymbol } from "@/core/cli/kernal/assets/keys";
 
 
 const makeContext = (path: string[] = ["root"]): CommandContext =>

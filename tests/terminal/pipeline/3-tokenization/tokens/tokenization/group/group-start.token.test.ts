@@ -1,4 +1,4 @@
-import { GroupStartToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/group";
+import { GroupStartToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/group";
 
 describe("GroupStartToken", () => {
 

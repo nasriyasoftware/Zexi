@@ -1,4 +1,4 @@
-import { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 import { Contract, DeferredStream, GenerateFunctions, PropItem } from "./types";
 /**
  * Envelope tokenization contracts.

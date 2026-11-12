@@ -1,8 +1,8 @@
-import type { EnvelopeKind } from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/types";
-import type { Token } from "../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import type { EnvelopeKind } from "@/core/terminal/pipeline/4-rendering/shared/envelope/types";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 
-import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
-import DataEnvelope from "../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
+import TOKENS from "@/core/terminal/pipeline/3-tokenization/tokens";
+import DataEnvelope from "@/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
 
 import contracts from "./assets/contracts";
 import _tokenization from "../../../3-tokenization/helpers/helpers";
@@ -154,7 +154,7 @@ describe("DataEnvelope", () => {
     });
 
     describe("serialization", () => {
-        it("serializes correctly jest. JSON.stringify", () => {
+        it("serializes correctly with JSON.stringify", () => {
             const env = new DataEnvelope("regex", {
                 pattern: "abc",
                 flags: "gi"
@@ -517,8 +517,8 @@ describe("DataEnvelope", () => {
                                 trailing: Token[];
                             }
 
-                            expect(stream.start).toEqual(_tokenization.extractKinds(result.tokens.start));
-                            expect(stream.trailing).toEqual(_tokenization.extractKinds(result.tokens.trailing));
+                            expect(stream.start).toEqual(_tokenization.extractKinds(result.tokens.start) as any);
+                            expect(stream.trailing).toEqual(_tokenization.extractKinds(result.tokens.trailing) as any);
 
                             expect(result.tokens.start[result.tokens.start.length - 1]).toBeInstanceOf(TOKENS.Anchor);
                             expect(result.tokens.trailing[0]).toBeInstanceOf(TOKENS.Anchor);

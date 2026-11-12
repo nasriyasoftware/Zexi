@@ -1,8 +1,8 @@
 import _tokenization from "../helpers/helpers";
-import DefaultTokenizer from "../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/default.tokenizer";
-import TOKENS from "../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
-import CircularReferenceError from "../../../../../src/core/terminal/pipeline/1-graphing/identity/circular.error";
-import type { Token } from "../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import DefaultTokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizers/default.tokenizer";
+import TOKENS from "@/core/terminal/pipeline/3-tokenization/tokens";
+import CircularReferenceError from "@/core/terminal/pipeline/1-graphing/identity/circular.error";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 
 describe("DefaultTokenizer", () => {
     const primitives = ["Ahmad", 123, true, false, null, undefined, Symbol("test")]
@@ -57,7 +57,7 @@ describe("DefaultTokenizer", () => {
             const token = tokens[0] as InstanceType<typeof TOKENS.Primitive>;
 
             expect(token.kind).toBe("primitive");
-            expect(token.type).toBe(type);
+            expect(token.type).toBe(type as any);
             expect(token.value).toBe(value);
         })
 
@@ -415,7 +415,7 @@ describe("DefaultTokenizer", () => {
                 ])
             });
 
-            it("tokenizes objects preserjest.g insertion order", () => {
+            it("tokenizes objects preserving insertion order", () => {
                 const tokens = tokenize({ z: 1, a: 2, m: 3 });
                 const kinds = _tokenization.extractKinds(tokens);
 

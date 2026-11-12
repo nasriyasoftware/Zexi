@@ -1,5 +1,5 @@
-import PrimitiveRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/primitive.node";
-import SetRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/set.node";
+import PrimitiveRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/primitive.node";
+import SetRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/set.node";
 
 describe("SetRepresentationNode", () => {
 
@@ -31,7 +31,7 @@ describe("SetRepresentationNode", () => {
 
     describe("factory", () => {
 
-        it("creates instance jest. create()", () => {
+        it("creates instance with create()", () => {
             const a = node("a");
             const b = node("b");
 
@@ -66,7 +66,7 @@ describe("SetRepresentationNode", () => {
 
     });
 
-    describe("behajest.r", () => {
+    describe("behaviour", () => {
 
         it("supports multiple items", () => {
             const set = SetRepresentationNode.create([
@@ -78,7 +78,7 @@ describe("SetRepresentationNode", () => {
             expect(set.items.length).toBe(3);
         });
 
-        it("reflects external array mutations (reference behajest.r)", () => {
+        it("reflects external array mutations (reference behaviour)", () => {
             const items = [node("a")];
 
             const set = SetRepresentationNode.create(items);

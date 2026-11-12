@@ -1,6 +1,6 @@
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
-import type { DEFERRED_BODY_ENVELOPES_VALUES } from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/consts";
-import type { EnvelopeKind, EnvelopeMap } from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/types";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
+import type { DEFERRED_BODY_ENVELOPES_VALUES } from "@/core/terminal/pipeline/4-rendering/shared/envelope/consts";
+import type { EnvelopeKind, EnvelopeMap } from "@/core/terminal/pipeline/4-rendering/shared/envelope/types";
 
 export type IsDeferred<K extends EnvelopeKind> = K extends typeof DEFERRED_BODY_ENVELOPES_VALUES[number] ? true : false;
 export type GenerateFunctions = {
@@ -104,7 +104,7 @@ export type DeferredStream = {
  *
  * The purpose is to detect *any* modification to the emitted token
  * stream, whether caused by implementation changes, refactors, layout
- * adjustments, ordering changes, or serializer behajest.r changes.
+ * adjustments, ordering changes, or serializer behaviour changes.
  *
  * Contract failures are expected whenever token emission changes.
  * Intentional changes should be accompanied by an update to the

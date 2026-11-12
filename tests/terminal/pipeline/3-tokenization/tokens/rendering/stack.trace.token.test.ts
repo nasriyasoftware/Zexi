@@ -1,5 +1,5 @@
-import { StackTraceToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/rendering/stack.trace.token";
-import { ErrorStartToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/error";
+import { StackTraceToken } from "@/core/terminal/pipeline/3-tokenization/tokens/rendering/stack.trace.token";
+import { ErrorStartToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/error";
 
 describe("StackTraceToken", () => {
 

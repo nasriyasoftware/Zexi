@@ -1,13 +1,13 @@
-import keys from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/keys";
+import keys from "@/core/terminal/pipeline/4-rendering/shared/keys";
 
-import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
-import ObjectCache from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/assets/object.cache";
-import JSONHelpers from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/helpers";
-import ZexiRenderingContext from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
+import JSONTokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
+import ObjectCache from "@/core/terminal/pipeline/4-rendering/renderers/json/assets/object.cache";
+import JSONHelpers from "@/core/terminal/pipeline/4-rendering/renderers/json/helpers/helpers";
+import ZexiRenderingContext from "@/core/terminal/pipeline/4-rendering/shared/context/context";
 
-import type { PropertyToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/property.token";
-import type { JSONPipelineFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import type { PropertyToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/property.token";
+import type { JSONPipelineFlags } from "@/core/terminal/pipeline/4-rendering/renderers/json/types";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 
 
 describe("objectPass (integration)", () => {
@@ -102,7 +102,7 @@ describe("objectPass (integration)", () => {
 
 
     /* -------------------------------------------------------- */
-    /* 5. NORMAL OBJECT BEHAjest.R                               */
+    /* 5. NORMAL OBJECT BEHAVIOUR                               */
     /* -------------------------------------------------------- */
 
     it("does not collapse valid objects", () => {

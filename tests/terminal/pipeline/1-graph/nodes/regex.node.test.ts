@@ -1,4 +1,4 @@
-import RegExpGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/regex.node";
+import RegExpGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/regex.node";
 
 describe("RegExpGraphNode", () => {
 
@@ -59,7 +59,7 @@ describe("RegExpGraphNode", () => {
 
     describe("static factory", () => {
 
-        it("creates equivalent node jest. create()", () => {
+        it("creates equivalent node with create()", () => {
             const regex = /factory/;
 
             const direct = new RegExpGraphNode(regex);
@@ -71,7 +71,7 @@ describe("RegExpGraphNode", () => {
 
     });
 
-    describe("behajest.r safety", () => {
+    describe("behaviour safety", () => {
 
         it("does not execute regex", () => {
             const regex = /a+/g;
@@ -81,7 +81,7 @@ describe("RegExpGraphNode", () => {
             expect(node.value.test("aaa")).toBe(true);
         });
 
-        it("does not preserve lastIndex behajest.r of original instance", () => {
+        it("does not preserve lastIndex behaviour of original instance", () => {
             const regex = /a/g;
             const node = new RegExpGraphNode(regex);
 

@@ -1,5 +1,5 @@
-import ArrayGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/array.node";
-import PrimitiveGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/primitive.node";
+import ArrayGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/array.node";
+import PrimitiveGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/primitive.node";
 
 describe("ArrayGraphNode", () => {
 

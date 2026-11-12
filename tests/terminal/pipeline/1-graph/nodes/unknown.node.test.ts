@@ -1,4 +1,4 @@
-import UnknownGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/unknown.node";
+import UnknownGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/unknown.node";
 
 describe("UnknownGraphNode", () => {
 
@@ -29,7 +29,7 @@ describe("UnknownGraphNode", () => {
 
     describe("static factory", () => {
 
-        it("creates node jest. factory method", () => {
+        it("creates node via factory method", () => {
             const value = new Date();
 
             const node = UnknownGraphNode.create(value);

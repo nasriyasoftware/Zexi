@@ -1,4 +1,4 @@
-import JSONTokenizer from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
+import JSONTokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
 import _tokenization from "../../../../3-tokenization/helpers/helpers";
 
 describe("JSONTokenizer - canonical object serialization", () => {

@@ -1,7 +1,7 @@
 
-import DebugRenderer from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/debug/renderer";
-import DefaultTokenizer from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/default.tokenizer";
-import type { DebugOptions } from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/debug/types";
+import DebugRenderer from "@/core/terminal/pipeline/4-rendering/renderers/debug/renderer";
+import DefaultTokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizers/default.tokenizer";
+import type { DebugOptions } from "@/core/terminal/pipeline/4-rendering/renderers/debug/types";
 
 describe("DebugRenderer", () => {
 

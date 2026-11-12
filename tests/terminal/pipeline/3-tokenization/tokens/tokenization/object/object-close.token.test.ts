@@ -1,4 +1,4 @@
-import { ObjectCloseToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/object";
+import { ObjectCloseToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/object";
 
 describe("ObjectCloseToken", () => {
     it("stores and exposes the closing delimiter", () => {

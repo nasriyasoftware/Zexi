@@ -1,6 +1,6 @@
-import TraversalDepth from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/traversal/traversal.depth";
-import ScopesController from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/scopes/scopes.controller";
-import RenderingWriter from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/writer/writer";
+import TraversalDepth from "@/core/terminal/pipeline/4-rendering/shared/context/traversal/traversal.depth";
+import ScopesController from "@/core/terminal/pipeline/4-rendering/shared/context/scopes/scopes.controller";
+import RenderingWriter from "@/core/terminal/pipeline/4-rendering/shared/context/writer/writer";
 
 describe("ScopesController", () => {
     // --------------------------------------------------
@@ -164,7 +164,7 @@ describe("ScopesController", () => {
     });
 
     // --------------------------------------------------
-    // Writer behajest.r
+    // Writer behaviour
     // --------------------------------------------------
 
     it("creates an isolated writer per scope", () => {
@@ -325,7 +325,7 @@ describe("ScopesController", () => {
     });
 
     // --------------------------------------------------
-    // getInherited behajest.r
+    // getInherited behaviour
     // --------------------------------------------------
 
     it("getInherited excludes current scope", () => {

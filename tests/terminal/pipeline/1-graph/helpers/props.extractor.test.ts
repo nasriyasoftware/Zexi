@@ -1,4 +1,4 @@
-import PropsExtractor from "../../../../../src/core/terminal/pipeline/1-graphing/helpers/props.extractor";
+import PropsExtractor from "@/core/terminal/pipeline/1-graphing/helpers/props.extractor";
 
 describe("PropsExtractor", () => {
     it("should be defined", () => {

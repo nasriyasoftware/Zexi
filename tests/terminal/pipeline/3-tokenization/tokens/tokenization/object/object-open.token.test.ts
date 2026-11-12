@@ -1,4 +1,4 @@
-import { ObjectOpenToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/object";
+import { ObjectOpenToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/object";
 
 describe("ObjectOpenToken", () => {
     it("stores and exposes the opening delimiter", () => {

@@ -1,4 +1,4 @@
-import { KeyValueSeparatorToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/key-value.separator";
+import { KeyValueSeparatorToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/key-value.separator";
 
 describe("KeyValueSeparatorToken", () => {
     it("defaults to ':' when no argument is provided", () => {
@@ -31,7 +31,7 @@ describe("KeyValueSeparatorToken", () => {
         expect(token.kind).toBe("key-value-separator");
     });
 
-    it("does not allow mutation of internal state jest. value", () => {
+    it("does not allow mutation of internal state with value", () => {
         const token = new KeyValueSeparatorToken("=>");
 
         expect(token.value).toBe("=>");
@@ -40,7 +40,7 @@ describe("KeyValueSeparatorToken", () => {
         expect(token.value).toBe(token.value);
     });
 
-    it("preserves constructor default behajest.r contract", () => {
+    it("preserves constructor default behaviour contract", () => {
         const defaultToken = new KeyValueSeparatorToken();
         const explicitToken = new KeyValueSeparatorToken(":");
 

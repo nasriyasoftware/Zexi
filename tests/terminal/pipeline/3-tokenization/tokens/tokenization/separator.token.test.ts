@@ -1,4 +1,4 @@
-import { SeparatorToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/separator.token";
+import { SeparatorToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/separator.token";
 
 describe("SeparatorToken", () => {
     it("defaults to ',' when no value is provided", () => {
@@ -34,7 +34,7 @@ describe("SeparatorToken", () => {
         expect(token.value).toBe(token.value);
     });
 
-    it("maintains consistent default behajest.r contract", () => {
+    it("maintains consistent default behaviour contract", () => {
         const defaultToken = new SeparatorToken();
         const explicitToken = new SeparatorToken(",");
 

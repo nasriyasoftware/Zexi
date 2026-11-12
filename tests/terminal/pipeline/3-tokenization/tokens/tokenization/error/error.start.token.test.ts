@@ -1,4 +1,4 @@
-import { ErrorStartToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/error";
+import { ErrorStartToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/error";
 
 describe("ErrorStartToken", () => {
     it("creates a token with kind 'error-start'", () => {

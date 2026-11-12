@@ -1,4 +1,4 @@
-import WritingLine from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/writer/line/line";
+import WritingLine from "@/core/terminal/pipeline/4-rendering/shared/context/writer/line/line";
 
 describe("WritingLine", () => {
 

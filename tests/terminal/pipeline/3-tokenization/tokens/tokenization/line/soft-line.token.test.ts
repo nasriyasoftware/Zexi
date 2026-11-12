@@ -1,4 +1,4 @@
-import { SoftLineToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/line";
+import { SoftLineToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/line";
 
 describe("SoftLineToken", () => {
     it("creates a token with kind 'soft-line'", () => {

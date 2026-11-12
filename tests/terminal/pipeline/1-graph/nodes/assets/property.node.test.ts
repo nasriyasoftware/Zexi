@@ -1,4 +1,4 @@
-import PropertyNode, { type PropertyKind } from "../../../../../../src/core/terminal/pipeline/1-graphing/nodes/assets/property.node";
+import PropertyNode, { type PropertyKind } from "@/core/terminal/pipeline/1-graphing/nodes/assets/property.node";
 
 describe("PropertyNode", () => {
 
@@ -36,7 +36,7 @@ describe("PropertyNode", () => {
 
     describe("immutability", () => {
 
-        it("does not allow mutation of name jest. external reassignment", () => {
+        it("does not allow mutation of name by external reassignment", () => {
             const node = new PropertyNode("id", "property");
 
             expect(() => {
@@ -45,7 +45,7 @@ describe("PropertyNode", () => {
             }).toThrow(TypeError);
         });
 
-        it("does not allow mutation of kind jest. external reassignment", () => {
+        it("does not allow mutation of kind by external reassignment", () => {
             const node = new PropertyNode("id", "property");
 
             expect(() => {
