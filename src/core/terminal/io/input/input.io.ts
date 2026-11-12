@@ -19,7 +19,7 @@ import type { StdinCaptureOptions, StdinHandler, StdinSession } from "./assets";
  *
  * @since 1.0.0
  */
-class TerminalInput {
+export class TerminalInput {
     /**
      * Serializes terminal protocol queries that consume stdin responses.
      *

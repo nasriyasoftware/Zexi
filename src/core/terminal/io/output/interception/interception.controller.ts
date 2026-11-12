@@ -27,7 +27,7 @@ import { Console } from 'node:console';
  *
  * @since 1.0.0
  */
-class ProcessStdInterception {
+export class ProcessStdInterception {
     /**
      * Tracks installation and active interception state.
      *

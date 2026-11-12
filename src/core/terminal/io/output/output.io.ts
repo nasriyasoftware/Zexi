@@ -45,7 +45,7 @@ import type { TerminalBufferEntry, WriteReturnType } from "./types";
  *
  * @since 1.0.0
  */
-class TerminalOutput {
+export class TerminalOutput {
     /**
      * Stores intercepted terminal writes received before the terminal becomes
      * ready.
