@@ -1,4 +1,4 @@
-import terminalIO from "./terminal.io.v2";
+import terminalIO from "./terminal.io";
 
 /**
  * Exposes the process-wide terminal I/O coordinator.
@@ -28,7 +28,7 @@ export * from './output/types';
  *
  * @since 1.0.0
  */
-export { ZexiTerminalIO } from "./terminal.io.v2";
+export { ZexiTerminalIO } from "./terminal.io";
 
 /**
  * The process-wide terminal I/O coordinator.
