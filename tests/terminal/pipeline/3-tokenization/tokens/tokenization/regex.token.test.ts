@@ -1,4 +1,4 @@
-import { RegExpToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/regex.token";
+import { RegExpToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/regex.token";
 
 describe("RegExpToken", () => {
     it("stores the original RegExp instance", () => {
@@ -52,7 +52,7 @@ describe("RegExpToken", () => {
         expect(token.value).toBe(regex);
     });
 
-    it("does not modify regex behajest.r", () => {
+    it("does not modify regex behaviour", () => {
         const regex = new RegExp("^test$", "i");
 
         const token = new RegExpToken(regex);

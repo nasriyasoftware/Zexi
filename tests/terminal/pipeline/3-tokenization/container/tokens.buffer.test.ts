@@ -1,4 +1,4 @@
-import TokensBuffer from "../../../../../src/core/terminal/pipeline/3-tokenization/container/tokens.buffer";
+import TokensBuffer from "@/core/terminal/pipeline/3-tokenization/container/tokens.buffer";
 
 // minimal token mock (since tokens are immutable in our system)
 const createToken = (id: string) => Object.freeze({ id }) as unknown as any;

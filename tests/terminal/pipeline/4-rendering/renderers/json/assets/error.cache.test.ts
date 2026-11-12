@@ -1,10 +1,10 @@
 
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
-import type { ErrorStartToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/error";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
+import type { ErrorStartToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/error";
 
-import ErrorCache, { ERROR_SECTIONS } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/assets/error.cache";
-import DataEnvelope from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
-import TOKENS from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
+import ErrorCache, { ERROR_SECTIONS } from "@/core/terminal/pipeline/4-rendering/renderers/json/assets/error.cache";
+import DataEnvelope from "@/core/terminal/pipeline/4-rendering/shared/envelope/data.envelope";
+import TOKENS from "@/core/terminal/pipeline/3-tokenization/tokens";
 
 import _tokenization from "../../../../3-tokenization/helpers/helpers";
 

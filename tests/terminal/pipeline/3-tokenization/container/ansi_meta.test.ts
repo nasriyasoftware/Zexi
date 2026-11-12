@@ -1,6 +1,6 @@
-import AnsiMeta from "../../../../../src/core/terminal/pipeline/3-tokenization/container/ansi_meta/ansi.meta";
-import { ANSI } from "../../../../../src/core/terminal/styling/ansi";
-import type { AnsiColor } from "../../../../../src/core/terminal/styling/types";
+import AnsiMeta from "@/core/terminal/pipeline/3-tokenization/container/ansi_meta/ansi.meta";
+import { ANSI } from "@/core/terminal/styling/ansi";
+import type { AnsiColor } from "@/core/terminal/styling/types";
 
 describe("AnsiMeta", () => {
 

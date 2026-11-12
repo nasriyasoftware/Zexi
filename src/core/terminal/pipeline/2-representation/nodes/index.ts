@@ -8,6 +8,14 @@ import PrimitiveRepresentationNode from "./primitive.node";
 import RegExpRepresentationNode from "./regex.node";
 import SetRepresentationNode from "./set.node";
 
+/**
+ * Registry of representation-node constructors keyed by graph-node kind.
+ *
+ * The representation builder uses this map to convert supported graph nodes
+ * into their corresponding output representation nodes.
+ *
+ * @since 1.0.0
+ */
 const REP_NODES = {
     Array: ArrayRepresentationNode,
     Date: DateRepresentationNode,

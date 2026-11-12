@@ -1,13 +1,13 @@
-import DefaultTokenizer from "../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/default.tokenizer";
-import JSONTokenizer from "../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
-import TOKENS from "../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
-import type { Token } from "../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import DefaultTokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizers/default.tokenizer";
+import JSONTokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
+import TOKENS from "@/core/terminal/pipeline/3-tokenization/tokens";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 
 /**
  * Extracts the `kind` field from every token in a token sequence.
  *
- * This helper projest.es a concise way to assert the structural shape of a
- * token stream without inspecting indijest.ual token instances.
+ * This helper provides a concise way to assert the structural shape of a
+ * token stream without inspecting individual token instances.
  *
  * It is primarily used when verifying token ordering or comparing the
  * overall structure produced by a tokenizer.
@@ -46,8 +46,8 @@ const expectPrimitive = (t: Token, value: unknown) => {
     const token = t as InstanceType<typeof TOKENS.Primitive>;
 
     expect(token).toBeInstanceOf(TOKENS.Primitive);
-    expect(token.value).toBe(value);
-    expect(token.type).toBe(value === null ? "null" : typeof value);
+    expect(token.value).toBe(value as any);
+    expect(token.type).toBe((value === null ? "null" : typeof value) as any);
 }
 
 /**
@@ -324,7 +324,7 @@ const expectEmptyObjectStructure = (tokens: Token[] | readonly Token[], classNam
  * Shared assertion helpers used by the tokenization test suites.
  *
  * These helpers encapsulate common structural assertions to keep the
- * indijest.ual test cases focused on behajest.r rather than repetitive token
+ * individual test cases focused on behaviour rather than repetitive token
  * validation logic.
  *
  * They intentionally verify both token ordering and important invariants

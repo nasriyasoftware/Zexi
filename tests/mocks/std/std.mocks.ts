@@ -1,4 +1,3 @@
-import consoleStyler from "../../../src/core/terminal/styling/styler";
 import ct from "./controller";
 import StdInputMock from "./std.input";
 import StdOutputMock from "./std.output";
@@ -419,6 +418,10 @@ class StdMocks {
 
         const content = parts.join('\n');
         process.stdout.write(content);
+    }
+
+    static get controller() {
+        return ct;
     }
 }
 

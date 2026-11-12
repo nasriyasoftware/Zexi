@@ -1,8 +1,8 @@
 
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 
-import TOKENS from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
-import MapEntryFrame from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/assets/map.entry.frame";
+import TOKENS from "@/core/terminal/pipeline/3-tokenization/tokens";
+import MapEntryFrame from "@/core/terminal/pipeline/4-rendering/renderers/json/assets/map.entry.frame";
 
 import _tokenization from "../../../../3-tokenization/helpers/helpers";
 

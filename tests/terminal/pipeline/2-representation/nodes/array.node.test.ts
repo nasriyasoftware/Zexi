@@ -1,5 +1,5 @@
-import ArrayRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/array.node";
-import type { RepresentationNode } from "../../../../../src/core/terminal/pipeline/2-representation/types";
+import ArrayRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/array.node";
+import type { RepresentationNode } from "@/core/terminal/pipeline/2-representation/types";
 
 describe("ArrayRepresentationNode", () => {
 
@@ -47,7 +47,7 @@ describe("ArrayRepresentationNode", () => {
             expect(node.name).toBe("Array");
         });
 
-        it("projest.es correct structural tokens", () => {
+        it("preserves correct structural tokens", () => {
             const node = new ArrayRepresentationNode([]);
 
             expect(node.openToken).toBe("[");
@@ -58,7 +58,7 @@ describe("ArrayRepresentationNode", () => {
 
     describe("factory", () => {
 
-        it("creates equivalent instance jest. create()", () => {
+        it("creates equivalent instance with create()", () => {
             const a = makeNode("a");
 
             const node = ArrayRepresentationNode.create([a]);
@@ -81,7 +81,7 @@ describe("ArrayRepresentationNode", () => {
 
     });
 
-    describe("behajest.r expectations", () => {
+    describe("behaviour expectations", () => {
 
         it("does not mutate input array", () => {
             const items = [makeNode("a"), makeNode("b")];

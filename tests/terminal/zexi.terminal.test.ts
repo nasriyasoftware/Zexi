@@ -1,9 +1,9 @@
-import terminalIO from '../../src/core/terminal/io/terminal.io';
-import zexiTerminal, { ZexiTerminal } from '../../src/core/terminal/zexi.terminal';
-import ZexiTerminalControllerInstance from '../../src/core/terminal/controller/controller';
+import terminalIO from '@/core/terminal/io';
+import zexiTerminal, { ZexiTerminal } from '@/core/terminal/zexi.terminal';
+import ZexiTerminalControllerInstance from '@/core/terminal/controller/controller';
 import StdMocks from '../mocks/std';
-import type { ZexiLogLevel } from '../../src/core/terminal/types';
-import type { TerminalEventName, TerminalLogEvent } from '../../src/core/terminal/events/types';
+import type { ZexiLogLevel } from '@/core/terminal/types';
+import type { TerminalEventName, TerminalLogEvent } from '@/core/terminal/events/types';
 
 type LogMethod = Extract<
     keyof ZexiTerminal,
@@ -163,7 +163,7 @@ describe("ZexiTerminal", () => {
         });
 
         it("prints when print is enabled", async () => {
-            const write = spyOn(terminalIO, "write").mockReturnValue(true);
+            const write = spyOn(terminalIO.output, "write").mockReturnValue(true);
 
             terminal.info("Hello");
 
@@ -173,7 +173,7 @@ describe("ZexiTerminal", () => {
         });
 
         it("prints messages at or above the configured level", async () => {
-            const write = spyOn(terminalIO, "write").mockReturnValue(true);
+            const write = spyOn(terminalIO.output, "write").mockReturnValue(true);
 
             const terminal = zexiTerminal.with({ logLevel: "warn" });
 
@@ -186,7 +186,7 @@ describe("ZexiTerminal", () => {
         });
 
         it("does not print messages below the configured level", async () => {
-            const write = spyOn(terminalIO, "write").mockReturnValue(true);
+            const write = spyOn(terminalIO.output, "write").mockReturnValue(true);
 
             const terminal = zexiTerminal.with({ logLevel: "warn" });
 
@@ -215,7 +215,7 @@ describe("ZexiTerminal", () => {
             const listener = mock();
             zexiTerminal.events.on("log.info", listener);
 
-            const write = spyOn(terminalIO, "write").mockReturnValue(true);
+            const write = spyOn(terminalIO.output, "write").mockReturnValue(true);
 
             zexiTerminal.info("Hello", { print: false });
 

@@ -1,6 +1,7 @@
 import atomix from "@nasriya/atomix";
 import keys from "../../shared/keys";
 import consoleStyler from "../../../../styling/styler";
+import terminalIO from "../../../../io";
 import TOKENS from "../../../3-tokenization/tokens";
 import JSONTokenizer from "../../../3-tokenization/tokenizers/json.tokenizer";
 import JSONHelpers from "./helpers/helpers";
@@ -132,7 +133,7 @@ class JSONRenderer {
      * Encapsulates:
      *
      * - layout resolution
-     * - abort handling
+     * - rendering-group rollback and layout recovery
      * - indentation restoration
      * - transformation orchestration
      * - envelope styling
@@ -278,7 +279,10 @@ class JSONRenderer {
 
         this.#_ctx = new ZexiRenderingContext(
             tokens,
-            { spaces: this.#_config.spaces, maxWidth }
+            {
+                spaces: this.#_config.spaces,
+                maxWidth: maxWidth ?? (this.#_mode === 'pretty' ? terminalIO.width : undefined)
+            }
         );
 
         this.#_helpers = new JSONHelpers({
@@ -315,7 +319,21 @@ class JSONRenderer {
      * - produce direct output (primitive, separator)
      * - mutate context (group, indent, scope)
      * - trigger structural rewrite (envelopes, regex, functions)
-     * - abort rendering and restart layout (inline → block)
+     * - abort an active rendering group and retry using block layout
+     *   when inline content overflows within a non-root scope
+     *
+     * ---------------------------------------------------------------------
+     * 🔷 INLINE OVERFLOW HANDLING
+     * ---------------------------------------------------------------------
+     *
+     * Inline-fit checks are performed only within non-root scopes.
+     *
+     * When a primitive cannot fit within the remaining inline space,
+     * the renderer delegates to the helper layer to abort the active
+     * rendering group and retry using block layout.
+     *
+     * Root-level primitives bypass this recovery mechanism because
+     * the root scope has no enclosing rendering group to abort.
      *
      * ---------------------------------------------------------------------
      * 🔷 STATEFUL BEHAVIOR
@@ -588,11 +606,14 @@ class JSONRenderer {
                         }
                     }
 
-                    const layout = this.#_helpers.getLayout();
-                    if (layout && layout === 'inline') {
-                        if (!this.#_ctx.writer.canFitInline(contentToWrite)) {
-                            this.#_helpers.resolvePrimitiveOverflow();
-                            continue rendering;
+                    if (!this.#_ctx.scopes.isRoot) {
+                        const layout = this.#_helpers.getLayout();
+
+                        if (layout && layout === 'inline') {
+                            if (!this.#_ctx.writer.canFitInline(contentToWrite)) {
+                                this.#_helpers.resolvePrimitiveOverflow();
+                                continue rendering;
+                            }
                         }
                     }
 

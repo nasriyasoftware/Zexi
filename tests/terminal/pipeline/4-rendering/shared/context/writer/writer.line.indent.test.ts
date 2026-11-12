@@ -1,4 +1,4 @@
-import LineIndent from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/writer/line/indent";
+import LineIndent from "@/core/terminal/pipeline/4-rendering/shared/context/writer/line/indent";
 
 describe("LineIndent", () => {
 
@@ -65,7 +65,7 @@ describe("LineIndent", () => {
         });
     });
 
-    describe("width behajest.r", () => {
+    describe("width behaviour", () => {
 
         it("returns 0 when pending", () => {
             const indent = new LineIndent();

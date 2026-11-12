@@ -1,4 +1,4 @@
-import { ObjectNameToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/object";
+import { ObjectNameToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/object";
 
 describe("ObjectNameToken", () => {
     it("stores and exposes a runtime class name", () => {

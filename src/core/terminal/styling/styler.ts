@@ -662,5 +662,14 @@ class ConsoleStyler {
     readonly tags = buildTags();
 }
 
+/**
+ * The process-wide console styling API.
+ *
+ * Use this instance to format text with the styling and color operations
+ * supported by Zexi. The package exposes it as `zexi.styler` and as the
+ * top-level `styler` export.
+ *
+ * @since 1.0.0
+ */
 const consoleStyler = new ConsoleStyler();
 export default consoleStyler;

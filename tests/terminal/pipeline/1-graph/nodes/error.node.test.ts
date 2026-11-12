@@ -1,4 +1,4 @@
-import ErrorGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/error.node";
+import ErrorGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/error.node";
 
 describe("ErrorGraphNode", () => {
 
@@ -92,7 +92,7 @@ describe("ErrorGraphNode", () => {
 
             expect(data.name).toBe("Error");
 
-            // runtime immutability is expected behajest.r even if TS doesn't enforce it
+            // runtime immutability is expected behaviour even if TS doesn't enforce it
             expect(() => {
                 (data as any).name = "mutated";
             }).not.toThrow();

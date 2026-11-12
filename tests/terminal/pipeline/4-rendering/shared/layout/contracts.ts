@@ -1,4 +1,4 @@
-import { INLINE_SAFE_TOKENS as JSON_INLINE_SAFE_TOKENS } from "../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/configs";
+import { INLINE_SAFE_TOKENS as JSON_INLINE_SAFE_TOKENS } from "@/core/terminal/pipeline/4-rendering/renderers/json/configs";
 import _tokenization from "../../../3-tokenization/helpers/helpers";
 
 /**
@@ -7,7 +7,7 @@ import _tokenization from "../../../3-tokenization/helpers/helpers";
  * ---------------------------------------------------------------------
  *
  * This module defines **tokenization contracts** used to validate the
- * behajest.r of the LayoutResolver across multiple tokenizer implementations.
+ * behaviour of the LayoutResolver across multiple tokenizer implementations.
  *
  * Instead of testing a single renderer configuration in isolation, the
  * system defines reusable “contracts” that describe:
@@ -20,7 +20,7 @@ import _tokenization from "../../../3-tokenization/helpers/helpers";
  * 🔷 WHY THIS EXISTS
  * ---------------------------------------------------------------------
  *
- * Layout behajest.r is NOT purely renderer-specific.
+ * Layout behaviour is NOT purely renderer-specific.
  *
  * It depends on:
  * - token structure (Graph → Representation → Token stream)
@@ -56,7 +56,7 @@ import _tokenization from "../../../3-tokenization/helpers/helpers";
  * - Only JSON renderer has a fully specified inline-safe model today
  * - Other tokenizers reuse JSON semantics as a temporary baseline
  *
- * ⚠️ This is a known coupling point and should be rejest.ited once
+ * ⚠️ This is a known coupling point and should be registered once
  * non-JSON renderers define their own layout rules.
  *
  * ---------------------------------------------------------------------
@@ -114,7 +114,7 @@ const data = {
     /**
      * Reference JSON tokenizer contract.
      *
-     * - Defines canonical inline-safe behajest.r
+     * - Defines canonical inline-safe behaviour
      * - Serves as baseline for all layout decisions
      * - Strict structural semantics
      */

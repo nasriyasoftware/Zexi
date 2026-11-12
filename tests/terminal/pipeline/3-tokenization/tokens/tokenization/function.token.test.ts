@@ -1,4 +1,4 @@
-import { FunctionToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/function.token";
+import { FunctionToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/function.token";
 
 describe("FunctionToken", () => {
     it("stores the original function reference", () => {

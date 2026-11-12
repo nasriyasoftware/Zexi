@@ -1,4 +1,4 @@
-import DateGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/date.node";
+import DateGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/date.node";
 
 describe("DateGraphNode", () => {
 
@@ -26,7 +26,7 @@ describe("DateGraphNode", () => {
 
     describe("static factory", () => {
 
-        it("creates a DateGraphNode jest. factory", () => {
+        it("creates a DateGraphNode factory", () => {
             const date = new Date();
             const node = DateGraphNode.create(date);
 
@@ -47,9 +47,9 @@ describe("DateGraphNode", () => {
 
     });
 
-    describe("value behajest.r", () => {
+    describe("value behaviour", () => {
 
-        it("allows mutation of underlying Date object (JS behajest.r preserved)", () => {
+        it("allows mutation of underlying Date object (JS behaviour preserved)", () => {
             const date = new Date("2024-01-01T00:00:00.000Z");
             const node = new DateGraphNode(date);
 

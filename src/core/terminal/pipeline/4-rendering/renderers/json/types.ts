@@ -241,13 +241,19 @@ interface JsonPrettyOptions {
     spaces?: number;
 
     /**
-     * Maximum line width before layout engine forces a break.
+     * Maximum line width used by the pretty renderer when deciding whether
+     * structured values should remain inline or expand into multiple lines.
+     *
+     * When omitted, the renderer uses the current process-terminal width
+     * reported by `terminalIO`, including its initial stream-width or
+     * 80-column fallback before terminal-size detection completes. Supplying
+     * this option overrides that detected width for this render operation.
      *
      * Used for:
      * - inline vs block decisions
      * - array/object formatting strategy
      *
-     * @default Infinity
+     * @default Current terminal width
      * @since 1.0.0
      */
     maxWidth?: number;

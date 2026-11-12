@@ -1,5 +1,5 @@
-import clearLineInterceptor from "../../../../src/core/terminal/io/interceptors/clearLine";
-import terminalIO from "../../../../src/core/terminal/io/terminal.io";
+import clearLineInterceptor from "@/core/terminal/io/output/interception/interceptors/clearLine";
+import terminalIO from "@/core/terminal/io";
 
 describe('clearLineInterceptor()', () => {
     afterEach(() => {
@@ -10,7 +10,7 @@ describe('clearLineInterceptor()', () => {
         'forwards direction %i to terminalIO.clearLine()',
         (direction) => {
             const clearLine = vi
-                .spyOn(terminalIO, 'clearLine')
+                .spyOn(terminalIO.output, 'clearLine')
                 .mockReturnValue(true);
 
             expect(clearLineInterceptor(direction)).toBe(true);
@@ -24,7 +24,7 @@ describe('clearLineInterceptor()', () => {
         const callback = jest.fn();
 
         const clearLine = vi
-            .spyOn(terminalIO, 'clearLine')
+            .spyOn(terminalIO.output, 'clearLine')
             .mockReturnValue(true);
 
         clearLineInterceptor(1, callback);
@@ -35,7 +35,7 @@ describe('clearLineInterceptor()', () => {
 
     it('returns the result from terminalIO.clearLine()', () => {
         const clearLine = vi
-            .spyOn(terminalIO, 'clearLine')
+            .spyOn(terminalIO.output, 'clearLine')
             .mockReturnValue(false);
 
         expect(clearLineInterceptor(0)).toBe(false);

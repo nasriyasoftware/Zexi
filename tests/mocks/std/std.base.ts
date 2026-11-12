@@ -1,9 +1,12 @@
 import stdController from "./controller";
 import { mock } from "bun:test";
+import { EventEmitter } from "node:events";
 import type { StdOutput, StdInput, Std } from "./types";
 
 abstract class StdMockBase<T extends StdOutput | StdInput> {
     readonly #_type: T;
+    readonly #_dimensions = { rows: 24, columns: 80 };
+    readonly #_events = new EventEmitter();
 
     constructor(type: T) {
         this.#_type = type;
@@ -36,6 +39,8 @@ abstract class StdMockBase<T extends StdOutput | StdInput> {
             command: 'removeListener',
             args
         });
+
+        this.#_events.removeListener(args[0], args[1]);
     });
 
     on = mock((...args: Parameters<Std<T>['on']>) => {
@@ -44,6 +49,8 @@ abstract class StdMockBase<T extends StdOutput | StdInput> {
             command: 'on',
             args
         });
+
+        this.#_events.on(args[0], args[1]);
     });
 
     once = mock((...args: Parameters<Std<T>['once']>) => {
@@ -52,6 +59,8 @@ abstract class StdMockBase<T extends StdOutput | StdInput> {
             command: 'once',
             args
         });
+
+        this.#_events.once(args[0], args[1]);
     });
 
     emit = mock((...args: Parameters<Std<T>['emit']>) => {
@@ -60,6 +69,13 @@ abstract class StdMockBase<T extends StdOutput | StdInput> {
             command: 'emit',
             args
         });
+
+        if (args[0] === 'resize') {
+            this.#_dimensions.rows = args[1]?.rows || 24;
+            this.#_dimensions.columns = args[1]?.columns || 80;
+        }
+
+        return this.#_events.emit(args[0], ...args.slice(1));
     });
 
     off = mock((...args: Parameters<Std<T>['off']>) => {
@@ -68,6 +84,8 @@ abstract class StdMockBase<T extends StdOutput | StdInput> {
             command: 'off',
             args
         });
+
+        this.#_events.off(args[0], args[1]);
     });
 
     addListener = mock((...args: Parameters<Std<T>['addListener']>) => {
@@ -76,7 +94,12 @@ abstract class StdMockBase<T extends StdOutput | StdInput> {
             command: 'addListener',
             args
         });
+
+        this.#_events.addListener(args[0], args[1]);
     });
+
+    get columns() { return this.#_dimensions.columns; }
+    get rows() { return this.#_dimensions.rows; }
 }
 
 export default StdMockBase;

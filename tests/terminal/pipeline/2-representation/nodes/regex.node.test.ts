@@ -1,5 +1,5 @@
-import RegExpGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/regex.node";
-import RegExpRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/regex.node";
+import RegExpGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/regex.node";
+import RegExpRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/regex.node";
 
 describe("RegExpRepresentationNode", () => {
 
@@ -77,7 +77,7 @@ describe("RegExpRepresentationNode", () => {
 
     });
 
-    describe("semantic behajest.r", () => {
+    describe("semantic behaviour", () => {
 
         it("preserves regex flags correctly", () => {
             const regex = /abc/gim;

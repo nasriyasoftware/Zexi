@@ -1,14 +1,14 @@
-import ZexiRenderingContext from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/context";
-import JSONHelpers from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/helpers/helpers";
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
-import type { JSONPipelineFlags } from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/types";
+import ZexiRenderingContext from "@/core/terminal/pipeline/4-rendering/shared/context/context";
+import JSONHelpers from "@/core/terminal/pipeline/4-rendering/renderers/json/helpers/helpers";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
+import type { JSONPipelineFlags } from "@/core/terminal/pipeline/4-rendering/renderers/json/types";
 
-import TOKENS from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
-import objectPass from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/object.pass";
-import mapPass from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/map.pass";
-import setPass from "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/set.pass";
+import TOKENS from "@/core/terminal/pipeline/3-tokenization/tokens";
+import objectPass from "@/core/terminal/pipeline/4-rendering/renderers/json/passes/object.pass";
+import mapPass from "@/core/terminal/pipeline/4-rendering/renderers/json/passes/map.pass";
+import setPass from "@/core/terminal/pipeline/4-rendering/renderers/json/passes/set.pass";
 
-import LayoutResolver from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/layout/resolver";
+import LayoutResolver from "@/core/terminal/pipeline/4-rendering/shared/layout/resolver";
 
 import {
     createResolver,
@@ -19,7 +19,7 @@ import {
     forceBlock,
     resolvePrimitiveOverflow,
     getLayout
-} from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/utils";
+} from "@/core/terminal/pipeline/4-rendering/shared/utils";
 
 // -----------------------------------------------------
 // mocks
@@ -48,21 +48,21 @@ const mocks = {
 }
 
 mock.module(
-    "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/object.pass",
+    "@/core/terminal/pipeline/4-rendering/renderers/json/passes/object.pass",
     () => ({ default: mocks.objectPassMock })
 );
 
 mock.module(
-    "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/set.pass",
+    "@/core/terminal/pipeline/4-rendering/renderers/json/passes/set.pass",
     () => ({ default: mocks.setPassMock })
 );
 mock.module(
-    "../../../../../../../src/core/terminal/pipeline/4-rendering/renderers/json/passes/map.pass",
+    "@/core/terminal/pipeline/4-rendering/renderers/json/passes/map.pass",
     () => ({ default: mocks.mapPassMock })
 );
 
 mock.module(
-    "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/utils",
+    "@/core/terminal/pipeline/4-rendering/shared/utils",
     () => (mocks.utils)
 );
 

@@ -1,6 +1,6 @@
-import TokensController from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/tokens/tokens.controller";
-import { AnchorToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/rendering/anchor.token";
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import TokensController from "@/core/terminal/pipeline/4-rendering/shared/context/tokens/tokens.controller";
+import { AnchorToken } from "@/core/terminal/pipeline/3-tokenization/tokens/rendering/anchor.token";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 
 describe("TokensController", () => {
     // -----------------------------------------------------

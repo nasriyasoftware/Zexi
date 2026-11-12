@@ -1,5 +1,5 @@
-import FunctionGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/function.node";
-import FunctionRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/function.node";
+import FunctionGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/function.node";
+import FunctionRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/function.node";
 
 describe("FunctionRepresentationNode", () => {
 

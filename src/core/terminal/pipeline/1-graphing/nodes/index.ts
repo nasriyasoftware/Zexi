@@ -9,6 +9,15 @@ import RegExpGraphNode from "./regex.node"
 import SetGraphNode from "./set.node"
 import UnknownGraphNode from "./unknown.node"
 
+/**
+ * Registry of graph-node constructors keyed by supported source value kind.
+ *
+ * The graphing builder uses this map to select a node implementation for
+ * arrays, dates, errors, functions, maps, objects, primitives, regular
+ * expressions, sets, and unrecognized values.
+ *
+ * @since 1.0.0
+ */
 const GRAPH_NODES = {
     Array: ArrayGraphNode,
     Date: DateGraphNode,

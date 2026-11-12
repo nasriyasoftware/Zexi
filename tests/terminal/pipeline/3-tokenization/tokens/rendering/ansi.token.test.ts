@@ -1,4 +1,4 @@
-import { AnsiToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/rendering/ansi.token";
+import { AnsiToken } from "@/core/terminal/pipeline/3-tokenization/tokens/rendering/ansi.token";
 
 describe("AnsiToken", () => {
     it("creates a valid ANSI token with code and type", () => {

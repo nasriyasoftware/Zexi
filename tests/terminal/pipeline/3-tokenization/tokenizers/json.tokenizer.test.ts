@@ -1,7 +1,7 @@
 import _tokenization from "../helpers/helpers";
-import JSONTokenizer from "../../../../../src/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
-import TOKENS from "../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
-import CircularReferenceError from "../../../../../src/core/terminal/pipeline/1-graphing/identity/circular.error";
+import JSONTokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizers/json.tokenizer";
+import TOKENS from "@/core/terminal/pipeline/3-tokenization/tokens";
+import CircularReferenceError from "@/core/terminal/pipeline/1-graphing/identity/circular.error";
 
 describe("JSONTokenizer", () => {
 

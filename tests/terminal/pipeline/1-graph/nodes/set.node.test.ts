@@ -1,5 +1,5 @@
-import PrimitiveGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/primitive.node";
-import SetGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/set.node";
+import PrimitiveGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/primitive.node";
+import SetGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/set.node";
 
 describe("SetGraphNode", () => {
 
@@ -46,7 +46,7 @@ describe("SetGraphNode", () => {
             expect(node.value.has(c)).toBe(true);
         });
 
-        it("prevents duplicate references (Set behajest.r)", () => {
+        it("prevents duplicate references (Set behaviour)", () => {
             const node = new SetGraphNode();
 
             const item = PrimitiveGraphNode.create("dup");

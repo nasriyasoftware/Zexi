@@ -31,7 +31,7 @@ It provides a structured terminal environment where applications can:
 * Consume immutable JSON log events from application code.
 * Render terminal output using Zexi's rendering and styling system.
 
-Interactive input, dynamic entries, and screen operations are asynchronous and designed around queued terminal work, allowing terminal updates and interactive operations to be coordinated without directly manipulating the underlying terminal screen. Log methods are synchronous and return immediately after scheduling their terminal output and emitting the corresponding events.
+Interactive input, dynamic entries, and screen operations are asynchronous and designed around queued terminal work, allowing terminal updates and interactive operations to be coordinated without directly manipulating the underlying terminal screen. Log methods are synchronous: they initiate event delivery and schedule terminal output, but do not wait for either to complete.
 
 ## Contents
 
@@ -60,7 +60,7 @@ Interactive input, dynamic entries, and screen operations are asynchronous and d
   * [Clearing the Terminal](#clearing-the-terminal)
   * [Creating Isolated Terminal Instances](#creating-isolated-terminal-instances)
 * [Events](#events)
-* [Building CLI Applications](#building-cli-applications)
+* [Creating CLI Applications](#creating-cli-applications)
 * [Development and Testing](#development-and-testing)
 * [License](#license)
 
@@ -119,10 +119,22 @@ Zexi can also be used as a terminal infrastructure layer inside larger Node.js a
 
 ### Installation
 
-Install Zexi from npm:
+Install Zexi with your preferred package manager:
 
 ```bash
 npm install @nasriya/zexi
+```
+
+```bash
+pnpm add @nasriya/zexi
+```
+
+```bash
+yarn add @nasriya/zexi
+```
+
+```bash
+bun add @nasriya/zexi
 ```
 
 ### ESM
@@ -221,7 +233,7 @@ terminal.info('Information.', { ansi: false });
 
 Log methods are synchronous. They do not need to be awaited, while prompts, confirmations, and dynamic terminal-entry creation remain asynchronous.
 
-The `ansi` option applies only to that terminal operation. It does not disable ANSI processing globally and does not change the structured event emitted by Zexi. Use `ansi: false` when output is being redirected, captured by a test, written to a file, or consumed by a tool that expects plain text.
+The `ansi` option controls ANSI sequences in the event's `value.printable` representation and the corresponding log value. It leaves the event's `original` and `serialized` values unchanged, but `value.printable` reflects the option. It does not disable ANSI processing globally or guarantee that the entire printed line is ANSI-free; severity colors, metadata, or a trace may still contain ANSI sequences. Use `ansi: false` when the log value's printable representation should be plain.
 
 ---
 
@@ -369,11 +381,13 @@ The entry can then be updated:
 entry.update('Loading... 50%');
 ```
 
-And eventually finalized:
+Finalize the entry when its output is complete:
 
 ```ts
-entry.update('Loading complete.');
+entry.update('Loading complete.', { final: true });
 ```
+
+Alternatively, call `entry.finalize()` after the last update.
 
 Dynamic entries are useful for:
 
@@ -550,15 +564,9 @@ While asynchronous validation is running, further input is temporarily disabled.
 Applications can request explicit confirmation using `confirm()`:
 
 ```ts
-const confirmed = await terminal.confirm(
-    'Continue with the operation?'
-);
+const confirmed = await terminal.confirm('Continue with the operation?');
 
-if (confirmed === null) {
-    return;
-}
-
-if (confirmed) {
+if (confirmed === true) {
     await performOperation();
 }
 ```
@@ -572,12 +580,9 @@ Continue with the operation? [y/N]:
 A positive default can be selected:
 
 ```ts
-const confirmed = await terminal.confirm(
-    'Continue with the installation?',
-    {
-        default: true
-    }
-);
+const confirmed = await terminal.confirm('Continue with the installation?', {
+    default: true
+});
 ```
 
 This produces:
@@ -640,7 +645,13 @@ terminal.clear();
 
 The operation is queued through Zexi's terminal task system rather than directly manipulating the screen immediately.
 
-`clear()` schedules the screen operation synchronously and returns immediately. The screen mutation and corresponding `clear` event are processed asynchronously through Zexi's terminal task queue. Applications can schedule a following log operation immediately:
+The screen is cleared from its origin, including the current line and all rows
+below it. This can erase terminal output that predates Zexi's managed entries.
+
+`clear()` schedules the screen operation synchronously and returns immediately.
+The screen mutation and corresponding `clear` event are processed asynchronously
+through Zexi's terminal task queue. Applications can schedule a following log
+operation immediately:
 
 ```ts
 terminal.clear();
@@ -664,7 +675,7 @@ Before managing dynamic output or clearing the screen, Zexi initializes the term
 
 When the terminal supports cursor-position queries, Zexi preserves the existing terminal screen and renders from the position where it began managing output.
 
-If the cursor position cannot be determined safely, Zexi uses an alternate terminal screen to avoid overwriting existing output. The alternate screen is restored when Zexi finishes using it.
+If the cursor position cannot be determined safely, Zexi uses an alternate terminal screen to avoid overwriting existing output. Zexi registers cleanup to restore the original screen when the process exits or receives `SIGINT` or `SIGTERM`.
 
 Screen-based features require an interactive terminal. In non-interactive environments, such as some redirected or CI output streams, screen initialization may be unavailable. Applications that need portable non-interactive output should prefer ordinary logging and disable ANSI formatting when appropriate.
 

@@ -1,6 +1,6 @@
-import PropertyNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/assets/property.node";
-import ObjectRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/object.node";
-import PrimitiveRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/primitive.node";
+import PropertyNode from "@/core/terminal/pipeline/1-graphing/nodes/assets/property.node";
+import ObjectRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/object.node";
+import PrimitiveRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/primitive.node";
 
 describe("ObjectRepresentationNode", () => {
 
@@ -43,7 +43,7 @@ describe("ObjectRepresentationNode", () => {
 
     describe("factory", () => {
 
-        it("creates instance jest. static create()", () => {
+        it("creates instance with static create()", () => {
             const key = prop("name");
             const value = node("test");
 
@@ -63,7 +63,7 @@ describe("ObjectRepresentationNode", () => {
 
     });
 
-    describe("entries behajest.r", () => {
+    describe("entries behaviour", () => {
 
         it("supports multiple properties", () => {
             const k1 = prop("a");
@@ -88,7 +88,7 @@ describe("ObjectRepresentationNode", () => {
             expect(rep.entries.get(k2)).toBe(v2);
         });
 
-        it("reflects external map mutations (reference behajest.r)", () => {
+        it("reflects external map mutations (reference behaviour)", () => {
             const key = prop("x");
             const value = node(10);
 

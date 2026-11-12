@@ -1,4 +1,4 @@
-import FunctionGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/function.node";
+import FunctionGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/function.node";
 
 describe("FunctionGraphNode", () => {
 

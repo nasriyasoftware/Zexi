@@ -23,7 +23,7 @@ Zexi is not merely an argument parser. Its CLI API models the application as a c
 Application code should use Zexi's public API.
 
 ```ts
-import zexi from "zexi";
+import zexi from "@nasriya/zexi";
 ```
 
 Do not import Zexi's internal implementation modules directly.
@@ -41,6 +41,18 @@ The public `zexi` object is the API that application code should depend upon.
 When an exact API signature is uncertain, inspect the installed package's TypeScript declarations rather than inventing an API.
 
 ---
+
+## Installing Zexi
+
+Install the `@nasriya/zexi` package with the package manager used by the
+application:
+
+```sh
+npm install @nasriya/zexi
+pnpm add @nasriya/zexi
+yarn add @nasriya/zexi
+bun add @nasriya/zexi
+```
 
 # CLI
 
@@ -942,17 +954,14 @@ Do not manually reproduce this process using `process.argv` unless a requirement
 
 # Command Finalization
 
-Zexi command definitions have a lifecycle.
+Zexi command definitions have a lifecycle. Commands can be configured while
+they are being built, but attaching a command to a parent immediately finalizes
+the attached command. Once finalized, further configuration changes to that
+command are rejected.
 
-Commands can be configured while they are being built.
-
-Before execution, Zexi finalizes the command definitions.
-
-Once a command has been finalized, further configuration changes are rejected.
-
-Finalization protects the command tree from being mutated while it is being executed.
-
-Application code should therefore finish configuring:
+Build and configure each complete command subtree before attaching it to its
+parent. For example, configure a child command and its own children before
+registering it with the parent:
 
 * commands
 * subcommands
@@ -962,7 +971,8 @@ Application code should therefore finish configuring:
 * middleware
 * actions
 
-before calling:
+before calling the parent command's `.command(...)` method. Finish configuring
+the root application before running it:
 
 ```ts
 await app.run();
@@ -1168,10 +1178,14 @@ synchronous and return `void`. They process the log event synchronously and
 schedule terminal output through Zexi's terminal queue when printing is
 enabled. Do not use `await` with these methods.
 
-The `ansi` option applies only to that operation's printable output. It does
-not disable ANSI processing globally and does not change the structured event.
-Use `{ ansi: false }` for output redirected to a file, captured by a test, or
-consumed by a tool that expects plain text.
+The `ansi` option controls ANSI sequences in the log event's
+`value.printable` representation and the corresponding rendered log value. It
+does not disable ANSI processing globally; it leaves the event's `original`
+and `serialized` values unchanged, but `value.printable` reflects the option.
+It also does not guarantee that the entire printed line is ANSI-free, since
+severity colors, metadata, or a trace may still contain ANSI sequences. Use
+`{ ansi: false }` when the log value's printable representation should be
+plain, but do not rely on it to make every part of the terminal output plain.
 
 ---
 
@@ -1204,12 +1218,18 @@ Zexi's terminal API supports interactive prompts.
 
 Use Zexi prompts when the CLI needs to ask the user for a value.
 
-Conceptually:
+Pass prompt configuration as an options object:
 
 ```ts
-const name = await zexi.terminal.prompt(
-    "What is your name?"
-);
+const name = await zexi.terminal.prompt({
+    message: "What is your name?"
+});
+
+if (name === null) {
+    zexi.terminal.info("Prompt cancelled.");
+} else {
+    zexi.terminal.info(`Hello, ${name}!`);
+}
 ```
 
 Use the actual prompt API exposed by the installed version of Zexi.
@@ -1225,8 +1245,8 @@ application needs the entered value or confirmation decision.
 
 # Clearing and Screen Behavior
 
-The terminal exposes a high-level `clear()` operation for clearing the region
-managed by Zexi:
+The terminal exposes a high-level `clear()` operation that clears the active
+terminal screen from its origin and resets Zexi's managed screen state:
 
 ```ts
 zexi.terminal.clear();
@@ -1235,6 +1255,9 @@ zexi.terminal.clear();
 `clear()` is synchronous to the caller and returns `void`. It schedules the
 screen mutation through the terminal task queue; the actual mutation and the
 corresponding `clear` event are processed asynchronously.
+The erase begins at the screen origin and clears the current line and all rows
+below it, so it can remove terminal output that predates Zexi's managed
+entries.
 
 Before screen-based work, Zexi initializes the terminal and records the
 current cursor position when possible. When the position can be queried
@@ -1243,9 +1266,10 @@ captured origin. If the position cannot be established, Zexi may use an
 alternate terminal screen to avoid overwriting existing output.
 
 Screen-based behavior is intended for interactive terminals. For redirected,
-captured, or CI output, prefer ordinary logging and use `{ ansi: false }`
-when plain text is required. Do not manually write cursor-control escape
-sequences or manipulate the managed screen.
+captured, or CI output, prefer ordinary logging. Use `{ ansi: false }` when
+the log value's printable representation should be plain; it does not
+guarantee that every part of the rendered line is ANSI-free. Do not manually
+write cursor-control escape sequences or manipulate the managed screen.
 
 ---
 
@@ -1258,10 +1282,7 @@ Use confirms when the CLI needs an explicit yes/no decision.
 Conceptually:
 
 ```ts
-const confirmed =
-    await zexi.terminal.confirm(
-        "Are you sure?"
-    );
+const confirmed = await zexi.terminal.confirm("Are you sure?");
 ```
 
 Use the actual method signature exposed by the installed Zexi version.
@@ -1292,10 +1313,10 @@ Use it when terminal output needs things such as:
 For example, conceptually:
 
 ```ts
-const message = zexi.styler
-    .bold()
-    .color("green")
-    .text("Build completed");
+const message = zexi.styler.format("Build completed", {
+    color: "green",
+    style: "bold"
+});
 ```
 
 The exact styling API must be taken from the installed Zexi version.
@@ -1322,15 +1343,15 @@ Applications can subscribe to terminal events with:
 zexi.terminal.events.on(...)
 ```
 
-Terminal events allow application code to observe terminal activity programmatically.
+Terminal events expose structured log events and screen-clear events. They do
+not report arbitrary writes to stdout or stderr, or the user's prompt input.
 
 For example:
 
 ```ts
-zexi.terminal.events.on("...", event => {
-        // Handle terminal event.
-    }
-);
+zexi.terminal.events.on("log", event => {
+    // Process the structured log event.
+});
 ```
 
 The exact event names and event payload types must be obtained from the installed Zexi API.
@@ -1341,29 +1362,31 @@ Do not invent event names or payload structures.
 
 ## Terminal Event Use Cases
 
-Terminal events are particularly useful when terminal activity needs to be consumed by something other than the terminal itself.
+Terminal events are useful when Zexi's structured log and clear events need to
+be consumed by something other than the terminal itself.
 
 Examples include:
 
-* application logging
-* monitoring
-* telemetry
-* writing terminal activity to a file
-* forwarding terminal activity to a monitoring service
-* integrating terminal activity with external tooling
-* collecting structured terminal events
+* collecting Zexi log events for application logging or monitoring
+* writing structured log events to a file
+* forwarding log events to a monitoring service
+* observing when Zexi clears the terminal screen
+* integrating these structured events with external tooling
 
-The events are structured data and can therefore be processed programmatically.
+Log events contain structured values and can therefore be processed
+programmatically.
 
-For example, an application can listen to terminal events and forward the resulting event data to an external logging or monitoring system.
+For example, an application can listen for `log` events and forward their
+structured data to an external logging or monitoring system.
 
 Do not assume that terminal events are merely text strings.
 
 ---
 
-## Observing Terminal Activity
+## Observing Zexi Events
 
-When a developer asks how to observe Zexi terminal activity, prefer:
+When a developer asks how to observe Zexi's structured logging or screen-clear
+events, prefer:
 
 ```ts
 zexi.terminal.events.on(...)
@@ -1380,7 +1403,8 @@ process.stderr
 
 Do not recommend replacing Zexi's terminal implementation merely to obtain logging or monitoring information.
 
-The event system exists specifically to make terminal activity observable.
+The event system exposes Zexi's log and screen-clear events; it is not a
+general-purpose observer for every terminal write or prompt interaction.
 
 ---
 
@@ -1416,7 +1440,7 @@ Prefer:
 zexi.terminal.events.on(...)
 ```
 
-for observing terminal activity.
+for observing Zexi log and screen-clear events.
 
 Avoid introducing separate dependencies for these tasks unless the requested behavior is genuinely outside Zexi's capabilities.
 
@@ -1427,7 +1451,7 @@ Avoid introducing separate dependencies for these tasks unless the requested beh
 A basic Zexi application can be structured as follows:
 
 ```ts
-import zexi from "zexi";
+import zexi from "@nasriya/zexi";
 
 const app = zexi.cli.createApp(
     "my-cli",
@@ -1496,7 +1520,7 @@ The important execution semantics are:
 A larger CLI can use static commands to form a hierarchy:
 
 ```ts
-import zexi from "zexi";
+import zexi from "@nasriya/zexi";
 
 const app = zexi.cli.createApp(
     "my-cli",
@@ -2036,7 +2060,7 @@ process.stdout
 process.stderr
 ```
 
-to observe Zexi terminal activity.
+to observe Zexi log and screen-clear events.
 
 Use:
 
@@ -2071,7 +2095,7 @@ Do not add a prompt dependency when Zexi's terminal prompt and confirmation APIs
 For a normal CLI application, prefer a structure similar to:
 
 ```ts
-import zexi from "zexi";
+import zexi from "@nasriya/zexi";
 
 const app = zexi.cli.createApp(
     "my-cli",
@@ -2203,9 +2227,9 @@ When working with Zexi, remember these core rules:
 29. Use Zexi's prompts for interactive input.
 30. Use Zexi's confirms for yes/no interaction.
 31. Use `zexi.styler` for ANSI terminal styling.
-32. Use `zexi.terminal.events.on()` to observe terminal activity.
-33. Terminal events can be used for logging, monitoring, and forwarding structured terminal events.
-34. Do not monkey-patch `console`, `stdout`, or `stderr` to observe Zexi terminal activity.
+32. Use `zexi.terminal.events.on()` to observe Zexi log and screen-clear events.
+33. Zexi log events can be collected, monitored, or forwarded; clear events indicate when Zexi clears the screen.
+34. Do not monkey-patch `console`, `stdout`, or `stderr` to observe Zexi log and screen-clear events.
 35. Do not add dependencies for functionality already provided by Zexi.
 36. Use Zexi's public API rather than internal implementation modules.
 37. When an exact API detail is uncertain, inspect the installed TypeScript declarations instead of guessing.

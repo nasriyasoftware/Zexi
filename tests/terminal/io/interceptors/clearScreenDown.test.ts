@@ -1,5 +1,5 @@
-import clearScreenDownInterceptor from "../../../../src/core/terminal/io/interceptors/clearScreenDown";
-import terminalIO from "../../../../src/core/terminal/io/terminal.io";
+import clearScreenDownInterceptor from "@/core/terminal/io/output/interception/interceptors/clearScreenDown";
+import terminalIO from "@/core/terminal/io";
 
 describe('clearScreenDownInterceptor()', () => {
     afterEach(() => {
@@ -10,7 +10,7 @@ describe('clearScreenDownInterceptor()', () => {
         const callback = jest.fn();
 
         const clearScreenDown = vi
-            .spyOn(terminalIO, 'clearScreenDown')
+            .spyOn(terminalIO.output, 'clearScreenDown')
             .mockReturnValue(true);
 
         clearScreenDownInterceptor(callback);
@@ -21,7 +21,7 @@ describe('clearScreenDownInterceptor()', () => {
 
     it('returns the result from terminalIO.clearScreenDown()', () => {
         const clearScreenDown = vi
-            .spyOn(terminalIO, 'clearScreenDown')
+            .spyOn(terminalIO.output, 'clearScreenDown')
             .mockReturnValue(false);
 
         expect(clearScreenDownInterceptor()).toBe(false);

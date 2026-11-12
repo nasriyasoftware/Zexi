@@ -1,4 +1,4 @@
-import { IndentStart } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/indent";
+import { IndentStart } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/indent";
 
 describe("IndentStart", () => {
     it("creates a token with kind 'indent-start'", () => {

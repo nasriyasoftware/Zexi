@@ -1,5 +1,5 @@
-import PrimitiveGraphNode from "../../../../../src/core/terminal/pipeline/1-graphing/nodes/primitive.node";
-import PrimitiveRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/primitive.node";
+import PrimitiveGraphNode from "@/core/terminal/pipeline/1-graphing/nodes/primitive.node";
+import PrimitiveRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/primitive.node";
 
 describe("PrimitiveRepresentationNode", () => {
 

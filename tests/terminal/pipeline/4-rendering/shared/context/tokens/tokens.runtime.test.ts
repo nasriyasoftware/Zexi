@@ -1,7 +1,7 @@
-import TokensRuntime from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/tokens/runtime";
-import TokensController from "../../../../../../../src/core/terminal/pipeline/4-rendering/shared/context/tokens/tokens.controller";
-import { AnchorToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/rendering/anchor.token";
-import type { Token } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/types";
+import TokensRuntime from "@/core/terminal/pipeline/4-rendering/shared/context/tokens/runtime";
+import TokensController from "@/core/terminal/pipeline/4-rendering/shared/context/tokens/tokens.controller";
+import { AnchorToken } from "@/core/terminal/pipeline/3-tokenization/tokens/rendering/anchor.token";
+import type { Token } from "@/core/terminal/pipeline/3-tokenization/types";
 
 describe("TokensRuntime", () => {
     // ---------------------------------------------------------------------
@@ -339,7 +339,7 @@ describe("TokensRuntime", () => {
     // ---------------------------------------------------------------------
     // INTEGRATION
     // ---------------------------------------------------------------------
-    describe("integration behajest.r", () => {
+    describe("integration behaviour", () => {
 
         it("maintains deterministic traversal under mixed operations", () => {
             const runtime = createRuntime([token("A"), token("D")]);

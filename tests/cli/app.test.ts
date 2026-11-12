@@ -1,5 +1,5 @@
 import zexi from "../../src";
-import { ZexiCommandSymbol } from "../../src/core/cli/kernal/assets/keys";
+import { ZexiCommandSymbol } from "@/core/cli/kernal/assets/keys";
 
 describe('App', () => {
     it('Creates apps correctly', () => {

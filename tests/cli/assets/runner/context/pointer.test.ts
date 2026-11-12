@@ -1,4 +1,4 @@
-import ContextPointer from "../../../../../src/core/cli/kernal/assets/runner/context/pointer";
+import ContextPointer from "@/core/cli/kernal/assets/runner/context/pointer";
 
 describe("ContextPointer", () => {
     it("starts before the first item", () => {

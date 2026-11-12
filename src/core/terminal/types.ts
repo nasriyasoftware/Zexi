@@ -1,11 +1,16 @@
-export type { TerminalEntry } from "./screen/terminal-cell";
-import type TerminalEntry from "./screen/terminal-cell";
-import {
-    StdinCaptureOptions,
+/**
+ * Re-exports the externally configurable terminal cell type from the terminal
+ * API's type module.
+ *
+ * @since 1.0.0
+ */
+export type { default as TerminalCell } from "./screen/tom/cells/terminal.cell";
+import type TerminalCell from "./screen/tom/cells/terminal.cell";
+import type {
     StdinCapturePrivacy,
     StdinCustomValidationHandler,
     StdinEscapeBehavior
-} from "./input/types";
+} from "./io";
 
 /**
  * Logging levels supported by Zexi.
@@ -77,6 +82,8 @@ export type TerminalLogOptions = {
      *
      * @default For `debug()`: `'debug'`.
      * @default For all other log levels: `'json'`.
+     *
+     * @since 1.0.0
      */
     target?: OutputTarget;
 
@@ -88,6 +95,8 @@ export type TerminalLogOptions = {
      * trace and its printable representation.
      *
      * @default false
+     *
+     * @since 1.0.0
      */
     trace?: boolean;
 
@@ -100,21 +109,36 @@ export type TerminalLogOptions = {
      * still emitted.
      *
      * @default true
+     *
+     * @since 1.0.0
      */
     print?: boolean;
 
     /**
-     * Determines whether ANSI escape sequences are included in the printable
-     * log representation.
+     * Determines whether ANSI escape sequences are retained in the rendered
+     * log value stored as the event's `value.printable` field.
      *
-     * When disabled, the rendered output is emitted without ANSI escape
-     * sequences. This is useful when the caller needs raw terminal text or wants
-     * to apply its own ANSI formatting.
+     * When disabled, the renderer is asked to omit styling and the resulting
+     * printable representation is stripped of ANSI escape sequences as a
+     * safeguard. This is useful when the caller needs plain text for capture,
+     * redirection, or a tool that does not interpret terminal styling.
      *
-     * This option only affects terminal presentation. It does not modify the
-     * structured log event or its emitted data.
+     * This option does not change the event's original value or canonical
+     * serialized value. The event's `value.printable` field reflects this
+     * option, so event consumers receive a styled or plain value representation.
      *
-     * @default true
+     * This is a value-rendering option, not a guarantee that the complete
+     * terminal line contains no ANSI sequences. The print path separately
+     * applies severity colors to primitive values and metadata, and an
+     * included trace is currently rendered with ANSI enabled.
+     *
+     * The default is calculated from the logging level and input value:
+     * ANSI is enabled for debug and info events, and for non-primitive values
+     * at every level. Primitive values logged at warn, error, or fatal default
+     * to plain output.
+     *
+     * @default Derived from the log level and whether the input is primitive.
+     * @since 1.0.0
      */
     ansi?: boolean;
 }
@@ -138,6 +162,8 @@ export type ZexiTerminalOptions = {
      * The severity ordering is defined by {@link ZEXI_LOG_LEVELS}.
      *
      * @default `'debug'`
+     *
+     * @since 1.0.0
      */
     logLevel?: ZexiLogLevel;
 
@@ -151,6 +177,8 @@ export type ZexiTerminalOptions = {
      * contains its timestamp and log level.
      *
      * @default false
+     *
+     * @since 1.0.0
      */
     includeMetadata?: boolean;
 }
@@ -203,10 +231,10 @@ export type TerminalPromptOptions = {
      *
      * When omitted, the prompt creates an entry using {@link message} and
      * automatically finalizes it when input capture ends.
-     * 
+     *
      * @since 1.0.0
      */
-    entry?: TerminalEntry;
+    entry?: TerminalCell;
 
     /**
      * The message displayed before the user's input.
@@ -219,7 +247,7 @@ export type TerminalPromptOptions = {
      * ```
      *
      * If omitted, no message is displayed before the input.
-     * 
+     *
      * @since 1.0.0
      */
     message?: string;
@@ -259,8 +287,10 @@ export type TerminalPromptOptions = {
      * option is omitted, the prompt has no timeout and can remain active
      * indefinitely.
      *
-     * The value must be at least `1000` milliseconds.
-     * 
+     * The value must be at least `1000` milliseconds. Supply a finite
+     * duration; the current runtime range checks do not explicitly reject
+     * `NaN`.
+     *
      * @since 1.0.0
      */
     timeoutAfter?: number;
@@ -308,7 +338,7 @@ export type TerminalPromptOptions = {
      *     }
      * });
      * ```
-     * 
+     *
      * @since 1.0.0
      */
     onCustomValidation?: StdinCustomValidationHandler;
@@ -349,6 +379,8 @@ export type TerminalPromptOptions = {
  *     // The confirmation timed out or was cancelled.
  * }
  * ```
+ *
+ * @since 1.0.0
  */
 export type TerminalConfirmOptions = {
     /**
@@ -360,8 +392,10 @@ export type TerminalConfirmOptions = {
      *
      * When omitted, the confirmation creates and manages its own terminal
      * entry using the message passed to {@link Terminal.confirm}.
+     *
+     * @since 1.0.0
      */
-    entry?: TerminalEntry;
+    entry?: TerminalCell;
 
     /**
      * The value to use when the user submits the confirmation without
@@ -371,6 +405,8 @@ export type TerminalConfirmOptions = {
      * means it is denied by default.
      *
      * @default false
+     *
+     * @since 1.0.0
      */
     default?: boolean;
 
@@ -383,7 +419,45 @@ export type TerminalConfirmOptions = {
      * If omitted, the confirmation has no timeout and remains active until
      * the user explicitly confirms, denies, or cancels it.
      *
-     * The value must be at least `1000` milliseconds.
+     * The value must be at least `1000` milliseconds. Supply a finite
+     * duration; the current runtime range checks do not explicitly reject
+     * `NaN`.
+     *
+     * @since 1.0.0
      */
     timeoutAfter?: number;
 };
+
+/**
+ * Resolved logging configuration shared with a terminal instance's log service.
+ *
+ * Unlike {@link ZexiTerminalOptions}, these fields are required because the
+ * terminal constructor supplies defaults before creating the log service.
+ * Each ZexiTerminal instance owns a separate configuration object, while
+ * printed output still uses the shared screen engine and event system.
+ *
+ * @internal
+ * @since 1.0.0
+ */
+export interface ZexiTerminalConfigs {
+    /**
+     * Minimum log severity printed by the associated terminal instance.
+     *
+     * Log events below this level are still created and emitted; this value
+     * controls only the instance's terminal print threshold.
+     *
+     * @default 'debug'
+     * @since 1.0.0
+     */
+    logLevel: ZexiLogLevel;
+    /**
+     * Whether printed log lines include their timestamp and uppercase level.
+     *
+     * This changes terminal presentation only; emitted log events always
+     * retain their timestamp and level fields.
+     *
+     * @default false
+     * @since 1.0.0
+     */
+    includeMetadata: boolean;
+}

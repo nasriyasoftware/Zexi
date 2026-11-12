@@ -1,5 +1,5 @@
-import MapRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/map.node";
-import PrimitiveRepresentationNode from "../../../../../src/core/terminal/pipeline/2-representation/nodes/primitive.node";
+import MapRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/map.node";
+import PrimitiveRepresentationNode from "@/core/terminal/pipeline/2-representation/nodes/primitive.node";
 
 describe("MapRepresentationNode", () => {
 
@@ -34,7 +34,7 @@ describe("MapRepresentationNode", () => {
 
     describe("factory", () => {
 
-        it("creates instance jest. create()", () => {
+        it("creates instance with create()", () => {
             const key = node("a");
             const value = node("b");
 
@@ -71,7 +71,7 @@ describe("MapRepresentationNode", () => {
 
     });
 
-    describe("behajest.r expectations", () => {
+    describe("behaviour expectations", () => {
 
         it("does not mutate original map reference", () => {
             const map = new Map();

@@ -1,4 +1,4 @@
-import { CallbackToken } from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/callback.token";
+import { CallbackToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/callback.token";
 
 describe("CallbackToken", () => {
     it("executes the handler when run is called", () => {

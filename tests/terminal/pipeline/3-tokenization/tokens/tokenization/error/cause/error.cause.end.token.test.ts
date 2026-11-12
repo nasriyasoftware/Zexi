@@ -1,4 +1,4 @@
-import { ErrorCauseEndToken, ErrorCauseStartToken, ErrorStartToken } from "../../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/error";
+import { ErrorCauseEndToken, ErrorCauseStartToken, ErrorStartToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/error";
 
 describe("ErrorCauseEndToken", () => {
     

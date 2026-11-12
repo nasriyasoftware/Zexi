@@ -1,4 +1,4 @@
-import buildStack from "../../../../../src/core/terminal/pipeline/1-graphing/helpers/build.stack";
+import buildStack from "@/core/terminal/pipeline/1-graphing/helpers/build.stack";
 
 describe("buildStack", () => {
     it("parses a standard V8 stack trace correctly", () => {

@@ -1,4 +1,4 @@
-import { normalizeName } from "../../../src/core/cli/kernal/utils/utils";
+import { normalizeName } from "@/core/cli/kernal/utils/utils";
 
 describe("normalizeName", () => {
     it("normalizes case, spaces, leading dashes, and repeated dashes", () => {

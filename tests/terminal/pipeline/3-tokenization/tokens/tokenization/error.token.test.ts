@@ -1,13 +1,13 @@
 // Pipeline builders
-import GraphBuilder from "../../../../../../src/core/terminal/pipeline/1-graphing/builder";
-import RepresentationBuilder from "../../../../../../src/core/terminal/pipeline/2-representation/builder";
-import Tokenizer from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokenizer";
+import GraphBuilder from "@/core/terminal/pipeline/1-graphing/builder";
+import RepresentationBuilder from "@/core/terminal/pipeline/2-representation/builder";
+import Tokenizer from "@/core/terminal/pipeline/3-tokenization/tokenizer";
 
 // Types
-import TokensBuffer from "../../../../../../src/core/terminal/pipeline/3-tokenization/container/tokens.buffer";
-import type { GraphNode } from "../../../../../../src/core/terminal/pipeline/1-graphing/types";
-import type { RepresentationNode } from "../../../../../../src/core/terminal/pipeline/2-representation/types";
-import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
+import TokensBuffer from "@/core/terminal/pipeline/3-tokenization/container/tokens.buffer";
+import type { GraphNode } from "@/core/terminal/pipeline/1-graphing/types";
+import type { RepresentationNode } from "@/core/terminal/pipeline/2-representation/types";
+import TOKENS from "@/core/terminal/pipeline/3-tokenization/tokens";
 
 // Helpers
 const buildGraph = (value: unknown) => GraphBuilder.build(value, { cycles: "throw", });

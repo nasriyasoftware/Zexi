@@ -1,4 +1,4 @@
-import parseRequest from "../../../../src/core/terminal/io/helpers/req.parser";
+import parseRequest from "@/core/terminal/io/output/assets/write.request.parser";
 
 describe('parseRequest()', () => {
     it('parses output-only arguments', () => {

@@ -1,20 +1,20 @@
-import terminalIO from "../../../../src/core/terminal/io/terminal.io";
-import zexiTerminal from "../../../../src/core/terminal/zexi.terminal";
-import stderrWriteInterceptor from "../../../../src/core/terminal/io/interceptors/stderr.write";
-import type { TerminalEntry } from "../../../../src/core/terminal/types";
+import terminalIO from "@/core/terminal/io";
+import zexiTerminal from "@/core/terminal/zexi.terminal";
+import stderrWriteInterceptor from "@/core/terminal/io/output/interception/interceptors/stderr.write";
+import type { TerminalCell } from "@/core/terminal/types";
 
 describe("stderrWriteInterceptor()", () => {
     beforeEach(() => {
-        terminalIO.intercepting = false;
+        terminalIO.output.interception.intercepting = false;
     });
 
     afterEach(() => {
-        terminalIO.intercepting = false;
+        terminalIO.output.interception.intercepting = false;
         mock.restore();
     });
 
     it("queues the request when interception is disabled", () => {
-        const queue = spyOn(terminalIO, "queue").mockReturnValue(true);
+        const queue = spyOn(terminalIO.output, "queue").mockReturnValue(true);
         const callback = mock();
 
         expect(stderrWriteInterceptor("Hello", "utf8", callback)).toBe(true);
@@ -28,7 +28,7 @@ describe("stderrWriteInterceptor()", () => {
     });
 
     it("returns the result from terminalIO.queue() when interception is disabled", () => {
-        const queue = spyOn(terminalIO, "queue").mockReturnValue(false);
+        const queue = spyOn(terminalIO.output, "queue").mockReturnValue(false);
 
         expect(stderrWriteInterceptor("Hello")).toBe(false);
 
@@ -41,9 +41,9 @@ describe("stderrWriteInterceptor()", () => {
     });
 
     it("creates a Zexi entry when interception is enabled", () => {
-        terminalIO.intercepting = true;
+        terminalIO.output.interception.intercepting = true;
 
-        const createEntry = spyOn(zexiTerminal, "createEntry").mockResolvedValue({} as TerminalEntry);
+        const createEntry = spyOn(zexiTerminal, "createEntry").mockResolvedValue({} as TerminalCell);
 
         expect(stderrWriteInterceptor("Hello")).toBe(true);
 
@@ -61,9 +61,9 @@ describe("stderrWriteInterceptor()", () => {
     });
 
     it("removes trailing newlines before creating the entry", () => {
-        terminalIO.intercepting = true;
+        terminalIO.output.interception.intercepting = true;
 
-        const createEntry = spyOn(zexiTerminal, "createEntry").mockResolvedValue({} as TerminalEntry);
+        const createEntry = spyOn(zexiTerminal, "createEntry").mockResolvedValue({} as TerminalCell);
 
         stderrWriteInterceptor("Hello\r\n\n");
 
@@ -81,9 +81,9 @@ describe("stderrWriteInterceptor()", () => {
     });
 
     it("converts binary output to text before creating the entry", () => {
-        terminalIO.intercepting = true;
+        terminalIO.output.interception.intercepting = true;
 
-        const createEntry = spyOn(zexiTerminal, "createEntry").mockResolvedValue({} as TerminalEntry);
+        const createEntry = spyOn(zexiTerminal, "createEntry").mockResolvedValue({} as TerminalCell);
 
         stderrWriteInterceptor(
             new Uint8Array([72, 101, 108, 108, 111]),
@@ -104,7 +104,7 @@ describe("stderrWriteInterceptor()", () => {
     });
 
     it("invokes the original callback after the entry completes", async () => {
-        terminalIO.intercepting = true;
+        terminalIO.output.interception.intercepting = true;
 
         const callback = mock();
         stderrWriteInterceptor("Hello", callback);
@@ -117,11 +117,11 @@ describe("stderrWriteInterceptor()", () => {
     });
 
     it("writes the fallback output to stderr when entry creation fails", async () => {
-        terminalIO.intercepting = true;
+        terminalIO.output.interception.intercepting = true;
 
         spyOn(zexiTerminal, "createEntry").mockRejectedValue(new Error("Something went wrong"));
 
-        const write = spyOn(terminalIO, "write").mockReturnValue(true);
+        const write = spyOn(terminalIO.output, "write").mockReturnValue(true);
 
         stderrWriteInterceptor("Hello");
 
@@ -149,7 +149,7 @@ describe("stderrWriteInterceptor()", () => {
     });
 
     it("invokes the original callback when entry creation fails", async () => {
-        terminalIO.intercepting = true;
+        terminalIO.output.interception.intercepting = true;
 
         const callback = mock();
 

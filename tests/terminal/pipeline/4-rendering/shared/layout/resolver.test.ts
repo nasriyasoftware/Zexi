@@ -1,15 +1,15 @@
 import contracts from "./contracts";
 import ContractTester from "./contract.tester";
-import TOKENS from "../../../../../../src/core/terminal/pipeline/3-tokenization/tokens";
+import TOKENS from "@/core/terminal/pipeline/3-tokenization/tokens";
 
 describe("LayoutResolver", () => {
 
     /**
      * ---------------------------------------------------------------------
-     * INLINE BEHAjest.R
+     * INLINE BEHAVIOUR
      * ---------------------------------------------------------------------
      */
-    describe.each(contracts)("inline behajest.r (%s)", (_name, contract) => {
+    describe.each(contracts)("inline behaviour (%s)", (_name, contract) => {
 
         test("primitive object stays inline", () => {
             const tokens = contract.tokenize({ a: 1 });
@@ -165,7 +165,7 @@ describe("LayoutResolver", () => {
                 tester.expectLayout("inline");
             });
 
-            test("mixed array crosses threshold only when jest.ible elements exceed limit", () => {
+            test("mixed array crosses threshold only when visible elements exceed limit", () => {
                 // effective values = 6 (1..6), should force block
                 const tokens = contract.tokenize([
                     1,
@@ -186,10 +186,10 @@ describe("LayoutResolver", () => {
 
     /**
      * ---------------------------------------------------------------------
-     * jest.IBILITY RULES
+     * VIOUIBILITY RULES
      * ---------------------------------------------------------------------
      */
-    describe.each(contracts)("jest.ibility rules (%s)", (_name, contract) => {
+    describe.each(contracts)("visibility rules (%s)", (_name, contract) => {
 
         test("undefined value is ignored", () => {
             const tokens = contract.tokenize({ a: undefined });

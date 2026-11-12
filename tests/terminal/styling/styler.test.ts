@@ -1,4 +1,4 @@
-import consoleStyler from "../../../src/core/terminal/styling/styler";
+import consoleStyler from "@/core/terminal/styling/styler";
 
 const ANSI = consoleStyler.ansi;
 

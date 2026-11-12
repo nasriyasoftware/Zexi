@@ -1,4 +1,4 @@
-import { HardSpaceToken } from "../../../../../../../src/core/terminal/pipeline/3-tokenization/tokens/tokenization/space";
+import { HardSpaceToken } from "@/core/terminal/pipeline/3-tokenization/tokens/tokenization/space";
 
 describe("HardSpaceToken", () => {
     it("creates a token with kind 'hard-space'", () => {

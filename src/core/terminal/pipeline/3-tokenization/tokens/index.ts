@@ -18,6 +18,15 @@ import { SeparatorToken } from "./tokenization/separator.token";
 import { SoftSpaceToken, HardSpaceToken } from "./tokenization/space";
 import { AnchorToken } from "./rendering/anchor.token";
 
+/**
+ * Registry of token constructors used by the terminal tokenization pipeline.
+ *
+ * The tokenizer and renderers use these named token types to represent
+ * structural boundaries, values, spacing, line breaks, references, ANSI
+ * content, and other rendering instructions.
+ *
+ * @since 1.0.0
+ */
 const TOKENS = {
     Ansi: AnsiToken,
     SoftWrap: SoftWrapToken,
